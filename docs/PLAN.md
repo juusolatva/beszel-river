@@ -68,14 +68,19 @@ frontend/
   index.html
   vite.config.ts              dev proxy /stream → bridge
   src/
-    main.ts                   entry
+    main.ts                   entry: wiring and frame loop
+    config.ts                 look tunables (LOOK) and URL parameters
+    source/source.ts          FrameSource interface
     source/stream.ts          EventSource client [M4]
-    source/demo.ts            fake channels for development [M2]
-    sim/particles.ts          particle pool and motion [M2]
-    sim/noise.ts              curl noise [M2]
-    render/gl.ts              WebGL2 setup, framebuffers [M2]
-    render/shaders/           GLSL [M2]
-    color/oklch.ts            rainbow palette [M2]
+    source/demo.ts            generated channels for development
+    sim/streams.ts            per-stream eased state, band layout, lifecycle
+    sim/particles.ts          particle pool and motion
+    sim/noise.ts              simplex noise, curl flow field
+    render/renderer.ts        trail buffers, particle pass, tone mapping
+    render/gl.ts              WebGL2 program and render-target helpers
+    render/shaders/           GLSL, including OKLCH → sRGB
+    debug/panel.ts            ?debug panel: channel sliders, stats
+    util/math.ts              PRNG, easing, small helpers
 deploy/
   bridge.Dockerfile           [M5]
   compose.yml                 [M5]
@@ -202,7 +207,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - Two framebuffers alternate: each frame draws the previous one dimmed (decay 0.93–0.97), then the new particles on top.
   - Particles are drawn as streaks from their previous position, so faster particles get longer tails.
 - **Colour:**
-  - OKLCH, so all hues look equally bright.
+  - OKLCH, so all hues look equally bright; converted to linear sRGB in the particle vertex shader.
   - Hue = slow global rotation + vertical gradient + per-stream offset + `heat` drift.
   - Additive blending makes overlapping streams glow.
 - **Streams:**
@@ -232,10 +237,11 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 ## Milestones
 
 - [x] **M0 – Project setup.** Workspaces, TypeScript config, Vite, CI, this plan.
-- [ ] **M1 – Message format.** `Frame` and `Stream` types in `shared/src/index.ts`.
-  - Done when: bridge and frontend both type-check against them.
+- [x] **M1 – Message format.** `Frame` and `Stream` types in `shared/src/index.ts`.
+  - Done when: bridge and frontend both type-check against them. The frontend uses them; the bridge starts using them in M3.
 - [ ] **M2 – Renderer + demo source.** Particles, trails, colour, multi-stream layout, all driven by `DemoSource`.
   - Done when: `npm run dev:frontend` shows the river at 60 fps on a desktop browser, and changing demo channels visibly changes it.
+  - Status: implemented. Channel changes, a host going down and stream removal are checked in headless Chromium. The 60 fps check needs a real browser with a GPU.
 - [ ] **M3 – Bridge with `systems` adapter.** Config, Beszel client, baselines, normalize, mix, anonymize, SSE server, vitest unit tests.
   - Done when: `curl -N http://127.0.0.1:8787/stream` (`-N` disables curl's output buffering, so events print as they arrive) shows a frame per minute for every host, and `npm test` passes.
 - [ ] **M4 – Integration and tuning.** The frontend uses `StreamSource`; tune the mapping against real data.
