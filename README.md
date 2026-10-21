@@ -2,7 +2,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: project setup (M0). Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: renderer with generated demo data (M2). Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout
 
@@ -27,6 +27,18 @@ npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.e
 npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
+
+### Frontend URL parameters
+
+| Parameter | Effect |
+|---|---|
+| `?debug` | Panel with per-stream channel sliders, alive/hold toggles, add/remove stream buttons and fps/particle stats. `d` hides it. |
+| `?streams=N` | Number of demo streams (default 4). |
+| `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
+| `?particles=N` | Particle pool size (default 20000, 8000 on touch devices, halved with reduced motion). |
+| `?seed=N` | Fixed random seed, for repeatable looks. |
+
+Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/config.ts` (`LOOK`).
 
 ## License
 
