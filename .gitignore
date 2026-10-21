@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+
+# Secrets and private tuning
+.env
+bridge/mix.json
+
+.DS_Store
