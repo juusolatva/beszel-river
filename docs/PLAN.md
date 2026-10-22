@@ -287,15 +287,13 @@ Commands and steps are in README, "Deployment".
     - CPU stress on all cores: the first update after the load started (about 14 s of load in that minute) gave `flow` 0.004 → 0.196 and `pulse` 0.576; the next gave `flow` 0.818 and `pulse` 1. In M3 the same test gave 0.03 → 0.14 and a `pulse` of 0.30. The `flow` smoothing in the template is now `tau` 30 s instead of 90 s.
     - The recorded frames were replayed to the page through `/stream` in headless Chromium. The first stress frame made it visibly brighter and denser; the second gave long, fast streaks. The replay was needed because software WebGL keeps the 4 cores busy, so the agent reads about 94 % CPU while the browser runs.
     - Dev without the bridge falls back to demo frames. In a production build, the stream retries after 502s (5 s, then 10 s, then 20 s) and recovers when the bridge returns. Hiding the tab closes the stream; showing it reopens it.
-- [ ] **M5 – Deployment.** Dockerfile, compose file, nginx config, deploy notes in README.
+- [x] **M5 – Deployment.** Dockerfile, compose file, nginx config, deploy notes in README.
   - Done when: the public URL serves the river from live data.
-  - Status: deployment files written and checked against a local Beszel v0.21.0 hub, with the hub behind a container named `beszel` on a `beszel_default` network:
-    - `docker compose up` with `deploy/compose.yml` unchanged: the container became healthy, logged in through `http://beszel:8090` and streamed frames; `docker compose stop` shut it down in 0.3 s through the SIGTERM handler. Without `bridge/mix.json`, compose refuses to start.
-    - nginx 1.29 with `river.conf` (self-signed certificate; the sandbox has no IPv6, so the `[::]` listens were removed for the test): HTTP redirects to HTTPS; the page and assets are served over HTTP/2 with the cache and security headers; `/stream` delivers each update as it is sent; `/healthz` is 404; a ninth concurrent stream gets 429.
-    - Headless Chromium through nginx, at the root and under `/river/` with `river-path.conf`: no CSP violations, `/stream` connected, the river rendered from live frames.
-    - With `compose.host-network.yml` and the hub on `127.0.0.1:8090` and no `beszel_default` network: healthy, logged in through `http://127.0.0.1:8090`, frames on `127.0.0.1:8787`; a connection from another container to the host's bridge address on 8787 was refused.
-    - Deployed at `https://symbolic.click`: page, headers, `/stream` and the private `/healthz` check out, but the hub there has password auth disabled (OIDC), so the bridge got 403 and served no streams. `BESZEL_TOKEN` was added for that and checked against a local hub with `DISABLE_PASSWORD_AUTH=true`: password mode reproduces the 403; with a token the container became healthy and streamed frames; setting the user's password made the token fail with 401.
-    - Remaining: deploy with a token on the VPS and check the public URL.
+  - Verified at `https://symbolic.click` (bridge with `compose.host-network.yml` next to a hub on `network_mode: host`, authenticating with `BESZEL_TOKEN` because that hub runs OIDC only; nginx with its own server block, DNS only):
+    - `HTTP/2 200` with HSTS, CSP, `no-cache` on `index.html` and a far-future `max-age` on the hashed asset; `/healthz` is 404.
+    - 70 s of `/stream`: 4 alive streams carrying only the channel fields, with values changing after a hub update between the first and last frame.
+    - Headless Chromium (in the sandbox, not on the measured hosts) with `?debug`: `/stream` connected, 4 alive streams in the panel, the river rendered.
+    - Before that, the same files were checked locally against Beszel v0.21.0: compose on a `beszel_default` network and with the host-network override, nginx with `river.conf` and `river-path.conf` (redirect, unbuffered streaming, 429 on the ninth concurrent stream), and password auth disabled with a token (a set password revoked it). The HTTP → HTTPS redirect on the public host was not checked; the sandbox reaches it only over HTTPS.
 - [ ] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
 - [ ] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
 
