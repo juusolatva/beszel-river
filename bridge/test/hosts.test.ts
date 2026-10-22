@@ -51,9 +51,8 @@ describe("HostTable", () => {
     expect(table.addStats(stats("a", "2026-10-22 11:57:00.000Z", 0))).toBe(false);
     expect(table.addStats(stats("unknown", "2026-10-22 11:59:00.000Z", 0))).toBe(false);
     expect(table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 0))).toBe(true);
-    const flow = table.frame(now).streams[0]?.flow ?? 0;
-    expect(flow).toBeLessThan(0.7);
-    expect(flow).toBeGreaterThan(0.3);
+    // CPU dropped to 0, so flow decays from 0.7 over the 60 s gap with the template's time constant.
+    expect(table.frame(now).streams[0]?.flow).toBeCloseTo(0.7 * Math.exp(-60 / mix.channels.flow.tau), 3);
   });
 
   it("uses the info summary until the first stats record", () => {
