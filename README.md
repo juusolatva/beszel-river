@@ -36,6 +36,9 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
 2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT`.
+   - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**, and give it a duration in seconds, e.g. `31536000` for a year.
+   - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge.
+   - To revoke it, use **Reset issued tokens** in the same menu.
 3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored.
 4. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
 
@@ -64,7 +67,7 @@ The bridge runs next to the Beszel hub, in Docker or under systemd, and listens 
 
 ```sh
 git clone https://github.com/juusolatva/beszel-river.git /opt/beszel-river && cd /opt/beszel-river
-cp bridge/.env.example bridge/.env           # set BESZEL_EMAIL, BESZEL_PASSWORD, STREAM_SALT (and BESZEL_URL, below)
+cp bridge/.env.example bridge/.env           # set BESZEL_EMAIL and BESZEL_PASSWORD (or BESZEL_TOKEN), STREAM_SALT, BESZEL_URL (below)
 cp bridge/mix.example.json bridge/mix.json   # then change the weights: the template is public
 ```
 
