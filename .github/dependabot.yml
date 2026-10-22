@@ -1,0 +1,14 @@
+# Keeps the SHA-pinned actions in .github/workflows/ current. npm dependencies are updated by hand
+# (exact versions, see AGENTS.md); base images use floating tags and pick up patches on rebuild.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # Gives a compromised or broken release a week to be noticed before it is proposed.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
