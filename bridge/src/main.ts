@@ -106,9 +106,8 @@ setInterval(() => changed(hosts.tick(TICK_S)), TICK_S * 1000);
 void connect();
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(signal, async () => {
+  process.once(signal, () => {
     log("info", `${signal} received, shutting down`);
-    await Promise.all([server.close(), client.close()]);
-    process.exit(0);
+    Promise.all([server.close(), client.close()]).then(() => process.exit(0)).catch(() => process.exit(1));
   });
 }
