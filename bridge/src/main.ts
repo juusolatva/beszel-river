@@ -1,2 +1,81 @@
-// Placeholder until milestone M3 (Beszel adapter, mixing, SSE server), see docs/PLAN.md.
-console.log("bridge: not implemented yet");
+import { existsSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
+import { BeszelClient } from "./beszel/client.js";
+import { SystemsSource } from "./beszel/systems-source.js";
+import { loadConfig, type Config } from "./config.js";
+import { log } from "./log.js";
+import { HostTable } from "./pipeline/hosts.js";
+import { loadMixConfig } from "./pipeline/mix.js";
+import { StreamServer } from "./server.js";
+
+const PULSE_TICK_S = 2;
+const BROADCAST_DEBOUNCE_MS = 250;
+
+if (existsSync(".env")) process.loadEnvFile(".env");
+let config: Config;
+try {
+  config = loadConfig(process.env);
+} catch (error) {
+  log("error", (error as Error).message);
+  process.exit(1);
+}
+
+const mixFile = existsSync(config.mixFile) ? config.mixFile : "mix.example.json";
+if (mixFile !== config.mixFile) log("warn", `${config.mixFile} not found, using ${mixFile}`);
+const hosts = new HostTable(config.salt, loadMixConfig(mixFile));
+const client = new BeszelClient(config.beszelUrl, config.email, config.password);
+let live = false;
+
+const server = new StreamServer({
+  host: config.bindHost,
+  port: config.bindPort,
+  snapshot: () => hosts.frame(new Date()),
+  healthy: () => live && client.connected,
+});
+
+// Beszel updates every host within a second or two of each other; one frame covers the batch.
+let pending: NodeJS.Timeout | undefined;
+function changed(didChange: boolean): void {
+  if (!didChange || !live || pending) return;
+  pending = setTimeout(() => {
+    pending = undefined;
+    server.broadcast(hosts.frame(new Date()));
+  }, BROADCAST_DEBOUNCE_MS);
+}
+
+const source = new SystemsSource(client.pb, {
+  system: (record) => changed(hosts.upsertSystem(record)),
+  removed: (systemId) => changed(hosts.removeSystem(systemId)),
+  stats: (record) => changed(hosts.addStats(record)),
+});
+
+async function connect(): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await client.login();
+      await source.start();
+      client.keepAlive();
+      live = true;
+      changed(true);
+      return;
+    } catch (error) {
+      await client.pb.realtime.unsubscribe().catch(() => undefined);
+      const delay = Math.min(60, 5 * 2 ** attempt);
+      log("error", `Connecting to Beszel failed, retrying in ${delay} s`, error);
+      await sleep(delay * 1000);
+    }
+  }
+}
+
+const port = await server.listen();
+log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz)`);
+setInterval(() => changed(hosts.decay(PULSE_TICK_S)), PULSE_TICK_S * 1000);
+void connect();
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, async () => {
+    log("info", `${signal} received, shutting down`);
+    await Promise.all([server.close(), client.close()]);
+    process.exit(0);
+  });
+}
