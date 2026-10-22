@@ -111,7 +111,7 @@ function push(values: number[], value: number, size: number): void {
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] as number;
+  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
 }
 
 export function clamp01(value: number): number {
