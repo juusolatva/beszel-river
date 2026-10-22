@@ -153,7 +153,7 @@ Environment variables (template: `bridge/.env.example`):
 | `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
-Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults.
+Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults. The optional `pulseScatter` entry (`rate`, `max`, `window`; defaults 2, 2, 50 s) spreads the pulse of each minute record out, see "Pulse scattering"; `"max": 0` leaves one pulse per record.
 
 ### Pipeline
 
@@ -177,7 +177,7 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Filament order = shuffle of the profile seeded by `STREAM_SALT`, the system ID and the UTC date, so the busiest core is not always in the same place and hosts differ.
-5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` jumps on each sample and decays with time constant `pulseDecay` (8 s); a 2 s tick broadcasts the decay. Channels are rounded to three decimals.
+5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, minute records scattered, see below) and decays with time constant `pulseDecay` (8 s); a 2 s tick broadcasts the decay and fires scattered pulses that are due. Channels are rounded to three decimals.
 
 Mapping in the template `bridge/mix.example.json`, checked against a live hub in M4:
 
@@ -189,6 +189,15 @@ Mapping in the template `bridge/mix.example.json`, checked against a live hub in
 | `pulse` | CPU and network rises (and peaks where present) | Spawn waves, brightness flashes |
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
 | `alive` | `status` | Current flows or dries up |
+
+#### Pulse scattering
+
+Minute records arrive for every host within a second or two, so a pulse on each record made all bands flash together and left the rest of the minute without pulses; the flashes also gave away the poll cadence. The mixed `pulse` value p of a minute record is spread over the following minute instead:
+
+- The first pulse, at full strength p, fires at a random time in the first 5 s: within the update, so the river still reacts to load at once. The hosts' first pulses spread over two or three 2 s ticks instead of one.
+- Then n later pulses, n Poisson-distributed with mean `rate` × p and capped at `max`, at random times in the next `window` seconds, each at 0.4–0.8 × p. A busy host pulses more often and harder; an idle one (p near 0) usually not at all.
+- The next sample replaces whatever is still pending. Realtime samples are real 1 s data, so they pulse at once and also cancel pending scattered pulses.
+- Only the timing after the first pulse is invented; the strength still comes from the record. The frame format is unchanged and the frontend knows nothing about it.
 
 ### HTTP API
 
