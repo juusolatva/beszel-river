@@ -15,7 +15,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | Path | Contents |
 |---|---|
 | `shared/src/index.ts` | `Frame` and `Stream` message types. Type-only: `exports` has only a `types` condition, so consumers must use `import type`. |
-| `bridge/` | Node service. `src/beszel/` talks to the hub, `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
+| `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `docs/PLAN.md` | Plan. |
@@ -53,7 +53,7 @@ These protect the point of the project. Do not break them without a change to `d
 
 - Raw metrics, hostnames, system IDs and Beszel field names never leave the bridge. Frames carry only the `Stream` channels, rounded to 3 decimals.
 - Beszel record types are declared in `bridge/src/beszel/types.ts`. Only `bridge/src/beszel/`, `pipeline/features.ts` (stats and info → samples) and `pipeline/hosts.ts` (status, thread count) may read Beszel fields; everything after them works on samples and features. Beszel renames fields between minor releases.
-- Stream IDs are HMAC-SHA256 of the system ID with `STREAM_SALT`; band order is reshuffled daily from the salt and the UTC date; band widths are quantized. Do not add fields that reveal host count, core count or exact rates.
+- Stream IDs are HMAC-SHA256 of the system ID with `STREAM_SALT`; band order is reshuffled daily from the salt and the UTC date; band widths are quantized; `filaments` are always 6 values resampled from the sorted per-core usage, mixed through `mix.json` and reordered daily. Do not add fields that reveal host count, core count or exact rates.
 - The mixing recipe lives in `bridge/mix.json`, which is git-ignored. Only `bridge/mix.example.json` is committed; the frontend never learns the recipe.
 - The public page never mentions Beszel or hostnames in its title or visible text.
 - Secrets live in `bridge/.env` (git-ignored). Never commit real credentials, salts or `mix.json`.
@@ -62,7 +62,7 @@ These protect the point of the project. Do not break them without a change to `d
 
 - Bridge logic is pure where possible; add or update vitest tests in `bridge/test/` for every change to `config.ts`, `pipeline/` or `server.ts`.
 - `bridge/vitest.config.ts` sets coverage thresholds for those modules (90 % statements, functions and lines, 80 % branches); `npm run coverage` fails below them. Do not lower a threshold to make a change pass; add tests instead.
-- End-to-end bridge checks need a running Beszel hub and agent (release binaries from GitHub, run outside the repository). Watch frames with `curl -N http://127.0.0.1:8787/stream`.
+- End-to-end bridge checks need a running Beszel hub and agent (release binaries from GitHub, run outside the repository). Watch frames with `curl -N http://127.0.0.1:8787/stream`. With `SOURCE=realtime`, the bridge logs "Realtime metrics on/off" as viewers come and go.
 - Token mode (`BESZEL_TOKEN`): start the hub with `DISABLE_PASSWORD_AUTH=true` and get a token as a superuser with `POST /api/collections/users/impersonate/<user id>` and the body `{"duration": <seconds>}`.
 - Deployment files: run the CI `deploy` job's commands. `nginx -t` opens the listen sockets, so in a container without IPv6 remove the `listen [::]` lines first, as CI does.
 - The frontend has no unit tests. Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance. It also keeps every core busy, so do not run it on the machine whose metrics you are measuring; replay recorded frames instead.

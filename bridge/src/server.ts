@@ -10,6 +10,8 @@ export interface StreamServerOptions {
   /** Comment line interval that keeps proxies from closing quiet streams, ms. */
   pingMs?: number;
   maxClients?: number;
+  /** Called with the new count whenever a stream opens or closes. */
+  onClients?: (count: number) => void;
 }
 
 function event(name: FrameEvent, frame: Frame): string {
@@ -74,7 +76,11 @@ export class StreamServer {
       });
       response.write(`retry: 5000\n\n${event("snapshot", this.options.snapshot())}`);
       this.clients.add(response);
-      request.on("close", () => this.clients.delete(response));
+      this.options.onClients?.(this.clients.size);
+      request.on("close", () => {
+        // close() has already cleared the set during shutdown.
+        if (this.clients.delete(response)) this.options.onClients?.(this.clients.size);
+      });
     }
   }
 }

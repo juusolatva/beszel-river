@@ -16,8 +16,23 @@ export interface Recipe {
   inputs: Partial<Record<Feature, number>>;
 }
 
+/**
+ * filament = clamp01(bias + weight × (core − center)), smoothed with time constant `tau` seconds, where
+ * `core` is one value of the resampled per-core profile (0..1).
+ */
+export interface FilamentRecipe {
+  bias: number;
+  center: number;
+  weight: number;
+  tau: number;
+}
+
+/** Used when `mix.json` has no `filaments` entry (files from before M6). */
+export const DEFAULT_FILAMENTS: FilamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
+
 export interface MixConfig {
   channels: Record<Mixed, Recipe>;
+  filaments: FilamentRecipe;
   /** Pulse decay time constant, seconds. */
   pulseDecay: number;
 }
@@ -47,9 +62,21 @@ export function parseMixConfig(json: unknown): MixConfig {
     if (tau < 0) fail(`${channel}.tau must be >= 0`);
     channels[channel] = { bias: number(raw.bias, `${channel}.bias`, 0), center: number(raw.center, `${channel}.center`, 0), tau, inputs };
   }
+  let filaments = DEFAULT_FILAMENTS;
+  if (json.filaments !== undefined) {
+    const raw = json.filaments;
+    if (!isObject(raw)) return fail("filaments must be an object");
+    filaments = {
+      bias: number(raw.bias, "filaments.bias", DEFAULT_FILAMENTS.bias),
+      center: number(raw.center, "filaments.center", DEFAULT_FILAMENTS.center),
+      weight: number(raw.weight, "filaments.weight", DEFAULT_FILAMENTS.weight),
+      tau: number(raw.tau, "filaments.tau", DEFAULT_FILAMENTS.tau),
+    };
+    if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  }
   const pulseDecay = number(json.pulseDecay, "pulseDecay");
   if (pulseDecay <= 0) fail("pulseDecay must be > 0");
-  return { channels, pulseDecay };
+  return { channels, filaments, pulseDecay };
 }
 
 export function loadMixConfig(path: string): MixConfig {
@@ -59,6 +86,8 @@ export function loadMixConfig(path: string): MixConfig {
 /** Per-host channel state. */
 export class Mixer {
   readonly values: Record<Mixed, number> = { flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+  /** Mixed per-core profile; null while the host reports no per-core usage. */
+  filaments: number[] | null = null;
   private primed = false;
 
   constructor(private readonly config: MixConfig) {}
@@ -79,6 +108,21 @@ export class Mixer {
       else this.values[channel] = current + (raw - current) * (1 - Math.exp(-Math.max(dt, 0) / recipe.tau));
     }
     this.primed = true;
+  }
+
+  /** Mixes a new per-core profile (`coreProfile`) in; null drops the filaments. */
+  applyFilaments(profile: readonly number[] | null, dt: number): void {
+    if (!profile) {
+      this.filaments = null;
+      return;
+    }
+    const { bias, center, weight, tau } = this.config.filaments;
+    const previous = this.filaments?.length === profile.length ? this.filaments : null;
+    const k = previous && tau > 0 ? 1 - Math.exp(-Math.max(dt, 0) / tau) : 1;
+    this.filaments = profile.map((core, i) => {
+      const raw = clamp01(bias + weight * (core - center));
+      return previous ? previous[i] + (raw - previous[i]) * k : raw;
+    });
   }
 
   /** Lets `pulse` fade between samples; returns whether it changed visibly. */
