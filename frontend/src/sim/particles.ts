@@ -28,6 +28,10 @@ export class ParticleSystem {
   private readonly free: Int32Array;
   private freeTop: number;
   private globalHue = 0;
+  /** Most particles alive at once (`ParticleBudget`), at most `capacity`. */
+  limit: number;
+  /** Brightness factor for a thinned pool. */
+  intensityScale = 1;
 
   constructor(
     readonly capacity: number,
@@ -48,26 +52,28 @@ export class ParticleSystem {
     this.active = new Uint8Array(capacity);
     this.free = Int32Array.from({ length: capacity }, (_, i) => capacity - 1 - i);
     this.freeTop = capacity;
+    this.limit = capacity;
   }
 
   get count(): number {
     return this.capacity - this.freeTop;
   }
 
-  /** Spawns along the bottom edge; rates are normalized so the pool turns over every `turnoverSeconds`. */
-  spawn(dt: number, t: number, streams: StreamSet): void {
+  /** Spawns along the bottom edge; rates are normalized so `limit` particles turn over every `turnoverSeconds`. */
+  spawn(dt: number, streams: StreamSet): void {
     let share = 0;
     for (const s of streams.slots) if (s.used) share += s.shareWeight;
     if (share <= 0) return;
 
     const { random } = this;
-    const baseRate = this.capacity / LOOK.turnoverSeconds / share;
-    streams.slots.forEach((s, slotIndex) => {
-      if (!s.used) return;
+    const baseRate = this.limit / LOOK.turnoverSeconds / share;
+    for (let slotIndex = 0; slotIndex < streams.slots.length; slotIndex++) {
+      const s = streams.slots[slotIndex];
+      if (!s.used) continue;
       s.spawnCarry += baseRate * s.spawnWeight * dt;
       const n = Math.floor(s.spawnCarry);
       s.spawnCarry -= n;
-      for (let k = 0; k < n && this.freeTop > 0; k++) {
+      for (let k = 0; k < n && this.capacity - this.freeTop < this.limit; k++) {
         const i = this.free[--this.freeTop];
         this.active[i] = 1;
         this.slot[i] = slotIndex;
@@ -78,11 +84,11 @@ export class ParticleSystem {
           const lane = s.pickLane(random());
           const activity = s.filaments[lane];
           this.offset[i] = laneCenter(lane) + gaussian(random) * lerp(LOOK.filamentSpread[0], LOOK.filamentSpread[1], activity);
-          this.x[i] = s.centerAt(0, t) + this.offset[i] * s.half;
+          this.x[i] = s.centerAt(0) + this.offset[i] * s.half;
           this.speedJitter[i] *= lerp(LOOK.filamentSpeed[0], LOOK.filamentSpeed[1], activity);
         } else {
           this.offset[i] = 0;
-          this.x[i] = s.centerAt(0, t) + gaussian(random) * s.half * LOOK.spawnSpread;
+          this.x[i] = s.centerAt(0) + gaussian(random) * s.half * LOOK.spawnSpread;
         }
         this.y[i] = -0.02 * random();
         this.vx[i] = 0;
@@ -93,11 +99,11 @@ export class ParticleSystem {
         this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
         s.particles++;
       }
-    });
+    }
   }
 
   /** Advances every particle and writes the live ones to `instances`; returns the instance count. */
-  step(dt: number, t: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
+  step(dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
     const { x, y, vx, vy, age, life, instances } = this;
     const slots = streams.slots;
     const k = 1 - Math.exp(-dt / LOOK.inertia);
@@ -121,7 +127,7 @@ export class ParticleSystem {
       field.sample(x[i], y[i]);
       const up = s.speed * this.speedJitter[i];
       const limit = LOOK.maxSlope * up;
-      const side = clamp(field.sx * s.turbulenceAmp * up + (s.centerAt(y[i], t) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
+      const side = clamp(field.sx * s.turbulenceAmp * up + (s.centerAt(y[i]) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
       vx[i] += (side - vx[i]) * k;
       vy[i] += (up * (1 + 0.3 * field.sy * s.turbulenceAmp) - vy[i]) * k;
       x[i] += vx[i] * dt;
@@ -136,7 +142,7 @@ export class ParticleSystem {
       instances[o + 4] = fract(this.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + this.hueJitter[i]);
       instances[o + 5] = s.chroma;
       instances[o + 6] = LOOK.lightness;
-      instances[o + 7] = LOOK.intensity * fade * s.brightness;
+      instances[o + 7] = LOOK.intensity * this.intensityScale * fade * s.brightness;
       instances[o + 8] = this.size[i] * sizeScale;
       n++;
     }

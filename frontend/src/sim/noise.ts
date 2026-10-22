@@ -42,29 +42,39 @@ export function createSimplex3(random: Random): (x: number, y: number, z: number
     const y0 = yin - (j - t);
     const z0 = zin - (k - t);
 
-    // Offsets of the second and third simplex corners.
-    let i1, j1, k1, i2, j2, k2;
+    // Offsets of the second and third simplex corners. Plain assignments, no temporary arrays: this
+    // runs for every grid point on every frame.
+    let i1 = 0, j1 = 0, k1 = 0, i2 = 1, j2 = 1, k2 = 1;
     if (x0 >= y0) {
-      if (y0 >= z0) [i1, j1, k1, i2, j2, k2] = [1, 0, 0, 1, 1, 0];
-      else if (x0 >= z0) [i1, j1, k1, i2, j2, k2] = [1, 0, 0, 1, 0, 1];
-      else [i1, j1, k1, i2, j2, k2] = [0, 0, 1, 1, 0, 1];
+      i1 = 1;
+      if (y0 >= z0) k2 = 0;
+      else if (x0 >= z0) j2 = 0;
+      else {
+        i1 = 0;
+        k1 = 1;
+        j2 = 0;
+      }
     } else {
-      if (y0 < z0) [i1, j1, k1, i2, j2, k2] = [0, 0, 1, 0, 1, 1];
-      else if (x0 < z0) [i1, j1, k1, i2, j2, k2] = [0, 1, 0, 0, 1, 1];
-      else [i1, j1, k1, i2, j2, k2] = [0, 1, 0, 1, 1, 0];
+      i2 = 0;
+      if (y0 < z0) k1 = 1;
+      else if (x0 < z0) j1 = 1;
+      else {
+        j1 = 1;
+        i2 = 1;
+        k2 = 0;
+      }
     }
 
     const ii = i & 255;
     const jj = j & 255;
     const kk = k & 255;
-    const hash = (a: number, b: number, c: number): number => ii + a + perm[jj + b + perm[kk + c]];
 
     return (
       32 *
-      (corner(hash(0, 0, 0), x0, y0, z0) +
-        corner(hash(i1, j1, k1), x0 - i1 + G3, y0 - j1 + G3, z0 - k1 + G3) +
-        corner(hash(i2, j2, k2), x0 - i2 + 2 * G3, y0 - j2 + 2 * G3, z0 - k2 + 2 * G3) +
-        corner(hash(1, 1, 1), x0 - 1 + 3 * G3, y0 - 1 + 3 * G3, z0 - 1 + 3 * G3))
+      (corner(ii + perm[jj + perm[kk]], x0, y0, z0) +
+        corner(ii + i1 + perm[jj + j1 + perm[kk + k1]], x0 - i1 + G3, y0 - j1 + G3, z0 - k1 + G3) +
+        corner(ii + i2 + perm[jj + j2 + perm[kk + k2]], x0 - i2 + 2 * G3, y0 - j2 + 2 * G3, z0 - k2 + 2 * G3) +
+        corner(ii + 1 + perm[jj + 1 + perm[kk + 1]], x0 - 1 + 3 * G3, y0 - 1 + 3 * G3, z0 - 1 + 3 * G3))
     );
   };
 }
