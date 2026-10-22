@@ -2,7 +2,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: renderer with generated demo data (M2). Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: renderer with generated demo data (M2) and the bridge reading Beszel (M3); connecting the two is M4. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout
 
@@ -24,9 +24,19 @@ Status: renderer with generated demo data (M2). Design, message format and miles
 npm install            # install all workspaces
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
 npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
+npm test               # bridge unit tests (vitest)
 npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
+
+### Bridge setup
+
+1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
+2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT`.
+3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored.
+4. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
+
+Configuration and the mix format are described in [docs/PLAN.md](docs/PLAN.md) under "Bridge".
 
 ### Frontend URL parameters
 

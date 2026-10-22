@@ -1,0 +1,8 @@
+{
+  "flow": { "inputs": { "cpu": 0.7, "load": 0.3 }, "tau": 90 },
+  "density": { "inputs": { "mem": 0.8, "disk": 0.2 }, "tau": 300 },
+  "turbulence": { "inputs": { "netChange": 1.5, "diskChange": 1.0, "net": 0.3 }, "tau": 120 },
+  "pulse": { "inputs": { "burst": 1.0, "netChange": 0.5 } },
+  "heat": { "bias": 0.5, "center": 0.5, "inputs": { "txShare": 0.6, "temp": 0.6 }, "tau": 600 },
+  "pulseDecay": 8
+}

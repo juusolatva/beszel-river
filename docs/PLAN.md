@@ -14,11 +14,11 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Compiler | `typescript` 7.0.2 | Type-checking everywhere; emits the bridge build. |
 | Bridge dev runner | `tsx` 4.23.15 | Watch mode without a build step. |
 | Bridge HTTP | `node:http`, no framework | Only two endpoints. |
-| Beszel client | `pocketbase` 0.28.1 + `eventsource` 5.1.3 (added in M3) | The SDK handles login refresh and realtime reconnects; Node needs an `EventSource` polyfill for it. |
+| Beszel client | `pocketbase` 0.28.1 + `eventsource` 5.1.3 | The SDK handles login refresh and realtime reconnects; Node needs an `EventSource` polyfill for it. |
 | Browser transport | Server-Sent Events | One-way, browser `EventSource` reconnects by itself, simple through nginx. |
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
-| Tests | `vitest` (added in M3, version pinned then) | Normalization and mixing are pure functions. |
+| Tests | `vitest` 5.0.5 (bridge) | Normalization and mixing are pure functions. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
 | CI | GitHub Actions: `npm ci`, `typecheck`, `build` | `.github/workflows/ci.yml` |
 
 ## Architecture
@@ -53,17 +53,23 @@ docs/PLAN.md                  this plan
 shared/src/index.ts           message types [M1]
 bridge/
   .env.example                configuration template
-  mix.example.json            mixing weights template; real bridge/mix.json is git-ignored [M3]
+  mix.example.json            mixing weights template; real bridge/mix.json is git-ignored
+  tsconfig.json               type-checks src and test
+  tsconfig.build.json         emits src to dist
   src/
-    main.ts                   entry: config, wiring
-    config.ts                 env parsing and validation [M3]
-    beszel/client.ts          login, refresh, realtime subscription [M3]
-    beszel/systems-source.ts  60 s adapter [M3]
+    main.ts                   entry: config, wiring, reconnects, broadcast debounce, pulse ticks
+    config.ts                 env parsing and validation
+    log.ts                    timestamped log lines with error cause chains
+    beszel/types.ts           the Beszel record fields the bridge reads
+    beszel/client.ts          login, token refresh, EventSource polyfill
+    beszel/systems-source.ts  60 s adapter
     beszel/realtime-source.ts 1 s adapter [M6]
-    pipeline/normalize.ts     per-host baselines, 0..1 features [M3]
-    pipeline/mix.ts           features → channels [M3]
-    pipeline/anonymize.ts     stream IDs, band order [M3]
-    server.ts                 GET /stream, GET /healthz [M3]
+    pipeline/features.ts      samples, 24 h baselines, 0..1 features
+    pipeline/mix.ts           features → channels, mix.json parsing
+    pipeline/anonymize.ts     stream IDs, band order, band widths
+    pipeline/hosts.ts         per-host state → frames
+    server.ts                 GET /stream, GET /healthz
+  test/                       vitest unit tests
 frontend/
   index.html
   vite.config.ts              dev proxy /stream → bridge
@@ -93,14 +99,15 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
 
 - **API:** PocketBase REST and realtime at `BESZEL_URL`.
 - **Login:** `POST /api/collections/users/auth-with-password`; renew with `POST /api/collections/users/auth-refresh`.
-- **Access:** the bridge user must be in each system's `users` list, unless the hub runs with `SHARE_ALL_SYSTEMS=true`.
+- **Access:** Beszel sets the API rules in `internal/hub/collections.go`. A user can list `systems` and `system_stats` when they are in the system's `users` list, or for every system when the hub runs with `SHARE_ALL_SYSTEMS=true`. Give the bridge user the `readonly` role: it can read but not change systems.
 - **`systems` collection:** one record per host with `id`, `name`, `status` and `info`. Relevant `info` keys: `cpu`, `mp` (memory %), `dp` (disk %), `bb` (bandwidth bytes/s), `la` (load averages), `t` (threads), `dt` (dashboard temperature). The hub refreshes these every 60 s (`interval int = 60_000` in `internal/hub/systems/system_manager.go`).
 - **`system_stats` collection:** history records with a `type` tier (`1m`, `10m`, `20m`, `120m`, `480m`) and a `stats` object.
   - Rates: `cpu`, `mp`, `b` ([sent, recv] bytes/s), `dio` ([read, write] bytes/s).
   - Per-minute peaks: `cpum`, `bm`.
   - Also: `la`, `t` (temperatures), `cpub` (CPU breakdown).
   - A new `1m` record is written per host on each update.
-- **`rt_metrics` realtime topic:** the topic name starts with `rt_metrics` and takes a `system=<id>` query parameter. While subscribed, the hub fetches from that agent every second and pushes the full stats, including `cpus` (per-core usage) and `ni` (per-interface traffic). The exact topic string is undocumented; copy it from the Beszel web UI's network tab in M6.
+- **Unreachable hosts:** Beszel zero-fills `info` for systems it cannot reach (`t: 0`, `dt: 0`, …). The bridge treats a thread count of 0 as unknown and temperatures ≤ 0 as missing.
+- **`rt_metrics` realtime topic:** Beszel's web UI subscribes with `pb.realtime.subscribe("rt_metrics", callback, { query: { system: id } })` (`internal/site/src/components/routes/system/use-system-data.ts`). While subscribed, the hub fetches from that agent every second and pushes `{ stats, info, container }`, with `stats` including `cpus` (per-core usage) and `ni` (per-interface traffic).
 
 ### Adapters
 
@@ -125,18 +132,20 @@ Environment variables (template: `bridge/.env.example`):
 | `SOURCE` | `systems` | Adapter: `systems` or `realtime`. |
 | `BIND_HOST` | `127.0.0.1` | Listen address. |
 | `BIND_PORT` | `8787` | Listen port. |
-| `STREAM_SALT` | (required) | Secret for stream IDs and band order. |
+| `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
+| `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
-Mixing weights are read from `bridge/mix.json`. It is git-ignored, with `bridge/mix.example.json` as the committed template, so the recipe stays secret even if the repository becomes public.
+Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
 
 ### Pipeline
 
 1. **Ingest:** the adapter turns Beszel records into one sample per host: CPU %, memory %, net tx/rx, disk read/write, load per thread, peaks, temperature, status.
 2. **Normalize** each feature to 0..1:
    - CPU and memory: percentages divided by 100.
-   - Byte rates: `log1p(rate)` divided by `log1p(p95)`, where p95 is the host's rolling 95th percentile over 24 h.
+   - Byte rates: `log1p(100 × rate / p95) / log1p(100)`, where p95 is the host's rolling 95th percentile over 24 h (floored at 64 KiB/s for network, 256 KiB/s for disk). That gives 1 at p95, 0.52 at a tenth of it, 0.15 at a hundredth.
    - Load: `la[0] / threads`, clamped.
-   - Burstiness: per-minute peak ÷ average.
+   - Burstiness: the larger of (CPU peak − average) / 50 points and the network peak's excess over the average, both from the per-minute peaks.
+   - Direction: tx share of traffic, 0.5 below 1 KiB/s. Temperature: (max sensor − 30 °C) / 60.
 3. **Mix** features into channels.
    - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
    - Some inputs are changes since the previous sample rather than levels.
@@ -144,7 +153,7 @@ Mixing weights are read from `bridge/mix.json`. It is git-ignored, with `bridge/
 4. **Anonymize:**
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
-5. **Broadcast** the full state of all streams to every connected viewer.
+5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` jumps on each sample and decays with time constant `pulseDecay` (8 s); a 2 s tick broadcasts the decay. Channels are rounded to three decimals.
 
 Initial mapping, tuned in M4:
 
@@ -162,6 +171,8 @@ Initial mapping, tuned in M4:
 - **`GET /stream`** (`text/event-stream`):
   - On connect: `retry: 5000` and a `snapshot` event.
   - Then an `update` event after each upstream change, and a `: ping` comment every 15 s so proxies keep the connection open.
+  - Sends `X-Accel-Buffering: no`, so nginx streams it even without `proxy_buffering off`.
+  - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
 
 ## Message format
@@ -242,8 +253,9 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - [ ] **M2 – Renderer + demo source.** Particles, trails, colour, multi-stream layout, all driven by `DemoSource`.
   - Done when: `npm run dev:frontend` shows the river at 60 fps on a desktop browser, and changing demo channels visibly changes it.
   - Status: implemented. Channel changes, a host going down and stream removal are checked in headless Chromium. The 60 fps check needs a real browser with a GPU.
-- [ ] **M3 – Bridge with `systems` adapter.** Config, Beszel client, baselines, normalize, mix, anonymize, SSE server, vitest unit tests.
+- [x] **M3 – Bridge with `systems` adapter.** Config, Beszel client, baselines, normalize, mix, anonymize, SSE server, vitest unit tests.
   - Done when: `curl -N http://127.0.0.1:8787/stream` (`-N` disables curl's output buffering, so events print as they arrive) shows a frame per minute for every host, and `npm test` passes.
+  - Verified against a local Beszel v0.21.0 hub and agent: one frame per hub update, paused system hidden, unreachable system not alive, in the first update after a CPU stress run started, `flow` 0.03 → 0.14 and a `pulse` of 0.30; after a full minute of load, `flow` 0.52.
 - [ ] **M4 – Integration and tuning.** The frontend uses `StreamSource`; tune the mapping against real data.
   - Done when: the river visibly reacts to load on a host (e.g. a CPU stress run) within one update.
 - [ ] **M5 – Deployment.** Dockerfile, compose file, nginx config, deploy notes in README.
