@@ -1,4 +1,5 @@
 import type { Frame, FrameEvent, Stream } from "@beszel-river/shared";
+import { FILAMENTS } from "../sim/streams";
 import { clamp } from "../util/math";
 import type { FrameSource } from "./source";
 
@@ -85,7 +86,10 @@ export class StreamSource implements FrameSource {
   };
 }
 
-/** Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation. */
+/**
+ * Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation, and
+ * `filaments` is kept only with the expected length.
+ */
 export function parseFrame(data: string): Frame | null {
   let raw: unknown;
   try {
@@ -101,6 +105,10 @@ export function parseFrame(data: string): Frame | null {
     for (const channel of CHANNELS) {
       const value = s[channel];
       if (typeof value === "number" && Number.isFinite(value)) stream[channel] = clamp(value, 0, 1);
+    }
+    const filaments = s.filaments;
+    if (Array.isArray(filaments) && filaments.length === FILAMENTS && filaments.every((f) => typeof f === "number" && Number.isFinite(f))) {
+      stream.filaments = filaments.map((f: number) => clamp(f, 0, 1));
     }
     streams.push(stream);
   }
