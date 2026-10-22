@@ -86,6 +86,14 @@ curl -N http://127.0.0.1:8787/stream
 - `docker compose -f deploy/compose.yml`: uses that compose file. `up -d` starts in the background; `--build` builds the image first. `ps` lists the service and its health.
 - `curl -N`: prints events as they arrive.
 
+If the hub runs with `network_mode: host`, it is on no Docker network. Run the bridge on the host network too, with `BESZEL_URL=http://127.0.0.1:8090` (the hub's port), adding the override file:
+
+```sh
+docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml up -d --build
+```
+
+The bridge then listens on the host's `127.0.0.1:8787` directly; `BESZEL_NETWORK` is not used. Pass the same two `-f` options to every later `docker compose` command (`ps`, `logs`, `down`).
+
 `bridge/mix.json` must exist; compose refuses to start without it. To update: `git pull`, then the same `up -d --build` command.
 
 ### 2b. Bridge under systemd (hub not in Docker)

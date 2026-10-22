@@ -57,6 +57,7 @@ jobs:
         run: |
           cp bridge/.env.example bridge/.env
           docker compose -f deploy/compose.yml config --quiet
+          docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml config --quiet
       - name: Check nginx configs
         run: |
           le="$RUNNER_TEMP/le/live/river.example.com"
