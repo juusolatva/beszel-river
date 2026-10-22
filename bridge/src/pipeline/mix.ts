@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { clamp01, FEATURES, type Feature, type Features } from "./features.js";
+import { webcrypto } from "node:crypto";
+// Workaround for TypeScript DOM lib conflict: using webcrypto as Crypto
+const crypto = webcrypto as unknown as Crypto;
 
 /** Channels the mixer produces; `width` and `alive` come from the host table instead. */
 export const MIXED = ["flow", "density", "turbulence", "pulse", "heat"] as const;
@@ -114,7 +117,13 @@ export function parseMixConfig(json: unknown): MixConfig {
   const section = <T extends object>(raw: unknown, name: string, defaults: T): T => {
     if (raw === undefined) return defaults;
     if (!isObject(raw)) return fail(`${name} must be an object`);
-    return Object.fromEntries(Object.entries(defaults).map(([field, fallback]) => [field, number(raw[field], `${name}.${field}`, fallback as number)])) as T;
+    const result = {} as T;
+    for (const field in defaults) {
+      if (Object.prototype.hasOwnProperty.call(defaults, field)) {
+        result[field] = number(raw[field as keyof typeof raw], `${name}.${field}`, defaults[field] as number) as T[Extract<keyof T, string>];
+      }
+    }
+    return result;
   };
 
   if (!isObject(json)) return fail("expected an object");
@@ -167,7 +176,7 @@ export class Mixer {
 
   constructor(
     private readonly config: MixConfig,
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = () => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000,
   ) {}
 
   /**

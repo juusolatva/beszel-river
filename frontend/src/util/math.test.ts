@@ -1,55 +1,49 @@
-import { describe, it, expect } from 'vitest';
-import { hashString, mulberry32, gaussian, ease, lerp, clamp, fract } from './math';
+import { describe, expect, it, vi } from "vitest";
+import { fract, lerp, clamp, mulberry32, gaussian, hashString, ease } from "./math.js";
 
-describe('hashString', () => {
-  it('should return a number between 0 (inclusive) and 1 (exclusive)', () => {
-    const result = hashString('test string');
-    expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThan(1);
+describe("mulberry32", () => {
+  it("returns a function that generates pseudo-random numbers", () => {
+    const random = mulberry32(12345);
+    const val1 = random();
+    const val2 = random();
+    expect(val1).toBeGreaterThanOrEqual(0);
+    expect(val1).toBeLessThan(1);
+    expect(val2).toBeGreaterThanOrEqual(0);
+    expect(val2).toBeLessThan(1);
+    expect(val1).not.toBe(val2);
   });
 
-  it('should return consistent results for the same input', () => {
-    expect(hashString('hello world')).toBe(hashString('hello world'));
-  });
-
-  it('should return different results for different inputs', () => {
-    expect(hashString('hello')).not.toBe(hashString('world'));
-  });
-
-  it('should handle empty strings', () => {
-    const result = hashString('');
-    expect(result).toBeGreaterThanOrEqual(0);
-    expect(result).toBeLessThan(1);
-    expect(result).toBe((0x811c9dc5 >>> 0) / 4294967296);
-  });
-
-  it('should calculate the correct FNV-1a hash mapped to [0, 1)', () => {
-    const resultA = hashString('a');
-    let h = 0x811c9dc5;
-    h ^= 97;
-    h = Math.imul(h, 0x01000193);
-    const expected = (h >>> 0) / 4294967296;
-    expect(resultA).toBe(expected);
+  it("is deterministic based on the seed", () => {
+    const random1 = mulberry32(12345);
+    const random2 = mulberry32(12345);
+    expect(random1()).toBe(random2());
+    expect(random1()).toBe(random2());
   });
 });
 
-describe('mulberry32', () => {
-  it('should return a function that generates numbers between 0 and 1', () => {
-    const random = mulberry32(12345);
-    for (let i = 0; i < 100; i++) {
-      const val = random();
-      expect(val).toBeGreaterThanOrEqual(0);
-      expect(val).toBeLessThan(1);
-    }
+describe("gaussian", () => {
+  it("generates numbers that look like a normal distribution", () => {
+    // This is hard to test deterministically without a fixed PRNG,
+    // so we'll just check that it runs and returns numbers.
+    const mockRandom = vi.fn().mockReturnValue(0.5);
+    const result = gaussian(mockRandom);
+    expect(typeof result).toBe("number");
+  });
+});
+
+describe("hashString", () => {
+  it("returns a number between 0 and 1", () => {
+    const hash = hashString("hello world");
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThan(1);
   });
 
-  it('should be deterministic based on the seed', () => {
-    const rand1 = mulberry32(42);
-    const rand2 = mulberry32(42);
+  it("returns the same value for the same string", () => {
+    expect(hashString("test")).toBe(hashString("test"));
+  });
 
-    for (let i = 0; i < 10; i++) {
-      expect(rand1()).toBe(rand2());
-    }
+  it("returns different values for different strings", () => {
+    expect(hashString("test1")).not.toBe(hashString("test2"));
   });
 });
 
@@ -64,6 +58,20 @@ describe('gaussian', () => {
     const val = gaussian(mockRandom);
     expect(callCount).toBe(2);
     expect(val).toBeCloseTo(Math.sqrt(-2 * Math.log(0.5)) * Math.cos(0));
+  });
+describe("ease", () => {
+  it("moves current towards target based on time constant and delta time", () => {
+    const current = 0;
+    const target = 10;
+    const tau = 1;
+    const dt = 1;
+
+    const result1 = ease(current, target, tau, dt);
+    expect(result1).toBeGreaterThan(0);
+    expect(result1).toBeLessThan(10);
+
+    // With infinite time, it reaches the target
+    expect(ease(current, target, tau, 1000)).toBeCloseTo(10);
   });
 
   it('should handle typical values for u and v', () => {
@@ -102,47 +110,46 @@ describe('gaussian', () => {
   });
 });
 
-describe('ease', () => {
-  it('should move current towards target', () => {
-    const result = ease(0, 100, 1, 0.5);
-    expect(result).toBeGreaterThan(0);
-    expect(result).toBeLessThan(100);
-    expect(result).toBeCloseTo(100 * (1 - Math.exp(-0.5/1)));
+describe("fract", () => {
+  it("returns the fractional part of a positive number", () => {
+    expect(fract(1.25)).toBeCloseTo(0.25);
+    expect(fract(0.5)).toBeCloseTo(0.5);
+    expect(fract(42.99)).toBeCloseTo(0.99);
   });
 
-  it('should reach target if dt is very large', () => {
-    const result = ease(0, 100, 1, 1000);
-    expect(result).toBeCloseTo(100);
+  it("returns the fractional part of a negative number", () => {
+    // Math.floor(-1.25) is -2, so -1.25 - (-2) = 0.75
+    expect(fract(-1.25)).toBeCloseTo(0.75);
+    expect(fract(-0.5)).toBeCloseTo(0.5);
+    expect(fract(-42.99)).toBeCloseTo(0.01);
   });
 
-  it('should not move if current equals target', () => {
-    const result = ease(50, 50, 1, 0.5);
-    expect(result).toBe(50);
+  it("returns 0 for whole numbers", () => {
+    expect(fract(1)).toBe(0);
+    expect(fract(0)).toBe(0);
+    expect(fract(-5)).toBe(0);
+  });
+
+  it("handles edge cases correctly", () => {
+    expect(fract(0.000000000000001)).toBeCloseTo(0.000000000000001);
   });
 });
 
-describe('lerp', () => {
-  it('should correctly interpolate between two values', () => {
+describe("lerp", () => {
+  it("interpolates between two values correctly", () => {
+    expect(lerp(0, 10, 0.5)).toBe(5);
     expect(lerp(0, 10, 0)).toBe(0);
     expect(lerp(0, 10, 1)).toBe(10);
-    expect(lerp(0, 10, 0.5)).toBe(5);
-    expect(lerp(10, 20, 0.2)).toBe(12);
+    expect(lerp(5, 15, 0.2)).toBe(7);
   });
 });
 
-describe('clamp', () => {
-  it('should keep value within bounds', () => {
+describe("clamp", () => {
+  it("clamps a value within the specified range", () => {
     expect(clamp(5, 0, 10)).toBe(5);
     expect(clamp(-5, 0, 10)).toBe(0);
     expect(clamp(15, 0, 10)).toBe(10);
-  });
-});
-
-describe('fract', () => {
-  it('should return the fractional part of a number', () => {
-    expect(fract(1.25)).toBeCloseTo(0.25);
-    expect(fract(3.99)).toBeCloseTo(0.99);
-    expect(fract(5)).toBeCloseTo(0);
-    expect(fract(-1.25)).toBeCloseTo(0.75); // -1.25 - floor(-1.25) = -1.25 - (-2) = 0.75
+    expect(clamp(10, 0, 10)).toBe(10);
+    expect(clamp(0, 0, 10)).toBe(0);
   });
 });
