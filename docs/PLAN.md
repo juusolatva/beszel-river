@@ -298,9 +298,10 @@ Commands and steps are in README, "Deployment".
 - [x] **M0 – Project setup.** Workspaces, TypeScript config, Vite, CI, this plan.
 - [x] **M1 – Message format.** `Frame` and `Stream` types in `shared/src/index.ts`.
   - Done when: bridge and frontend both type-check against them. The frontend uses them; the bridge starts using them in M3.
-- [ ] **M2 – Renderer + demo source.** Particles, trails, colour, multi-stream layout, all driven by `DemoSource`.
+- [x] **M2 – Renderer + demo source.** Particles, trails, colour, multi-stream layout, all driven by `DemoSource`.
   - Done when: `npm run dev:frontend` shows the river at 60 fps on a desktop browser, and changing demo channels visibly changes it.
-  - Status: implemented. Channel changes, a host going down and stream removal are checked in headless Chromium. The 60 fps check needs a real browser with a GPU.
+  - Channel changes, a host going down and stream removal were checked in headless Chromium.
+  - 60 fps: the public page with `?debug` on a ThinkPad X280 (Core i5-8350U, integrated UHD 620 graphics), 4 live streams: 60 fps with 13 679 particles and 3.9 ms of simulation per frame. That was the production build with live data rather than the dev server with demo frames, and a build from before M7 (its panel shows no particle limit). It is a laptop with integrated graphics, which is a harder case than the desktop the condition names.
 - [x] **M3 – Bridge with `systems` adapter.** Config, Beszel client, baselines, normalize, mix, anonymize, SSE server, vitest unit tests.
   - Done when: `curl -N http://127.0.0.1:8787/stream` (`-N` disables curl's output buffering, so events print as they arrive) shows a frame per minute for every host, and `npm test` passes.
   - Verified against a local Beszel v0.21.0 hub and agent: one frame per hub update, paused system hidden, unreachable system not alive, in the first update after a CPU stress run started, `flow` 0.03 → 0.14 and a `pulse` of 0.30; after a full minute of load, `flow` 0.52.
