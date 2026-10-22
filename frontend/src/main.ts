@@ -37,7 +37,8 @@ let source: FrameSource;
 if (config.demo) source = startDemo();
 else {
   source = new StreamSource({
-    url: "/stream",
+    // Relative, so the page also works under a path such as /river/ (nginx proxies <path>/stream).
+    url: "stream",
     onUnavailable: import.meta.env.DEV
       ? () => {
           console.info("Bridge not reachable at /stream, using demo frames");

@@ -1,0 +1,36 @@
+# Bridge as a systemd service, for a Beszel hub that does not run in Docker.
+# Expects the repository in /opt/beszel-river with the bridge built (README, "Deployment"), and
+# bridge/.env and bridge/mix.json readable by the beszel-river user. Adjust the node path if Node 24
+# is installed elsewhere (`command -v node`).
+#   cp deploy/beszel-river-bridge.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now beszel-river-bridge
+
+[Unit]
+Description=beszel-river bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=beszel-river
+Group=beszel-river
+# main.js loads .env from the working directory.
+WorkingDirectory=/opt/beszel-river/bridge
+ExecStart=/usr/bin/node dist/main.js
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
