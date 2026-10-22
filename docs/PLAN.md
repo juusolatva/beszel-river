@@ -86,6 +86,7 @@ frontend/
     source/demo.ts            generated channels for development
     sim/streams.ts            per-stream eased state, band layout, lifecycle
     sim/particles.ts          particle pool and motion
+    sim/budget.ts             adaptive particle limit for slow devices
     sim/noise.ts              simplex noise, curl flow field
     render/renderer.ts        trail buffers, particle pass, tone mapping
     render/gl.ts              WebGL2 program and render-target helpers
@@ -230,7 +231,9 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - **Sources:** `StreamSource` (`EventSource` on `/stream`) and `DemoSource` (generated channels) share one interface. `?demo` in the URL forces the demo source; in dev it is also the fallback when the bridge is not running.
   - `StreamSource` accepts only `v: 1` frames and clamps every channel to 0..1; `filaments` is kept only with exactly 6 numbers.
   - `DemoSource` sends filaments too (wandering around `flow`, with an occasional busy lane); the `?debug` panel toggles them per stream.
-  - The browser reconnects by itself after a dropped connection. An HTTP error (nginx's 502 while the bridge restarts) closes an `EventSource` for good, so `StreamSource` then reopens it after 5 s, doubling up to 60 s.
+  - The browser reconnects by itself after a dropped connection. An HTTP error (nginx's 502 while the bridge restarts) closes an `EventSource` for good, so `StreamSource` then reopens it after 5 s, doubling up to 60 s. The browser's `online` event skips the rest of the wait.
+  - After 20 s without a connection, every stream thins out and greys as if its host were down, so a stale river does not pass for live data; the snapshot after reconnecting restores it. A bridge restart or a short network drop stays within the 20 s.
+  - In dev, when the bridge is not running, the page hands over to `DemoSource` for good (it stops listening, so showing the tab again does not reconnect alongside the demo).
 - **Smoothing:** each channel eases exponentially toward its latest value (time constant 1–5 s), so 60 s and 1 s updates both look continuous.
 - **Simulation:**
   - The particle pool is fixed-size, held in `Float32Array`s and updated on the CPU.
@@ -258,7 +261,10 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - **Performance and accessibility:**
   - devicePixelRatio is capped at 1.5.
   - The `EventSource` closes while the tab is hidden.
-  - `prefers-reduced-motion` gets fewer, slower particles.
+  - `prefers-reduced-motion`: half the particles, half the speed and sideways noise, half-speed braiding, and pulse flashes and spawn waves at a quarter of their strength, rising over 0.6 s instead of 0.3 s.
+  - Adaptive budget (`sim/budget.ts`): after 2 s of frames slower than 1.5× the display period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool, and particles get brighter (up to 2×) so the river keeps its weight. After 10 s of keeping up it rises by a tenth; each drop doubles that wait, up to 2 min, so it settles. The display period is the fastest frame interval seen, at most 1/30 s, learned while the pool fills on load, so a 30 Hz display or throttled browser is left alone. `?particles=N` fixes the count.
+  - The simulation and renderer allocate nothing per frame: the band layout sorts into a preallocated list, and the noise function uses plain locals (its output is unchanged).
+  - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
 
 ## Deployment
@@ -323,7 +329,17 @@ Commands and steps are in README, "Deployment".
     - A refused subscription (unknown system ID) next to a valid one, in either order: the valid one delivered 5 samples in 5 s and the refused topic was dropped. Before subscriptions ran one at a time, the shared batch failed and the valid host got nothing.
     - The one-core recording replayed in headless Chromium (agent stopped): idle lanes blur into a haze, the busy core's lane is a brighter strand. `?demo` shows filaments in every band.
     - Not checked on the public deployment, which runs `SOURCE=systems`.
-- [ ] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
+- [x] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
+  - Done when: reduced motion, a slow device, a phone, a lost connection, a browser coming back online and a browser without WebGL2 each get the behaviour under "Frontend", checked in headless Chromium.
+  - Verified in headless Chromium against recorded realtime frames (agent stopped), served by the production build through nginx with `river-path.conf` where the connection mattered:
+    - Software WebGL (10–15 fps): the limit fell 20 000 → 5 000 in about 12 s; with `?particles=20000` it stayed. A simulation of the budget against frame-time models: no change at 60 Hz, 144 Hz at 90 fps, 30 Hz throttling or tab switches; overloaded devices settled near 50 fps without swinging over 15 min.
+    - Reduced motion: pool 10 000; phone viewport (390 × 844, touch): pool 8 000. Both then thinned by the budget under software WebGL.
+    - Replay server killed: unchanged at 8 s, a grey trickle at 30 s (mean brightness 4.6 → 0.5, colourfulness 4.9 → 0.1); reconnected 3.9 s after the server returned and regained its colour.
+    - Server down for 40 s (backoff at 40 s), browser offline, server back, browser online: the stream reopened at once instead of about 33 s later.
+    - `--disable-webgl`: the note is shown.
+    - Vite's dev proxy keeps `/stream` open when its upstream dies, so the lost-connection behaviour shows only behind nginx (or with no proxy).
+    - The noise rewrite returned identical values for 51 100 sample points.
+    - Not checked: frame rates on real phones and GPUs (the open M2 check).
 
 ## Risks
 
