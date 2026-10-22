@@ -1,0 +1,43 @@
+# Bridge service. From this directory: docker compose up -d --build
+# Needs bridge/.env and bridge/mix.json (README, "Deployment").
+name: beszel-river
+
+services:
+  bridge:
+    build:
+      context: ..
+      dockerfile: deploy/bridge.Dockerfile
+    image: beszel-river-bridge
+    restart: unless-stopped
+    env_file: ../bridge/.env
+    environment:
+      # The container must listen on all its interfaces; the port mapping keeps it on the host's loopback.
+      BIND_HOST: 0.0.0.0
+      BIND_PORT: "8787"
+      MIX_FILE: mix.json
+    volumes:
+      # Required: without it the bridge would run the public template recipe. create_host_path: false
+      # makes a missing file an error instead of Docker creating an empty directory in its place.
+      - type: bind
+        source: ../bridge/mix.json
+        target: /app/bridge/mix.json
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8787:8787"
+    networks: [beszel]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  beszel:
+    # The Beszel hub's compose network; BESZEL_URL in bridge/.env is then http://<hub service>:8090.
+    external: true
+    name: ${BESZEL_NETWORK:-beszel_default}

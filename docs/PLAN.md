@@ -19,7 +19,8 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge) | Normalization and mixing are pure functions; coverage thresholds gate the pure modules. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci`, `typecheck`, `coverage`, `build` on Node 22.12.0 and 24 | `.github/workflows/ci.yml`; tests both ends of the supported range. |
+| CI | GitHub Actions: `npm ci`, `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image and runs `docker compose config` and `nginx -t` | `.github/workflows/ci.yml`; tests both ends of the supported range and keeps the deployment files valid. |
+| Deployment | Bridge in Docker (`node:24-alpine`) next to the hub, or systemd; host nginx serves the static build and proxies `/stream` | See "Deployment". |
 
 ## Architecture
 
@@ -49,6 +50,7 @@ Current files plus the planned ones (milestone in brackets).
 
 ```
 .github/workflows/ci.yml      CI
+.dockerignore                 keeps secrets and build output out of the image build context
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
 docs/PLAN.md                  this plan
@@ -75,7 +77,7 @@ bridge/
   test/                       vitest unit tests
 frontend/
   index.html
-  vite.config.ts              dev proxy /stream → bridge
+  vite.config.ts              relative base, dev proxy /stream → bridge
   src/
     main.ts                   entry: wiring and frame loop
     config.ts                 look tunables (LOOK) and URL parameters
@@ -91,9 +93,11 @@ frontend/
     debug/panel.ts            ?debug panel: channel sliders, stats
     util/math.ts              PRNG, easing, small helpers
 deploy/
-  bridge.Dockerfile           [M5]
-  compose.yml                 [M5]
-  nginx/river.conf            [M5]
+  bridge.Dockerfile           bridge image, built from the repository root
+  compose.yml                 bridge service on the hub's Docker network
+  beszel-river-bridge.service systemd unit, when the hub does not run in Docker
+  nginx/river.conf            own server block: TLS, static root, /stream proxy
+  nginx/river-path.conf       alternative: locations for /river/ in an existing server block
 ```
 
 ## Data source: Beszel hub
@@ -236,20 +240,30 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - `prefers-reduced-motion` gets fewer, slower particles.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
 
-## Deployment (M5)
+## Deployment
 
-- **Bridge:**
-  - Multi-stage Docker image on `node:24-alpine`.
-  - Compose service on the Beszel hub's Docker network, so `BESZEL_URL` is `http://<hub-service>:8090`.
-  - Port published as `127.0.0.1:8787:8787`; environment loaded from `bridge/.env`.
-  - If the hub does not run in Docker, use a systemd service running `node bridge/dist/main.js` instead.
-- **Frontend:** `npm run build -w @beszel-river/frontend`, then copy `frontend/dist/` to the nginx web root.
-- **nginx:**
-  - Static root, plus `location /stream` proxied to `127.0.0.1:8787` with:
+Commands and steps are in README, "Deployment".
+
+- **Bridge in Docker** (`deploy/bridge.Dockerfile`, `deploy/compose.yml`):
+  - Multi-stage image on `node:24-alpine`: build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
+  - `.dockerignore` keeps `.env`, `mix.json`, `node_modules` and build output out of the context, so the image holds no secrets.
+  - The compose service joins the hub's network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
+  - Environment from `bridge/.env`; compose overrides `BIND_HOST=0.0.0.0` and `BIND_PORT=8787` inside the container and publishes `127.0.0.1:8787:8787`.
+  - `bridge/mix.json` is bind-mounted read-only and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it.
+  - Read-only root filesystem, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
+- **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options.
+- **Frontend:** `npm run build -w @beszel-river/frontend`, then copy `frontend/dist/` to the web root. The build uses relative asset URLs (`base: "./"`) and connects to the relative `stream`, so the same files work at a site root or under a path.
+- **nginx** (`deploy/nginx/river.conf`, own server block):
+  - HTTP → HTTPS redirect; HTTP/2, because HTTP/1.1 browsers open at most 6 connections per host and every open tab holds one stream.
+  - `location = /stream` proxied to `127.0.0.1:8787` with:
     - `proxy_buffering off`: send events immediately.
     - `proxy_http_version 1.1` and `proxy_set_header Connection ""`: keep the upstream connection open.
     - `proxy_read_timeout 1h`: do not cut quiet streams.
-  - `limit_conn` caps concurrent streams per IP.
+    - `limit_conn` 8 per client address (each HTTP/2 request counts), answered with 429.
+  - `/healthz` is not proxied.
+  - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
+  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`.
+  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block.
 
 ## Milestones
 
@@ -271,6 +285,11 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
     - Dev without the bridge falls back to demo frames. In a production build, the stream retries after 502s (5 s, then 10 s, then 20 s) and recovers when the bridge returns. Hiding the tab closes the stream; showing it reopens it.
 - [ ] **M5 – Deployment.** Dockerfile, compose file, nginx config, deploy notes in README.
   - Done when: the public URL serves the river from live data.
+  - Status: deployment files written and checked against a local Beszel v0.21.0 hub, with the hub behind a container named `beszel` on a `beszel_default` network:
+    - `docker compose up` with `deploy/compose.yml` unchanged: the container became healthy, logged in through `http://beszel:8090` and streamed frames; `docker compose stop` shut it down in 0.3 s through the SIGTERM handler. Without `bridge/mix.json`, compose refuses to start.
+    - nginx 1.29 with `river.conf` (self-signed certificate; the sandbox has no IPv6, so the `[::]` listens were removed for the test): HTTP redirects to HTTPS; the page and assets are served over HTTP/2 with the cache and security headers; `/stream` delivers each update as it is sent; `/healthz` is 404; a ninth concurrent stream gets 429.
+    - Headless Chromium through nginx, at the root and under `/river/` with `river-path.conf`: no CSP violations, `/stream` connected, the river rendered from live frames.
+    - Remaining: deploy on the VPS and check the public URL.
 - [ ] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
 - [ ] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
 
@@ -284,7 +303,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 | Public `/stream` abuse. | `limit_conn` per IP; payload is tiny; one upstream subscription regardless of viewers. |
 | Recipe leaks via frontend code. | Mixing happens in the bridge; the frontend only knows channel → visual. |
 
-## Needed before M5
+## Needed to finish M5
 
 - Domain or subdomain for the site.
 - Whether the Beszel hub runs in Docker, and if so its compose service and network names.

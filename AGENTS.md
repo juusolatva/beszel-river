@@ -17,6 +17,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `shared/src/index.ts` | `Frame` and `Stream` message types. Type-only: `exports` has only a `types` condition, so consumers must use `import type`. |
 | `bridge/` | Node service. `src/beszel/` talks to the hub, `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them. Look tunables are `LOOK` in `src/config.ts`. |
+| `deploy/` | Bridge Dockerfile and compose file, systemd unit, nginx configs. CI builds the image and checks the configs. |
 | `docs/PLAN.md` | Plan. |
 
 ## Commands
@@ -33,7 +34,7 @@ npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile` and checks `deploy/compose.yml` (`docker compose config`) and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
