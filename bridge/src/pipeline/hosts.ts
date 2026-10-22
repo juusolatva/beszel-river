@@ -38,7 +38,7 @@ export class HostTable {
     private readonly salt: string,
     private readonly mix: MixConfig,
     /** Times and sizes of scattered pulses; injectable for tests. */
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = () => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000,
   ) {}
 
   /** Adds or updates a host from its `systems` record; returns whether the frame changed. */
@@ -76,7 +76,13 @@ export class HostTable {
 
   /** Hosts worth an `rt_metrics` subscription: the hub would poll the others' agents in vain. */
   realtimeTargets(): string[] {
-    return [...this.hosts.values()].filter((h) => h.status === "up").map((h) => h.systemId);
+    const targets: string[] = [];
+    for (const h of this.hosts.values()) {
+      if (h.status === "up") {
+        targets.push(h.systemId);
+      }
+    }
+    return targets;
   }
 
   /**
