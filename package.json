@@ -16,7 +16,8 @@
     "dev:frontend": "npm run dev -w @beszel-river/frontend",
     "build": "npm run build -ws --if-present",
     "typecheck": "npm run typecheck -ws --if-present",
-    "test": "npm run test -ws --if-present"
+    "test": "npm run test -ws --if-present",
+    "coverage": "npm run coverage -ws --if-present"
   },
   "devDependencies": {
     "typescript": "7.0.2"
