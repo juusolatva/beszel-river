@@ -13,6 +13,12 @@ const TOKEN_WARN_MS = 14 * 24 * 60 * 60 * 1000;
 /** PocketBase client logged in as the bridge's Beszel user. */
 export class BeszelClient {
   readonly pb: PocketBase;
+  /**
+   * Second client with the same login and its own realtime connection, for `rt_metrics`. The SDK
+   * resends every topic of a connection on each change, and the hub rejects the whole set if one
+   * `rt_metrics` target is refused, so keeping them apart protects the `systems` subscriptions.
+   */
+  readonly rt: PocketBase;
   private refreshTimer: NodeJS.Timeout | undefined;
 
   constructor(
@@ -20,8 +26,11 @@ export class BeszelClient {
     private readonly auth: BeszelAuth,
   ) {
     this.pb = new PocketBase(url);
+    this.rt = new PocketBase(url);
     // The bridge runs overlapping requests on purpose; the SDK would otherwise cancel duplicates.
     this.pb.autoCancellation(false);
+    this.rt.autoCancellation(false);
+    this.pb.authStore.onChange((token, record) => this.rt.authStore.save(token, record));
   }
 
   get connected(): boolean {
@@ -49,7 +58,7 @@ export class BeszelClient {
 
   async close(): Promise<void> {
     clearInterval(this.refreshTimer);
-    await this.pb.realtime.unsubscribe().catch(() => undefined);
+    await Promise.all([this.pb.realtime.unsubscribe().catch(() => undefined), this.rt.realtime.unsubscribe().catch(() => undefined)]);
   }
 
   private warnIfExpiring(): void {

@@ -37,7 +37,7 @@ export interface SystemStatsRecord {
   stats: SystemStats;
 }
 
-/** `system_stats.stats`: one minute of readings. */
+/** `system_stats.stats`: one minute of readings; `rt_metrics` sends the same object every second. */
 export interface SystemStats {
   /** CPU %, average and peak. */
   cpu?: number;
@@ -59,4 +59,12 @@ export interface SystemStats {
   la?: number[];
   /** Temperatures by sensor, °C. */
   t?: Record<string, number>;
+  /** Busy % per core, in core order. */
+  cpus?: number[];
+}
+
+/** `rt_metrics` message: what the hub fetches from the agent every second while subscribed. */
+export interface RealtimeData {
+  /** Same fields as `system_stats.stats`, without the peaks the hub adds when aggregating. */
+  stats?: SystemStats;
 }

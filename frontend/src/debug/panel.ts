@@ -67,7 +67,8 @@ export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
     const rows = (frame?.streams ?? []).map((stream) => {
       const box = document.createElement("div");
       box.className = "stream";
-      box.textContent = `${stream.id} ${stream.alive ? "alive" : "down"}\n${CHANNELS.map((c) => `${c.padEnd(11)}${stream[c].toFixed(3)}`).join("\n")}`;
+      const filaments = stream.filaments ? `\n${"filaments".padEnd(11)}${stream.filaments.map((f) => f.toFixed(2)).join(" ")}` : "";
+      box.textContent = `${stream.id} ${stream.alive ? "alive" : "down"}\n${CHANNELS.map((c) => `${c.padEnd(11)}${stream[c].toFixed(3)}`).join("\n")}${filaments}`;
       box.style.whiteSpace = "pre";
       return box;
     });
@@ -97,6 +98,10 @@ export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
         demo.emit();
       }),
       hold,
+      checkbox("filaments", stream.filaments, (checked) => {
+        stream.filaments = checked;
+        demo.emit();
+      }),
     );
     box.append(title);
 

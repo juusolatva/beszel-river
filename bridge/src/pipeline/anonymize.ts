@@ -17,6 +17,16 @@ export function bandOrder(salt: string, systemIds: readonly string[], now: Date)
 }
 
 /**
+ * Order of a stream's filaments for the day, as indexes into its ascending core profile, so the
+ * busiest filament is not always in the same place and the order differs between hosts.
+ */
+export function filamentOrder(salt: string, systemId: string, count: number, now: Date): number[] {
+  const day = now.toISOString().slice(0, 10);
+  const keyed = Array.from({ length: count }, (_, index) => ({ index, key: hmac(salt, `${day}:${systemId}:filament:${index}`) }));
+  return keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).map((k) => k.index);
+}
+
+/**
  * Relative band width from thread counts: log scale between the smallest and largest host,
  * quantized to quarters so it does not reveal exact core counts. All equal → 0.5; hosts left out
  * (unknown thread count) get 0.5 from the caller.

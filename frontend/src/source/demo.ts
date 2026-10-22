@@ -1,4 +1,5 @@
 import type { Channel, Frame, Stream } from "@beszel-river/shared";
+import { FILAMENTS } from "../sim/streams";
 import { clamp, gaussian, type Random } from "../util/math";
 import type { FrameSource } from "./source";
 
@@ -13,6 +14,10 @@ export interface DemoStream {
   held: boolean;
   values: Channels;
   means: Channels;
+  /** Sends `filaments`, as the bridge does with the `realtime` source; toggled in the debug panel. */
+  filaments: boolean;
+  /** Per-lane activity, wandering around `flow`. */
+  lanes: number[];
 }
 
 export interface DemoOptions {
@@ -56,7 +61,7 @@ export class DemoSource implements FrameSource {
   }
 
   emit(): void {
-    const streams = this.streams.map((s): Stream => ({ id: s.id, alive: s.alive, ...s.values }));
+    const streams = this.streams.map((s): Stream => ({ id: s.id, alive: s.alive, ...s.values, ...(s.filaments ? { filaments: [...s.lanes] } : {}) }));
     this.onFrame?.({ v: 1, t: Date.now(), streams });
   }
 
@@ -74,7 +79,8 @@ export class DemoSource implements FrameSource {
       // Quantized like the bridge's widths.
       width: Math.round(random() * 4) / 4,
     };
-    return { id, alive: true, held: false, values: { ...means }, means };
+    const lanes = Array.from({ length: FILAMENTS }, () => clamp(means.flow + 0.3 * gaussian(random), 0, 1));
+    return { id, alive: true, held: false, values: { ...means }, means, filaments: true, lanes };
   }
 
   private tick(): void {
@@ -87,6 +93,9 @@ export class DemoSource implements FrameSource {
         values[channel] = clamp(values[channel] + 0.15 * (means[channel] - values[channel]) + 0.07 * gaussian(random), 0, 1);
       }
       values.pulse = random() < 0.08 ? 0.5 + 0.5 * random() : values.pulse * 0.5;
+      // Lanes wander around flow, now and then one of them jumps, like a single busy core.
+      stream.lanes = stream.lanes.map((lane) => clamp(lane + 0.2 * (values.flow - lane) + 0.08 * gaussian(random), 0, 1));
+      if (random() < 0.1) stream.lanes[Math.floor(random() * FILAMENTS)] = 0.8 + 0.2 * random();
     }
   }
 }

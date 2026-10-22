@@ -7,7 +7,8 @@ export type BeszelAuth =
 export interface Config {
   beszelUrl: string;
   auth: BeszelAuth;
-  source: "systems";
+  /** `realtime` adds 1 s `rt_metrics` samples on top of `systems` while viewers are connected. */
+  source: "systems" | "realtime";
   bindHost: string;
   bindPort: number;
   salt: string;
@@ -28,8 +29,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
   if (!URL.canParse(beszelUrl)) errors.push(`BESZEL_URL is not a URL: ${beszelUrl}`);
 
   const source = value("SOURCE", "systems");
-  if (source === "realtime") errors.push("SOURCE=realtime is not implemented yet (milestone M6)");
-  else if (source !== "systems") errors.push(`SOURCE must be "systems" or "realtime", got "${source}"`);
+  if (source !== "systems" && source !== "realtime") errors.push(`SOURCE must be "systems" or "realtime", got "${source}"`);
 
   const port = Number(value("BIND_PORT", "8787"));
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push(`BIND_PORT must be 1-65535, got "${env.BIND_PORT}"`);
@@ -40,7 +40,7 @@ export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
   const config: Config = {
     beszelUrl,
     auth: loadAuth(env, now, errors, value),
-    source: "systems",
+    source: source === "realtime" ? "realtime" : "systems",
     bindHost: value("BIND_HOST", "127.0.0.1"),
     bindPort: port,
     salt,

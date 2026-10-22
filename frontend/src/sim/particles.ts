@@ -1,7 +1,7 @@
 import { LOOK } from "../config";
 import { clamp, fract, gaussian, lerp, type Random } from "../util/math";
 import type { FlowField } from "./noise";
-import type { StreamSet } from "./streams";
+import { laneCenter, type StreamSet } from "./streams";
 
 /**
  * Per-instance floats written by `step`, in attribute order:
@@ -21,6 +21,8 @@ export class ParticleSystem {
   private readonly hueJitter: Float32Array;
   private readonly size: Float32Array;
   private readonly speedJitter: Float32Array;
+  /** Steering target, band half-widths from the centre line: the spawn offset in a lane, or 0 outside lanes. */
+  private readonly offset: Float32Array;
   private readonly slot: Uint8Array;
   private readonly active: Uint8Array;
   private readonly free: Int32Array;
@@ -41,6 +43,7 @@ export class ParticleSystem {
     this.hueJitter = new Float32Array(capacity);
     this.size = new Float32Array(capacity);
     this.speedJitter = new Float32Array(capacity);
+    this.offset = new Float32Array(capacity);
     this.slot = new Uint8Array(capacity);
     this.active = new Uint8Array(capacity);
     this.free = Int32Array.from({ length: capacity }, (_, i) => capacity - 1 - i);
@@ -68,7 +71,19 @@ export class ParticleSystem {
         const i = this.free[--this.freeTop];
         this.active[i] = 1;
         this.slot[i] = slotIndex;
-        this.x[i] = s.centerAt(0, t) + gaussian(random) * s.half * LOOK.spawnSpread;
+        this.speedJitter[i] = lerp(LOOK.speedJitter[0], LOOK.speedJitter[1], random());
+        // With filaments, particles start in a lane picked by its activity and keep their place in it,
+        // so a busy lane, scattering little, shows as a strand.
+        if (s.filamentMix > 0.001 && random() < s.filamentMix) {
+          const lane = s.pickLane(random());
+          const activity = s.filaments[lane];
+          this.offset[i] = laneCenter(lane) + gaussian(random) * lerp(LOOK.filamentSpread[0], LOOK.filamentSpread[1], activity);
+          this.x[i] = s.centerAt(0, t) + this.offset[i] * s.half;
+          this.speedJitter[i] *= lerp(LOOK.filamentSpeed[0], LOOK.filamentSpeed[1], activity);
+        } else {
+          this.offset[i] = 0;
+          this.x[i] = s.centerAt(0, t) + gaussian(random) * s.half * LOOK.spawnSpread;
+        }
         this.y[i] = -0.02 * random();
         this.vx[i] = 0;
         this.vy[i] = s.speed;
@@ -76,7 +91,6 @@ export class ParticleSystem {
         this.life[i] = lerp(LOOK.lifeRange[0], LOOK.lifeRange[1], random());
         this.hueJitter[i] = (random() - 0.5) * 2 * LOOK.hueJitter;
         this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
-        this.speedJitter[i] = lerp(LOOK.speedJitter[0], LOOK.speedJitter[1], random());
         s.particles++;
       }
     });
@@ -102,12 +116,12 @@ export class ParticleSystem {
         continue;
       }
 
-      // Upward speed from the stream, sideways from curl noise plus a pull to the centre line.
+      // Upward speed from the stream, sideways from curl noise plus a pull to the centre line (or lane).
       // The heading stays within ±maxSlope of vertical: data changes speed and wiggle, not direction.
       field.sample(x[i], y[i]);
       const up = s.speed * this.speedJitter[i];
       const limit = LOOK.maxSlope * up;
-      const side = clamp(field.sx * s.turbulenceAmp * up + (s.centerAt(y[i], t) - x[i]) * LOOK.steer, -limit, limit);
+      const side = clamp(field.sx * s.turbulenceAmp * up + (s.centerAt(y[i], t) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
       vx[i] += (side - vx[i]) * k;
       vy[i] += (up * (1 + 0.3 * field.sy * s.turbulenceAmp) - vy[i]) * k;
       x[i] += vx[i] * dt;
