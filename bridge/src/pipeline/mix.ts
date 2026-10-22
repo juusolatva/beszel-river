@@ -173,7 +173,7 @@ export class Mixer {
 
   constructor(
     private readonly config: MixConfig,
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = () => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000,
   ) {}
 
   /**
