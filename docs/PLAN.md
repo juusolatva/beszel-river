@@ -262,8 +262,13 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - [x] **M3 – Bridge with `systems` adapter.** Config, Beszel client, baselines, normalize, mix, anonymize, SSE server, vitest unit tests.
   - Done when: `curl -N http://127.0.0.1:8787/stream` (`-N` disables curl's output buffering, so events print as they arrive) shows a frame per minute for every host, and `npm test` passes.
   - Verified against a local Beszel v0.21.0 hub and agent: one frame per hub update, paused system hidden, unreachable system not alive, in the first update after a CPU stress run started, `flow` 0.03 → 0.14 and a `pulse` of 0.30; after a full minute of load, `flow` 0.52.
-- [ ] **M4 – Integration and tuning.** The frontend uses `StreamSource`; tune the mapping against real data.
+- [x] **M4 – Integration and tuning.** The frontend uses `StreamSource`; tune the mapping against real data.
   - Done when: the river visibly reacts to load on a host (e.g. a CPU stress run) within one update.
+  - Verified against a local Beszel v0.21.0 hub and agent (4 threads):
+    - Idle: `turbulence` had stayed near 1 because changes were measured on the log scale. With linear changes it settles at 0.07 after a few quiet minutes.
+    - CPU stress on all cores: the first update after the load started (about 14 s of load in that minute) gave `flow` 0.004 → 0.196 and `pulse` 0.576; the next gave `flow` 0.818 and `pulse` 1. In M3 the same test gave 0.03 → 0.14 and a `pulse` of 0.30. The `flow` smoothing in the template is now `tau` 30 s instead of 90 s.
+    - The recorded frames were replayed to the page through `/stream` in headless Chromium. The first stress frame made it visibly brighter and denser; the second gave long, fast streaks. The replay was needed because software WebGL keeps the 4 cores busy, so the agent reads about 94 % CPU while the browser runs.
+    - Dev without the bridge falls back to demo frames. In a production build, the stream retries after 502s (5 s, then 10 s, then 20 s) and recovers when the bridge returns. Hiding the tab closes the stream; showing it reopens it.
 - [ ] **M5 – Deployment.** Dockerfile, compose file, nginx config, deploy notes in README.
   - Done when: the public URL serves the river from live data.
 - [ ] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
