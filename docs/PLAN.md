@@ -18,8 +18,8 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Browser transport | Server-Sent Events | One-way, browser `EventSource` reconnects by itself, simple through nginx. |
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
-| Tests | `vitest` 5.0.5 (bridge) | Normalization and mixing are pure functions. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci`, `typecheck`, `test`, `build` on Node 22.12.0 and 24 | `.github/workflows/ci.yml`; tests both ends of the supported range. |
+| Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge) | Normalization and mixing are pure functions; coverage thresholds gate the pure modules. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
+| CI | GitHub Actions: `npm ci`, `typecheck`, `coverage`, `build` on Node 22.12.0 and 24 | `.github/workflows/ci.yml`; tests both ends of the supported range. |
 
 ## Architecture
 
@@ -58,6 +58,7 @@ bridge/
   mix.example.json            mixing weights template; real bridge/mix.json is git-ignored
   tsconfig.json               type-checks src and test
   tsconfig.build.json         emits src to dist
+  vitest.config.ts            coverage reporters and thresholds
   src/
     main.ts                   entry: config, wiring, reconnects, broadcast debounce, pulse ticks
     config.ts                 env parsing and validation

@@ -27,12 +27,13 @@ Run from the repository root.
 npm ci                 # install exactly what package-lock.json lists
 npm run typecheck      # tsc in every workspace
 npm test               # bridge unit tests (vitest run)
+npm run coverage       # the same with coverage; report in bridge/coverage/ (index.html)
 npm run build          # bridge → bridge/dist, frontend → frontend/dist
 npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0.0.1:8787
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `test` and `build` on Node 22.12.0 and 24. Run all three checks before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
@@ -57,6 +58,7 @@ These protect the point of the project. Do not break them without a change to `d
 ## Testing
 
 - Bridge logic is pure where possible; add or update vitest tests in `bridge/test/` for every change to `config.ts`, `pipeline/` or `server.ts`.
+- `bridge/vitest.config.ts` sets coverage thresholds for those modules (90 % statements, functions and lines, 80 % branches); `npm run coverage` fails below them. Do not lower a threshold to make a change pass; add tests instead.
 - End-to-end bridge checks need a running Beszel hub and agent (release binaries from GitHub, run outside the repository). Watch frames with `curl -N http://127.0.0.1:8787/stream`.
 - The frontend has no unit tests. Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance.
 

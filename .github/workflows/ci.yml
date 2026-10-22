@@ -31,5 +31,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      # Runs the tests with coverage; fails when a threshold in bridge/vitest.config.ts is not met.
+      - run: npm run coverage
+      - name: Coverage summary
+        if: ${{ !cancelled() && hashFiles('bridge/coverage/coverage.txt') != '' }}
+        run: |
+          {
+            echo "### Bridge coverage (Node ${{ matrix.node }})"
+            echo '```'
+            cat bridge/coverage/coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
