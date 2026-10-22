@@ -15,6 +15,8 @@ export interface Sample {
   diskWrite: number;
   load1: number;
   tempMax: number | null;
+  /** Busy % per core; null when the agent does not report it. */
+  cores: number[] | null;
 }
 
 export function sampleFromStats(s: SystemStats): Sample {
@@ -35,6 +37,7 @@ export function sampleFromStats(s: SystemStats): Sample {
     diskWrite: s.dio?.[1] ?? (s.dw ?? 0) * MB,
     load1: s.la?.[0] ?? 0,
     tempMax: temps.length > 0 ? Math.max(...temps) : null,
+    cores: s.cpus && s.cpus.length > 0 ? s.cpus : null,
   };
 }
 
@@ -54,7 +57,28 @@ export function sampleFromInfo(i: SystemInfo): Sample {
     diskWrite: 0,
     load1: i.la?.[0] ?? 0,
     tempMax: i.dt && i.dt > 0 ? i.dt : null,
+    cores: null,
   };
+}
+
+/** Filaments per stream; fixed, so their number says nothing about the host's core count. */
+export const FILAMENTS = 6;
+
+/**
+ * Per-core usage resampled to `FILAMENTS` values, 0..1 in ascending order: linear interpolation along
+ * the sorted cores, from the idlest to the busiest. Any core count gives a smooth profile; only a
+ * single core gives six equal values. Null without per-core data.
+ */
+export function coreProfile(cores: readonly number[] | null): number[] | null {
+  if (!cores || cores.length === 0) return null;
+  const sorted = [...cores].sort((a, b) => a - b);
+  const last = sorted.length - 1;
+  return Array.from({ length: FILAMENTS }, (_, i) => {
+    const position = (i / (FILAMENTS - 1)) * last;
+    const low = Math.floor(position);
+    const high = Math.min(low + 1, last);
+    return clamp01((sorted[low] + (sorted[high] - sorted[low]) * (position - low)) / 100);
+  });
 }
 
 /** Byte rates over the last 24 h of samples, to scale each host against its own normal traffic. */

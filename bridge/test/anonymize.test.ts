@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bandOrder, bandWidths, streamId } from "../src/pipeline/anonymize.js";
+import { bandOrder, bandWidths, filamentOrder, streamId } from "../src/pipeline/anonymize.js";
 
 const salt = "0123456789abcdef-test";
 
@@ -25,6 +25,22 @@ describe("bandOrder", () => {
   it("changes across days", () => {
     const days = ["2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"].map((d) => bandOrder(salt, ids, new Date(`${d}T12:00:00Z`)).join());
     expect(new Set(days).size).toBeGreaterThan(1);
+  });
+});
+
+describe("filamentOrder", () => {
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+
+  it("is a permutation that is stable within a UTC day", () => {
+    const order = filamentOrder(salt, "abc", 6, day("2026-10-22"));
+    expect([...order].sort()).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(filamentOrder(salt, "abc", 6, new Date("2026-10-22T23:59:00Z"))).toEqual(order);
+  });
+
+  it("differs between hosts and days", () => {
+    const orders = (ids: string[], days: string[]) => new Set(ids.flatMap((id) => days.map((d) => filamentOrder(salt, id, 6, day(d)).join())));
+    expect(orders(["a", "b", "c", "d"], ["2026-10-22"]).size).toBeGreaterThan(1);
+    expect(orders(["a"], ["2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"]).size).toBeGreaterThan(1);
   });
 });
 

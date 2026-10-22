@@ -2,8 +2,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { SystemRecord, SystemStatsRecord } from "../src/beszel/types.js";
 import { streamId } from "../src/pipeline/anonymize.js";
-import { HostTable } from "../src/pipeline/hosts.js";
-import { loadMixConfig } from "../src/pipeline/mix.js";
+import { coreProfile } from "../src/pipeline/features.js";
+import { HostTable, REALTIME_STALE_MS } from "../src/pipeline/hosts.js";
+import { loadMixConfig, parseMixConfig } from "../src/pipeline/mix.js";
 
 const salt = "0123456789abcdef-test";
 const mix = loadMixConfig(fileURLToPath(new URL("../mix.example.json", import.meta.url)));
@@ -79,5 +80,86 @@ describe("HostTable", () => {
     for (const value of Object.values(table.frame(now).streams[0] ?? {})) {
       if (typeof value === "number") expect(Math.round(value * 1000) / 1000).toBe(value);
     }
+  });
+});
+
+describe("HostTable realtime", () => {
+  const t0 = Date.parse("2026-10-22T12:00:00Z");
+  const flowOf = (table: HostTable) => table.frame(now).streams[0]?.flow;
+
+  it("mixes realtime samples and holds minute records back while they arrive", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("a", "up", null));
+    expect(table.addRealtime("a", { cpu: 100 }, t0)).toBe(true);
+    expect(flowOf(table)).toBe(0.7);
+    expect(table.addStats(stats("a", "2026-10-22 12:00:00.000Z", 0), t0 + REALTIME_STALE_MS - 1)).toBe(false);
+    expect(flowOf(table)).toBe(0.7);
+    // Realtime stopped: minute records count again.
+    expect(table.addStats(stats("a", "2026-10-22 12:01:00.000Z", 0), t0 + REALTIME_STALE_MS)).toBe(true);
+    expect(flowOf(table)).toBeCloseTo(0.7 * Math.exp(-60 / mix.channels.flow.tau), 3);
+  });
+
+  it("smooths realtime samples over the time between them", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("a", "up", null));
+    table.addRealtime("a", { cpu: 100 }, t0);
+    table.addRealtime("a", { cpu: 0 }, t0 + 3000);
+    expect(flowOf(table)).toBeCloseTo(0.7 * Math.exp(-3 / mix.channels.flow.tau), 3);
+  });
+
+  it("counts rises between realtime samples as bursts, but not the step from a minute average", () => {
+    const fromRealtime = new HostTable(salt, mix);
+    fromRealtime.upsertSystem(system("a", "up", null));
+    fromRealtime.addRealtime("a", { cpu: 0 }, t0);
+    fromRealtime.addRealtime("a", { cpu: 80 }, t0 + 1000);
+    expect(fromRealtime.frame(now).streams[0]?.pulse).toBe(1);
+
+    const fromMinute = new HostTable(salt, mix);
+    fromMinute.upsertSystem(system("a", "up", null));
+    fromMinute.addStats(stats("a", "2026-10-22 11:59:00.000Z", 0), t0);
+    fromMinute.addRealtime("a", { cpu: 80, b: [1000, 1000] }, t0 + 1000);
+    expect(fromMinute.frame(now).streams[0]?.pulse).toBe(0);
+  });
+
+  it("keeps realtime samples out of the 24 h baseline", () => {
+    // flow follows the network level directly, to read the baseline's reference back.
+    const byNet = parseMixConfig({ flow: { inputs: { net: 1 } }, density: { inputs: {} }, turbulence: { inputs: {} }, pulse: { inputs: {} }, heat: { inputs: {} }, pulseDecay: 8 });
+    const table = new HostTable(salt, byNet);
+    table.upsertSystem(system("a", "up", null));
+    const MB = 1024 * 1024;
+    table.addStats({ ...stats("a", "2026-10-22 11:59:00.000Z", 0), stats: { b: [MB / 2, MB / 2] } }, t0);
+    for (let i = 0; i < 100; i++) table.addRealtime("a", { b: [50 * MB, 50 * MB] }, t0 + i * 1000);
+    table.addRealtime("a", { b: [MB / 2, MB / 2] }, t0 + 100_000);
+    // At the minute records' 1 MB/s reference; 100 MB/s would give 0.15.
+    expect(flowOf(table)).toBe(1);
+  });
+
+  it("ignores realtime samples for unknown and paused hosts", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("paused", "paused"));
+    expect(table.addRealtime("paused", { cpu: 50 }, t0)).toBe(false);
+    expect(table.addRealtime("unknown", { cpu: 50 }, t0)).toBe(false);
+  });
+
+  it("targets only hosts that are up", () => {
+    const table = new HostTable(salt, mix);
+    for (const status of ["up", "down", "paused", "pending"] as const) table.upsertSystem(system(status, status));
+    table.upsertSystem(system("up2"));
+    expect(table.realtimeTargets().sort()).toEqual(["up", "up2"]);
+  });
+
+  it("sends six filaments from per-core usage, in a daily order, and none without it", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("a", "up", null));
+    table.upsertSystem(system("b", "up", null));
+    table.addRealtime("a", { cpu: 50, cpus: [10, 90, 35, 70] }, t0);
+    table.addRealtime("b", { cpu: 50 }, t0);
+    const streams = new Map(table.frame(now).streams.map((s) => [s.id, s]));
+    const filaments = streams.get(streamId(salt, "a"))?.filaments ?? [];
+    expect(filaments).toHaveLength(6);
+    const { bias, center, weight } = mix.filaments;
+    const expected = (coreProfile([10, 90, 35, 70]) as number[]).map((v) => Math.round(Math.min(1, Math.max(0, bias + weight * (v - center))) * 1000) / 1000);
+    expect([...filaments].sort()).toEqual([...expected].sort());
+    expect(streams.get(streamId(salt, "b"))).not.toHaveProperty("filaments");
   });
 });

@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Features } from "../src/pipeline/features.js";
-import { loadMixConfig, Mixer, parseMixConfig, type MixConfig } from "../src/pipeline/mix.js";
+import { DEFAULT_FILAMENTS, loadMixConfig, Mixer, parseMixConfig, type MixConfig } from "../src/pipeline/mix.js";
 
 const zero: Features = { cpu: 0, mem: 0, net: 0, netChange: 0, disk: 0, diskChange: 0, load: 0, burst: 0, txShare: 0.5, temp: 0.5 };
 
@@ -25,6 +25,15 @@ describe("parseMixConfig", () => {
     expect(() => parseMixConfig({ ...valid, heat: undefined })).toThrow(/"heat" is missing/);
     expect(() => parseMixConfig({ ...valid, flow: { inputs: {}, tau: "slow" } })).toThrow(/flow.tau/);
     expect(() => parseMixConfig({ ...valid, pulseDecay: 0 })).toThrow(/pulseDecay/);
+    expect(() => parseMixConfig({ ...valid, filaments: 1 })).toThrow(/filaments must be an object/);
+    expect(() => parseMixConfig({ ...valid, filaments: { weight: "x" } })).toThrow(/filaments.weight/);
+    expect(() => parseMixConfig({ ...valid, filaments: { tau: -1 } })).toThrow(/filaments.tau/);
+  });
+
+  it("defaults the filament recipe, also for single missing fields", () => {
+    const valid = { flow: { inputs: {} }, density: { inputs: {} }, turbulence: { inputs: {} }, pulse: { inputs: {} }, heat: { inputs: {} }, pulseDecay: 5 };
+    expect(parseMixConfig(valid).filaments).toEqual(DEFAULT_FILAMENTS);
+    expect(parseMixConfig({ ...valid, filaments: { weight: 2 } }).filaments).toEqual({ ...DEFAULT_FILAMENTS, weight: 2 });
   });
 });
 
@@ -56,5 +65,28 @@ describe("Mixer", () => {
     for (let i = 0; i < 20; i++) m.decay(10);
     expect(m.values.pulse).toBe(0);
     expect(m.decay(10)).toBe(false);
+  });
+});
+
+describe("Mixer filaments", () => {
+  const recipe = (filaments: MixConfig["filaments"]): MixConfig => ({ ...config, filaments });
+
+  it("applies the recipe to the first profile, then smooths with tau", () => {
+    const m = new Mixer(recipe({ bias: 0.1, center: 0.5, weight: 2, tau: 5 }));
+    expect(m.filaments).toBeNull();
+    m.applyFilaments([0, 0.5, 0.6, 0.9, 1, 1], 1);
+    expect(m.filaments?.map((f) => +f.toFixed(6))).toEqual([0, 0.1, 0.3, 0.9, 1, 1]);
+    m.applyFilaments([0.5, 0.5, 0.5, 0.5, 0.5, 0.5], 5);
+    expect(m.filaments?.[0]).toBeCloseTo(0.1 * (1 - Math.exp(-1)), 6);
+    expect(m.filaments?.[5]).toBeCloseTo(0.1 + 0.9 * Math.exp(-1), 6);
+  });
+
+  it("takes each profile as is with tau 0, and drops the filaments without one", () => {
+    const m = new Mixer(recipe({ ...DEFAULT_FILAMENTS, tau: 0 }));
+    m.applyFilaments([0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 1);
+    m.applyFilaments([0.7, 0.7, 0.7, 0.7, 0.7, 0.7], 1);
+    expect(m.filaments).toEqual([0.7, 0.7, 0.7, 0.7, 0.7, 0.7]);
+    m.applyFilaments(null, 1);
+    expect(m.filaments).toBeNull();
   });
 });
