@@ -4,6 +4,8 @@ import { CHANNELS, type DemoSource, type DemoStream } from "../source/demo";
 export interface Stats {
   fps: number;
   particles: number;
+  /** Live particle limit from `ParticleBudget`. */
+  limit: number;
   simMs: number;
 }
 
@@ -130,7 +132,7 @@ export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
   build();
   let shownFrame: Frame | null = null;
   setInterval(() => {
-    header.textContent = `${stats.fps.toFixed(0)} fps · ${stats.particles} particles · sim ${stats.simMs.toFixed(1)} ms`;
+    header.textContent = `${stats.fps.toFixed(0)} fps · ${stats.particles}/${stats.limit} particles · sim ${stats.simMs.toFixed(1)} ms`;
     if (target.demo !== built) build();
     if (!target.demo && target.frame !== shownFrame) {
       shownFrame = target.frame;
