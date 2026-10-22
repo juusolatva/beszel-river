@@ -306,10 +306,3 @@ Commands and steps are in README, "Deployment".
 | 1 s polling load on agents. | Subscribe only while viewers are connected. |
 | Public `/stream` abuse. | `limit_conn` per IP; payload is tiny; one upstream subscription regardless of viewers. |
 | Recipe leaks via frontend code. | Mixing happens in the bridge; the frontend only knows channel → visual. |
-
-## Needed to finish M5
-
-- Domain or subdomain for the site.
-- Whether the Beszel hub runs in Docker, and if so its compose service and network names.
-- Beszel hub version.
-- Whether the site gets a new nginx server block or a path in an existing one, and how TLS is handled.
