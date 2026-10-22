@@ -1,0 +1,13 @@
+# For a Beszel hub that runs with network_mode: host. Use together with compose.yml:
+#   docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml up -d --build
+# The bridge then shares the host's network as well and reaches the hub at BESZEL_URL=http://127.0.0.1:8090
+# (the hub's PORT). It listens on the host's loopback directly, so no port is published.
+services:
+  bridge:
+    network_mode: host
+    networks: !reset null
+    ports: !reset []
+    environment:
+      BIND_HOST: 127.0.0.1
+
+networks: !reset {}
