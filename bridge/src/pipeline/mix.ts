@@ -30,12 +30,35 @@ export interface FilamentRecipe {
 /** Used when `mix.json` has no `filaments` entry (files from before M6). */
 export const DEFAULT_FILAMENTS: FilamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
 
+/**
+ * How the pulse from a minute record is spread out, so hosts do not all flash at the top of the minute
+ * and the river keeps pulsing between records. The first pulse fires at full strength within
+ * `FIRST_PULSE_JITTER_S`; then a Poisson-distributed number of weaker ones (mean `rate` × pulse, at most
+ * `max`) at random times over the next `window` seconds. Realtime samples pulse at once instead.
+ */
+export interface PulseScatter {
+  rate: number;
+  max: number;
+  window: number;
+}
+
+/** Used when `mix.json` has no `pulseScatter` entry: one to three pulses per record. */
+export const DEFAULT_PULSE_SCATTER: PulseScatter = { rate: 2, max: 2, window: 50 };
+
 export interface MixConfig {
   channels: Record<Mixed, Recipe>;
   filaments: FilamentRecipe;
+  pulseScatter: PulseScatter;
   /** Pulse decay time constant, seconds. */
   pulseDecay: number;
 }
+
+/** Spread of the first scattered pulse, seconds: short enough to stay within the update, long enough to spread hosts over two or three 2 s ticks. */
+const FIRST_PULSE_JITTER_S = 5;
+/** Strength of the later scattered pulses, as a fraction of the first. */
+const LATER_PULSE = [0.4, 0.8] as const;
+/** Pulse values below this are not visible. */
+const VISIBLE = 0.005;
 
 export function parseMixConfig(json: unknown): MixConfig {
   const fail = (message: string): never => {
@@ -74,9 +97,22 @@ export function parseMixConfig(json: unknown): MixConfig {
     };
     if (filaments.tau < 0) fail("filaments.tau must be >= 0");
   }
+  let pulseScatter = DEFAULT_PULSE_SCATTER;
+  if (json.pulseScatter !== undefined) {
+    const raw = json.pulseScatter;
+    if (!isObject(raw)) return fail("pulseScatter must be an object");
+    pulseScatter = {
+      rate: number(raw.rate, "pulseScatter.rate", DEFAULT_PULSE_SCATTER.rate),
+      max: number(raw.max, "pulseScatter.max", DEFAULT_PULSE_SCATTER.max),
+      window: number(raw.window, "pulseScatter.window", DEFAULT_PULSE_SCATTER.window),
+    };
+    if (pulseScatter.rate < 0) fail("pulseScatter.rate must be >= 0");
+    if (!Number.isInteger(pulseScatter.max) || pulseScatter.max < 0) fail("pulseScatter.max must be a whole number >= 0");
+    if (pulseScatter.window <= 0) fail("pulseScatter.window must be > 0");
+  }
   const pulseDecay = number(json.pulseDecay, "pulseDecay");
   if (pulseDecay <= 0) fail("pulseDecay must be > 0");
-  return { channels, filaments, pulseDecay };
+  return { channels, filaments, pulseScatter, pulseDecay };
 }
 
 export function loadMixConfig(path: string): MixConfig {
@@ -89,11 +125,20 @@ export class Mixer {
   /** Mixed per-core profile; null while the host reports no per-core usage. */
   filaments: number[] | null = null;
   private primed = false;
+  /** Scattered pulses still to fire; `at` is a time in ms. */
+  private readonly pending: { at: number; value: number }[] = [];
 
-  constructor(private readonly config: MixConfig) {}
+  constructor(
+    private readonly config: MixConfig,
+    private readonly random: () => number = Math.random,
+  ) {}
 
-  /** Mixes new features in; `dt` is the time since the previous sample, seconds. */
-  apply(features: Features, dt: number): void {
+  /**
+   * Mixes new features in; `dt` is the time since the previous sample, seconds. With `scatterAt`
+   * (the current time, ms) the pulse is spread out as `PulseScatter` describes; without it, it rises at
+   * once. Either way, pulses still pending from the previous sample are dropped.
+   */
+  apply(features: Features, dt: number, scatterAt?: number): void {
     for (const channel of MIXED) {
       const recipe = this.config.channels[channel];
       let raw = recipe.bias;
@@ -103,7 +148,7 @@ export class Mixer {
       raw = clamp01(raw);
 
       const current = this.values[channel];
-      if (channel === "pulse") this.values.pulse = Math.max(current, raw);
+      if (channel === "pulse") this.pulse(raw, scatterAt);
       else if (!this.primed || recipe.tau === 0) this.values[channel] = raw;
       else this.values[channel] = current + (raw - current) * (1 - Math.exp(-Math.max(dt, 0) / recipe.tau));
     }
@@ -125,11 +170,44 @@ export class Mixer {
     });
   }
 
-  /** Lets `pulse` fade between samples; returns whether it changed visibly. */
-  decay(dt: number): boolean {
+  /** Lets `pulse` fade and fires the scattered pulses due by `now` (ms); returns whether it changed visibly. */
+  decay(dt: number, now = Date.now()): boolean {
     const before = this.values.pulse;
-    const after = before * Math.exp(-dt / this.config.pulseDecay);
-    this.values.pulse = after < 0.005 ? 0 : after;
-    return Math.abs(before - this.values.pulse) >= 0.005;
+    let after = before * Math.exp(-dt / this.config.pulseDecay);
+    if (after < VISIBLE) after = 0;
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      if (this.pending[i].at > now) continue;
+      after = Math.max(after, this.pending[i].value);
+      this.pending.splice(i, 1);
+    }
+    this.values.pulse = after;
+    return Math.abs(before - after) >= VISIBLE;
   }
+
+  private pulse(strength: number, scatterAt: number | undefined): void {
+    this.pending.length = 0;
+    if (scatterAt === undefined) {
+      this.values.pulse = Math.max(this.values.pulse, strength);
+      return;
+    }
+    if (strength < VISIBLE) return;
+    const { rate, max, window } = this.config.pulseScatter;
+    this.pending.push({ at: scatterAt + this.random() * FIRST_PULSE_JITTER_S * 1000, value: strength });
+    const later = poisson(rate * strength, max, this.random);
+    for (let i = 0; i < later; i++) {
+      const at = scatterAt + this.random() * window * 1000;
+      this.pending.push({ at, value: strength * (LATER_PULSE[0] + (LATER_PULSE[1] - LATER_PULSE[0]) * this.random()) });
+    }
+  }
+}
+
+/** Poisson-distributed count with the given mean, capped at `max` (Knuth's method; the means here are small). */
+function poisson(mean: number, max: number, random: () => number): number {
+  const limit = Math.exp(-mean);
+  let count = 0;
+  for (let p = 1; count < max; count++) {
+    p *= random();
+    if (p <= limit) break;
+  }
+  return count;
 }
