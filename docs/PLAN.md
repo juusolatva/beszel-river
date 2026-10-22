@@ -61,7 +61,7 @@ bridge/
   tsconfig.build.json         emits src to dist
   vitest.config.ts            coverage reporters and thresholds
   src/
-    main.ts                   entry: config, wiring, reconnects, broadcast debounce, pulse ticks
+    main.ts                   entry: config, wiring, reconnects, broadcast debounce, 2 s ticks
     config.ts                 env parsing and validation
     log.ts                    timestamped log lines with error cause chains
     beszel/types.ts           the Beszel record fields the bridge reads
@@ -127,7 +127,7 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
 
 - **`systems` (M3, default):**
   - Load all `systems` records, then subscribe to `systems` (status, host list) and to `system_stats` record creations, keeping only `type = "1m"` (metrics).
-  - On startup, read the last 24 h of `1m` records per host to seed baselines.
+  - On startup, read the last 24 h of `1m` records per host to seed baselines and channels. They apply at once and without pulses: replayed, a pulse would be old news, and every host's would flash together at startup.
 - **`realtime` (M6):** everything `systems` does, plus `rt_metrics` per host, but only while someone watches, so agents are not polled every second around the clock.
   - Subscribed: hosts with status `up`, while at least one `/stream` client is connected and for 30 s after the last one leaves (a reload does not restart the subscriptions). Status changes and host removal update the set.
   - The subscriptions use a second SDK client with the same login and its own realtime connection, so a refused one cannot break the `systems` subscriptions. Changes run one at a time, so a refusal names its system; that system's topic is dropped and retried after 60 s.
@@ -153,7 +153,7 @@ Environment variables (template: `bridge/.env.example`):
 | `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
-Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults. The optional `pulseScatter` entry (`rate`, `max`, `window`; defaults 2, 2, 50 s) spreads the pulse of each minute record out, see "Pulse scattering"; `"max": 0` leaves one pulse per record.
+Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults. The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5 s, 2, 2, 50 s) spreads the pulse of each minute record out, and the optional `glide` (default 60 s) its other channels, see "Minute records"; each missing field takes its default. `window` must leave room for the later pulses, at least `max` × (`pulseDecay` + 2 s), and `jitter` + `window` must be at most 55 s, so every pulse fires before the next record. `"jitter": 0`, `"max": 0` and `"glide": 0` together apply each minute record at once, with one pulse, as before the scattering.
 
 ### Pipeline
 
@@ -177,7 +177,7 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Filament order = shuffle of the profile seeded by `STREAM_SALT`, the system ID and the UTC date, so the busiest core is not always in the same place and hosts differ.
-5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, minute records scattered, see below) and decays with time constant `pulseDecay` (8 s); a 2 s tick broadcasts the decay and fires scattered pulses that are due. Channels are rounded to three decimals.
+5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, live minute records scattered, see below) and decays with time constant `pulseDecay` (8 s). A 2 s tick lets pulses decay, fires scattered pulses that are due and moves gliding channels on, and broadcasts when that changed anything visibly (a pulse by 0.005, a gliding value by 0.0005). Channels are rounded to three decimals.
 
 Mapping in the template `bridge/mix.example.json`, checked against a live hub in M4:
 
@@ -190,14 +190,15 @@ Mapping in the template `bridge/mix.example.json`, checked against a live hub in
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
 | `alive` | `status` | Current flows or dries up |
 
-#### Pulse scattering
+#### Minute records
 
-Minute records arrive for every host within a second or two, so a pulse on each record made all bands flash together and left the rest of the minute without pulses; the flashes also gave away the poll cadence. The mixed `pulse` value p of a minute record is spread over the following minute instead:
+Minute records arrive for every host within a second or two. Applied as they came, every band changed and flashed at the same moment once a minute and held still for the rest of it, which also gave away the poll cadence. Live minute records are therefore spread over the following minute. Records replayed at startup apply at once and without pulses (see "Adapters"); realtime samples are real 1 s data and also apply at once.
 
-- The first pulse, at full strength p, fires at a random time in the first 5 s: within the update, so the river still reacts to load at once. The hosts' first pulses spread over two or three 2 s ticks instead of one.
-- Then n later pulses, n Poisson-distributed with mean `rate` × p and capped at `max`, at random times in the next `window` seconds, each at 0.4–0.8 × p. A busy host pulses more often and harder; an idle one (p near 0) usually not at all.
-- The next sample replaces whatever is still pending. Realtime samples are real 1 s data, so they pulse at once and also cancel pending scattered pulses.
-- Only the timing after the first pulse is invented; the strength still comes from the record. The frame format is unchanged and the frontend knows nothing about it.
+- **Glide:** the record's other channels and filaments move in a straight line from where they are to the record's values over `glide` seconds (60 s, the time to the next record), so each band changes a little on every tick instead of all of them stepping together. The next sample continues from wherever the glide has got to. The river reaches a record's values up to `glide` later than before; the first pulse still shows a load change within seconds.
+- **First pulse:** the record's own pulse, at its full mixed strength p, is due at a random time within `jitter` seconds (5 s). The 2 s tick fires it up to 2 s later, so it shows within about 7 s of the record, and the hosts' first pulses spread over several ticks instead of one.
+- **Later pulses:** n more, n Poisson-distributed with mean `rate` × p and capped at `max`. Each is a random 0.4–0.8 × p, due at a random time within `window` seconds of the first pulse and at least `pulseDecay` + 2 s after the pulse before it. Measured in ticks, that is more than `pulseDecay`, so the earlier pulse has faded below 1/e ≈ 0.37 of its strength, below the weakest later pulse, and each later pulse shows as a rise of its own. They are scheduled only when even the weakest would be visible (0.4 × p ≥ 0.005). A busy host pulses more often and harder; an idle one (p near 0) once or not at all.
+- **Next sample:** it drops the later pulses still pending; the record's own pulse, if it has not fired yet, fires at once instead of being lost. A host whose status changes from `up` drops every pending pulse, so a stream that is drying up does not flash.
+- p and the channel values come from the record; the number, strengths and times of the later pulses are random, steered by p. The record times can still be estimated from when glides change direction and first pulses cluster, but no longer from one frame in which every stream changes. The frame format is unchanged and the frontend knows nothing about it.
 
 ### HTTP API
 
