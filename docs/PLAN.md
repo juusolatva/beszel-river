@@ -106,7 +106,7 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
 - **`systems` collection:** one record per host with `id`, `name`, `status` and `info`. Relevant `info` keys: `cpu`, `mp` (memory %), `dp` (disk %), `bb` (bandwidth bytes/s), `la` (load averages), `t` (threads), `dt` (dashboard temperature). The hub refreshes these every 60 s (`interval int = 60_000` in `internal/hub/systems/system_manager.go`).
 - **`system_stats` collection:** history records with a `type` tier (`1m`, `10m`, `20m`, `120m`, `480m`) and a `stats` object.
   - Rates: `cpu`, `mp`, `b` ([sent, recv] bytes/s), `dio` ([read, write] bytes/s).
-  - Per-minute peaks: `cpum`, `bm`.
+  - Peaks: `cpum`, `bm`. Only the aggregated tiers (`10m` and up) have them: the hub computes them when averaging (`internal/records/records.go`), and the agent does not send them, so `1m` records leave them out.
   - Also: `la`, `t` (temperatures), `cpub` (CPU breakdown).
   - A new `1m` record is written per host on each update.
 - **Unreachable hosts:** Beszel zero-fills `info` for systems it cannot reach (`t: 0`, `dt: 0`, …). The bridge treats a thread count of 0 as unknown and temperatures ≤ 0 as missing.
@@ -147,7 +147,8 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - CPU and memory: percentages divided by 100.
    - Byte rates: `log1p(100 × rate / p95) / log1p(100)`, where p95 is the host's rolling 95th percentile over 24 h (floored at 64 KiB/s for network, 256 KiB/s for disk). That gives 1 at p95, 0.52 at a tenth of it, 0.15 at a hundredth.
    - Load: `la[0] / threads`, clamped.
-   - Burstiness: the larger of (CPU peak − average) / 50 points and the network peak's excess over the average, both from the per-minute peaks.
+   - Changes (`netChange`, `diskChange`): the absolute change in the byte rate since the previous sample, divided by the same p95 reference. Linear rather than a difference on the log scale, which magnifies the low end: on the log scale an idle host's trickle going from 1 to 4 KiB/s read as a quarter of full scale.
+   - Burstiness: the larger of the CPU burst (the rise since the previous sample, or the peak's excess over the average where peaks exist, per 50 points) and the network burst (the rise since the previous sample divided by p95, or the peak's excess on the log scale). `1m` records have no peaks, so the rises carry it.
    - Direction: tx share of traffic, 0.5 below 1 KiB/s. Temperature: (max sensor − 30 °C) / 60.
 3. **Mix** features into channels.
    - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
@@ -158,14 +159,14 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
 5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` jumps on each sample and decays with time constant `pulseDecay` (8 s); a 2 s tick broadcasts the decay. Channels are rounded to three decimals.
 
-Initial mapping, tuned in M4:
+Mapping in the template `bridge/mix.example.json`, checked against a live hub in M4:
 
 | Channel | Mixed from | Visual |
 |---|---|---|
 | `flow` | CPU (fast) + load | Upward speed, tail length |
 | `density` | Memory (slow) | Spawn rate |
 | `turbulence` | Change in network + disk IO | Sideways wiggle |
-| `pulse` | Network and CPU peaks above baseline | Spawn waves, brightness flashes |
+| `pulse` | CPU and network rises (and peaks where present) | Spawn waves, brightness flashes |
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
 | `alive` | `status` | Current flows or dries up |
 

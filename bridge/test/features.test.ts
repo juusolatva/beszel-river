@@ -84,14 +84,27 @@ describe("computeFeatures", () => {
     expect(computeFeatures(sampleFromStats({ b: [30000, 10000] }), baseline, 1, null).txShare).toBe(0.75);
   });
 
-  it("measures change against the previous features", () => {
-    const first = computeFeatures(sampleFromStats({ b: [0, 0] }), baseline, 1, null);
-    const second = computeFeatures(sampleFromStats({ b: [64 * 1024, 0] }), baseline, 1, first);
+  it("measures change against the previous sample", () => {
+    const second = computeFeatures(sampleFromStats({ b: [64 * 1024, 0] }), baseline, 1, sampleFromStats({ b: [0, 0] }));
     expect(second.netChange).toBe(1);
+    const disk = computeFeatures(sampleFromStats({ dio: [0, 0] }), baseline, 1, sampleFromStats({ dio: [128 * 1024, 0] }));
+    expect(disk.diskChange).toBe(0.5);
+  });
+
+  it("keeps an idle host's trickle from reading as change", () => {
+    const f = computeFeatures(sampleFromStats({ b: [4096, 0], dio: [16384, 0] }), baseline, 1, sampleFromStats({ b: [1024, 0], dio: [0, 0] }));
+    expect(f.netChange).toBeLessThan(0.05);
+    expect(f.diskChange).toBeLessThan(0.07);
   });
 
   it("reports bursts from CPU and network peaks", () => {
     expect(computeFeatures(sampleFromStats({ cpu: 20, cpum: 70 }), baseline, 1, null).burst).toBe(1);
     expect(computeFeatures(sampleFromStats({ cpu: 20, cpum: 20 }), baseline, 1, null).burst).toBe(0);
+  });
+
+  it("reports rises since the previous sample as bursts, since 1m records carry no peaks", () => {
+    expect(computeFeatures(sampleFromStats({ cpu: 45 }), baseline, 1, sampleFromStats({ cpu: 20 })).burst).toBe(0.5);
+    expect(computeFeatures(sampleFromStats({ cpu: 20 }), baseline, 1, sampleFromStats({ cpu: 45 })).burst).toBe(0);
+    expect(computeFeatures(sampleFromStats({ b: [32 * 1024, 0] }), baseline, 1, sampleFromStats({ b: [0, 0] })).burst).toBe(0.5);
   });
 });
