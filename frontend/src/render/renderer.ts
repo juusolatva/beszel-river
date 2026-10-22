@@ -34,6 +34,12 @@ export class Renderer {
     this.emptyVao = gl.createVertexArray();
 
     this.particleVao = gl.createVertexArray();
+    this.instanceBuffer = gl.createBuffer();
+    this.initParticleVao(capacity);
+  }
+
+  private initParticleVao(capacity: number): void {
+    const { gl } = this;
     gl.bindVertexArray(this.particleVao);
 
     const cornerBuffer = gl.createBuffer();
@@ -42,7 +48,6 @@ export class Renderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    this.instanceBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
     const stride = INSTANCE_FLOATS * 4;
