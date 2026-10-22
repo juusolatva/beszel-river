@@ -11,8 +11,9 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 | `shared/` | Message types shared by bridge and frontend (type-only). |
 | `bridge/` | Node service: reads the Beszel hub, mixes metrics into abstract channels, serves them over SSE at `/stream`. |
 | `frontend/` | Static WebGL2 page built with Vite. |
-| `deploy/` | Bridge Dockerfile, compose file, systemd unit, nginx configs. |
+| `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
+| `.github/` | CI workflow and Dependabot config for its actions. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
 
 ## Requirements
