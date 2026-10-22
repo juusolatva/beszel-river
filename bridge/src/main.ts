@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { BeszelClient } from "./beszel/client.js";
+import { RealtimeSource } from "./beszel/realtime-source.js";
 import { SystemsSource } from "./beszel/systems-source.js";
 import { loadConfig, type Config } from "./config.js";
 import { log } from "./log.js";
@@ -10,6 +11,8 @@ import { StreamServer } from "./server.js";
 
 const PULSE_TICK_S = 2;
 const BROADCAST_DEBOUNCE_MS = 250;
+/** Realtime subscriptions outlast the last viewer by this long, so a reload does not restart them. */
+const REALTIME_LINGER_MS = 30_000;
 
 if (existsSync(".env")) process.loadEnvFile(".env");
 let config: Config;
@@ -31,6 +34,7 @@ const server = new StreamServer({
   port: config.bindPort,
   snapshot: () => hosts.frame(new Date()),
   healthy: () => live && client.connected,
+  onClients: viewersChanged,
 });
 
 // Beszel updates every host within a second or two of each other; one frame covers the batch.
@@ -44,10 +48,38 @@ function changed(didChange: boolean): void {
 }
 
 const source = new SystemsSource(client.pb, {
-  system: (record) => changed(hosts.upsertSystem(record)),
-  removed: (systemId) => changed(hosts.removeSystem(systemId)),
+  system: (record) => {
+    changed(hosts.upsertSystem(record));
+    syncRealtime();
+  },
+  removed: (systemId) => {
+    changed(hosts.removeSystem(systemId));
+    syncRealtime();
+  },
   stats: (record) => changed(hosts.addStats(record)),
 });
+
+const realtime = config.source === "realtime" ? new RealtimeSource(client.rt, (systemId, stats) => changed(hosts.addRealtime(systemId, stats))) : null;
+let lingerTimer: NodeJS.Timeout | undefined;
+
+function viewersChanged(count: number): void {
+  if (count > 0) {
+    clearTimeout(lingerTimer);
+    lingerTimer = undefined;
+  } else {
+    lingerTimer ??= setTimeout(() => {
+      lingerTimer = undefined;
+      syncRealtime();
+    }, REALTIME_LINGER_MS);
+  }
+  syncRealtime();
+}
+
+/** With `SOURCE=realtime`, keeps one `rt_metrics` subscription per up host while anyone is watching. */
+function syncRealtime(): void {
+  const watched = server.clientCount > 0 || lingerTimer !== undefined;
+  realtime?.sync(live && watched ? hosts.realtimeTargets() : []);
+}
 
 async function connect(): Promise<void> {
   for (let attempt = 0; ; attempt++) {
@@ -57,6 +89,7 @@ async function connect(): Promise<void> {
       client.keepAlive();
       live = true;
       changed(true);
+      syncRealtime();
       return;
     } catch (error) {
       await client.pb.realtime.unsubscribe().catch(() => undefined);
@@ -68,7 +101,7 @@ async function connect(): Promise<void> {
 }
 
 const port = await server.listen();
-log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz)`);
+log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz), source ${config.source}`);
 setInterval(() => changed(hosts.decay(PULSE_TICK_S)), PULSE_TICK_S * 1000);
 void connect();
 

@@ -10,8 +10,8 @@ afterEach(async () => {
   server = undefined;
 });
 
-async function start(healthy = true, maxClients?: number): Promise<string> {
-  server = new StreamServer({ host: "127.0.0.1", port: 0, snapshot: () => frame(1), healthy: () => healthy, pingMs: 50, ...(maxClients ? { maxClients } : {}) });
+async function start(healthy = true, maxClients?: number, onClients?: (count: number) => void): Promise<string> {
+  server = new StreamServer({ host: "127.0.0.1", port: 0, snapshot: () => frame(1), healthy: () => healthy, pingMs: 50, ...(maxClients ? { maxClients } : {}), ...(onClients ? { onClients } : {}) });
   return `http://127.0.0.1:${await server.listen()}`;
 }
 
@@ -49,6 +49,16 @@ describe("StreamServer", () => {
     expect(server!.clientCount).toBe(1);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(server!.clientCount).toBe(0);
+  });
+
+  it("reports the viewer count as streams open and close", async () => {
+    const counts: number[] = [];
+    const base = await start(true, undefined, (count) => counts.push(count));
+    const first = await fetch(`${base}/stream`);
+    const second = await fetch(`${base}/stream`);
+    await Promise.all([read(first, /snapshot/), read(second, /snapshot/)]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(counts).toEqual([1, 2, 1, 0]);
   });
 
   it("caps concurrent clients", async () => {

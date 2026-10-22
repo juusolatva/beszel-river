@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { Baseline, computeFeatures, logRatio, percentile, sampleFromInfo, sampleFromStats } from "../src/pipeline/features.js";
+import { Baseline, computeFeatures, coreProfile, FILAMENTS, logRatio, percentile, sampleFromInfo, sampleFromStats } from "../src/pipeline/features.js";
 
 const MB = 1024 * 1024;
 
 describe("sampleFromStats", () => {
   it("reads current fields", () => {
-    const s = sampleFromStats({ cpu: 40, cpum: 90, mp: 55, b: [1000, 3000], bm: [5000, 9000], dio: [10, 20], la: [2, 1, 1], t: { a: 45, b: 61 } });
-    expect(s).toEqual({ cpu: 40, cpuPeak: 90, mem: 55, tx: 1000, rx: 3000, txPeak: 5000, rxPeak: 9000, diskRead: 10, diskWrite: 20, load1: 2, tempMax: 61 });
+    const s = sampleFromStats({ cpu: 40, cpum: 90, mp: 55, b: [1000, 3000], bm: [5000, 9000], dio: [10, 20], la: [2, 1, 1], t: { a: 45, b: 61 }, cpus: [30, 50] });
+    expect(s).toEqual({ cpu: 40, cpuPeak: 90, mem: 55, tx: 1000, rx: 3000, txPeak: 5000, rxPeak: 9000, diskRead: 10, diskWrite: 20, load1: 2, tempMax: 61, cores: [30, 50] });
+  });
+
+  it("has no cores without per-core usage", () => {
+    expect(sampleFromStats({ cpu: 10 }).cores).toBeNull();
+    expect(sampleFromStats({ cpu: 10, cpus: [] }).cores).toBeNull();
   });
 
   it("falls back to the older MB/s fields and to averages for missing peaks", () => {
@@ -23,6 +28,33 @@ describe("sampleFromStats", () => {
   it("ignores temperature sensors reporting 0", () => {
     expect(sampleFromStats({ t: { a: 0, b: 0 } }).tempMax).toBeNull();
     expect(sampleFromStats({ t: { a: 0, b: 42 } }).tempMax).toBe(42);
+  });
+});
+
+describe("coreProfile", () => {
+  it("is null without cores", () => {
+    expect(coreProfile(null)).toBeNull();
+    expect(coreProfile([])).toBeNull();
+  });
+
+  it("resamples any core count to the same number of ascending values from idlest to busiest", () => {
+    for (const cores of [[90, 10], [5, 60, 20, 80], Array.from({ length: 32 }, (_, i) => (i * 37) % 101)]) {
+      const profile = coreProfile(cores) as number[];
+      expect(profile).toHaveLength(FILAMENTS);
+      expect(profile[0]).toBe(Math.min(...cores) / 100);
+      expect(profile[FILAMENTS - 1]).toBe(Math.max(...cores) / 100);
+      expect([...profile].sort((a, b) => a - b)).toEqual(profile);
+    }
+  });
+
+  it("interpolates between neighbouring cores", () => {
+    expect(coreProfile([0, 100])).toEqual([0, 0.2, 0.4, 0.6, 0.8, 1]);
+    expect(coreProfile([40])).toEqual(Array(FILAMENTS).fill(0.4));
+  });
+
+  it("clamps out-of-range readings", () => {
+    // -5, 46, 97, 148, 199, 250 before clamping.
+    expect(coreProfile([-5, 250])).toEqual([0, 0.46, 0.97, 1, 1, 1]);
   });
 });
 

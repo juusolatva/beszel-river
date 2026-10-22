@@ -30,8 +30,8 @@ describe("loadConfig", () => {
     );
   });
 
-  it("rejects the realtime source until M6 and unknown sources", () => {
-    expect(() => loadConfig({ ...valid, SOURCE: "realtime" })).toThrow(/not implemented yet/);
+  it("accepts the realtime source and rejects unknown ones", () => {
+    expect(loadConfig({ ...valid, SOURCE: "realtime" }).source).toBe("realtime");
     expect(() => loadConfig({ ...valid, SOURCE: "carrier-pigeon" })).toThrow(/SOURCE must be/);
   });
 
