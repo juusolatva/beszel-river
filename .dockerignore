@@ -1,0 +1,12 @@
+# Only the bridge image is built; keep secrets, build output and dependencies out of the context.
+**/node_modules
+**/dist
+**/coverage
+**/.env
+bridge/mix.json
+.git
+.github
+frontend/src
+frontend/index.html
+docs
+*.log
