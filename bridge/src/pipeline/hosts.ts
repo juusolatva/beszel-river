@@ -37,6 +37,8 @@ export class HostTable {
   constructor(
     private readonly salt: string,
     private readonly mix: MixConfig,
+    /** Times and sizes of scattered pulses; injectable for tests. */
+    private readonly random: () => number = Math.random,
   ) {}
 
   /** Adds or updates a host from its `systems` record; returns whether the frame changed. */
@@ -51,7 +53,7 @@ export class HostTable {
         threads,
         info: record.info,
         baseline: new Baseline(),
-        mixer: new Mixer(this.mix),
+        mixer: new Mixer(this.mix, this.random),
         sample: null,
         sampledAt: null,
         realtimeAt: null,
@@ -77,7 +79,8 @@ export class HostTable {
 
   /**
    * Adds a `system_stats` record to the host's baseline, and mixes it in unless realtime samples are
-   * arriving (`now` is the current time, ms). Records older than the host's last one are ignored.
+   * arriving (`now` is the current time, ms). Its pulse is scattered over the following minute. Records
+   * older than the host's last one are ignored.
    */
   addStats(record: SystemStatsRecord, now = Date.now()): boolean {
     const host = this.hosts.get(record.system);
@@ -90,7 +93,7 @@ export class HostTable {
     host.baseline.add(sample);
     if (this.realtimeLive(host, now)) return false;
     // After realtime samples, a change from 1 s values to a minute's average is not a real change.
-    this.mixSample(host, sample, dt, host.fromRealtime ? null : host.sample, false);
+    this.mixSample(host, sample, dt, host.fromRealtime ? null : host.sample, false, now);
     return host.status !== "paused";
   }
 
@@ -108,11 +111,11 @@ export class HostTable {
     return true;
   }
 
-  /** Lets pulses fade; returns whether any visible stream changed. */
-  decay(dt: number): boolean {
+  /** Lets pulses fade and fires scattered ones due by `now` (ms); returns whether any visible stream changed. */
+  decay(dt: number, now = Date.now()): boolean {
     let changed = false;
     for (const host of this.hosts.values()) {
-      if (host.mixer.decay(dt) && host.status !== "paused") changed = true;
+      if (host.mixer.decay(dt, now) && host.status !== "paused") changed = true;
     }
     return changed;
   }
@@ -146,9 +149,12 @@ export class HostTable {
     return host.realtimeAt !== null && now - host.realtimeAt < REALTIME_STALE_MS;
   }
 
-  /** `previous` is the sample that change-based features compare against, or null for none. */
-  private mixSample(host: Host, sample: Sample, dt: number, previous: Sample | null, fromRealtime: boolean): void {
-    host.mixer.apply(computeFeatures(sample, host.baseline, host.threads ?? 1, previous), dt);
+  /**
+   * `previous` is the sample that change-based features compare against, or null for none. With
+   * `scatterAt` (now, ms) the pulse is scattered rather than raised at once.
+   */
+  private mixSample(host: Host, sample: Sample, dt: number, previous: Sample | null, fromRealtime: boolean, scatterAt?: number): void {
+    host.mixer.apply(computeFeatures(sample, host.baseline, host.threads ?? 1, previous), dt, scatterAt);
     host.mixer.applyFilaments(coreProfile(sample.cores), dt);
     host.sample = sample;
     host.fromRealtime = fromRealtime;

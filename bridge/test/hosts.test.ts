@@ -74,6 +74,24 @@ describe("HostTable", () => {
     expect(streams.get(streamId(salt, "small"))?.width).toBe(0);
   });
 
+  it("scatters a minute record's pulse over the following minute", () => {
+    const t0 = Date.parse("2026-10-22T12:00:00Z");
+    const table = new HostTable(salt, mix, () => 0.5);
+    table.upsertSystem(system("a", "up", null));
+    table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
+    // A CPU rise of 80 points: burst 1, so pulse 1. First pulse at 2.5 s, two more at 25 s.
+    table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
+    const pulseOf = () => table.frame(now).streams[0]?.pulse;
+    expect(pulseOf()).toBe(0);
+    expect(table.decay(2, t0 + 2000)).toBe(false);
+    expect(table.decay(2, t0 + 4000)).toBe(true);
+    expect(pulseOf()).toBe(1);
+    for (let t = 6000; t <= 24_000; t += 2000) table.decay(2, t0 + t);
+    expect(pulseOf()).toBeLessThan(0.1);
+    expect(table.decay(2, t0 + 26_000)).toBe(true);
+    expect(pulseOf()).toBe(0.6);
+  });
+
   it("rounds channels to three decimals", () => {
     const table = new HostTable(salt, mix);
     table.upsertSystem(system("a", "up", { t: 3, cpu: 33.3333, mp: 66.6666 }));
@@ -119,6 +137,16 @@ describe("HostTable realtime", () => {
     fromMinute.addStats(stats("a", "2026-10-22 11:59:00.000Z", 0), t0);
     fromMinute.addRealtime("a", { cpu: 80, b: [1000, 1000] }, t0 + 1000);
     expect(fromMinute.frame(now).streams[0]?.pulse).toBe(0);
+  });
+
+  it("drops scattered pulses when realtime samples take over", () => {
+    const table = new HostTable(salt, mix, () => 0.5);
+    table.upsertSystem(system("a", "up", null));
+    table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
+    table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
+    table.addRealtime("a", { cpu: 80 }, t0 + 1000);
+    expect(table.decay(2, t0 + 60_000)).toBe(false);
+    expect(table.frame(now).streams[0]?.pulse).toBe(0);
   });
 
   it("keeps realtime samples out of the 24 h baseline", () => {
