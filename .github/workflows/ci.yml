@@ -22,10 +22,10 @@ jobs:
         # 22.12.0: minimum in package.json "engines". 24: production version, keep equal to .nvmrc.
         node: ["22.12.0", "24"]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -35,9 +35,11 @@ jobs:
       - run: npm run coverage
       - name: Coverage summary
         if: ${{ !cancelled() && hashFiles('bridge/coverage/coverage.txt') != '' }}
+        env:
+          NODE_VERSION: ${{ matrix.node }}
         run: |
           {
-            echo "### Bridge coverage (Node ${{ matrix.node }})"
+            echo "### Bridge coverage (Node $NODE_VERSION)"
             echo '```'
             cat bridge/coverage/coverage.txt
             echo '```'
@@ -48,11 +50,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build bridge image
         run: docker build -f deploy/bridge.Dockerfile -t beszel-river-bridge .
+      # Catches runtime dependencies missing from the production stage. Without a hub the bridge keeps
+      # retrying the login, but /stream still answers with an empty snapshot.
+      - name: Smoke-test bridge image
+        run: |
+          docker run -d --name bridge -p 127.0.0.1:8787:8787 -e BIND_HOST=0.0.0.0 \
+            -e BESZEL_EMAIL=ci@example.com -e BESZEL_PASSWORD=ci -e STREAM_SALT=ci-smoke-test-salt beszel-river-bridge
+          ok=
+          for _ in $(seq 30); do
+            if curl -sN --max-time 2 http://127.0.0.1:8787/stream | grep -q '^event: snapshot'; then ok=1; break; fi
+            sleep 1
+          done
+          docker logs bridge
+          docker rm -f bridge > /dev/null
+          [ -n "$ok" ] || { echo "::error::bridge image did not serve /stream"; exit 1; }
       - name: Check compose file
         run: |
           cp bridge/.env.example bridge/.env
@@ -68,6 +84,7 @@ jobs:
           sed '/listen \[::\]/d' deploy/nginx/river.conf > "$RUNNER_TEMP/river.conf"
           docker run --rm -v "$RUNNER_TEMP/river.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$RUNNER_TEMP/le:/etc/letsencrypt:ro" nginx:stable-alpine nginx -t
+          # shellcheck disable=SC2016 # $binary_remote_addr is an nginx variable, not a shell one.
           printf '%s\n' 'limit_conn_zone $binary_remote_addr zone=river_stream:10m;' \
             'server { listen 8080; include /etc/nginx/snippets/river-path.conf; }' > "$RUNNER_TEMP/existing.conf"
           docker run --rm -v "$RUNNER_TEMP/existing.conf:/etc/nginx/conf.d/default.conf:ro" \

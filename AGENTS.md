@@ -18,6 +18,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
+| `.github/` | `workflows/ci.yml` and `dependabot.yml` (updates for the pinned actions). |
 | `docs/PLAN.md` | Plan. |
 
 ## Commands
@@ -34,7 +35,7 @@ npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile` and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
@@ -43,6 +44,7 @@ CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `buil
 - **TypeScript:** strict settings from `tsconfig.base.json`. `noUncheckedIndexedAccess` is off on purpose so typed-array code stays readable. ES modules everywhere; bridge imports use `.js` extensions (NodeNext resolution).
 - **Style:** match the surrounding code: short doc comments on exported items, comments that explain why rather than what, no formatter-driven churn. `.editorconfig` sets the whitespace rules.
 - **Frontend hot path:** no allocations per particle or per frame in `src/sim/` and `src/render/`; keep state in the preallocated typed arrays.
+- **CI:** pin actions to a full commit SHA with the version in a comment (`uses: actions/checkout@<sha> # v7.0.1`); Dependabot updates both. Pass `${{ }}` values to `run` scripts through `env`, not inline. Check workflow changes with `actionlint` (with `shellcheck` on the path) and `zizmor --persona=auditor .github`; both should report nothing above informational.
 - **Shaders:** GLSL files in `frontend/src/render/shaders/`, imported with Vite's `?raw` suffix.
 - **Frontend URLs:** keep them relative (`base: "./"` in `vite.config.ts`, stream URL `"stream"` in `src/main.ts`), so one build works at a site root and under `/river/`.
 - **Content-Security-Policy:** the nginx configs send `default-src 'self'` with only inline styles allowed. The page must not load anything from other origins or use inline scripts. Keep every `add_header` at server level: one inside a location drops the others there.
