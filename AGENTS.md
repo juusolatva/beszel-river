@@ -7,7 +7,7 @@ Instructions for coding agents working in this repository. `CLAUDE.md` only impo
 A public web page that turns live metrics from a Beszel hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation but must not be readable from it.
 
 - `docs/PLAN.md` is the source of truth for design, configuration, message format and milestones. Read the relevant section before changing behaviour, and update it in the same change when the behaviour, configuration or file layout changes.
-- `README.md` holds setup and usage. Update it when commands, environment variables or URL parameters change.
+- `README.md` holds setup, deployment and maintenance. Update it when commands, environment variables, URL parameters or deployment files change; new environment variables also go in `bridge/.env.example`.
 - Milestone status is the checklist under "Milestones" in `docs/PLAN.md`. Tick a milestone only when its "Done when" condition has been checked, and note how it was checked.
 
 ## Layout
@@ -16,8 +16,8 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 |---|---|
 | `shared/src/index.ts` | `Frame` and `Stream` message types. Type-only: `exports` has only a `types` condition, so consumers must use `import type`. |
 | `bridge/` | Node service. `src/beszel/` talks to the hub, `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
-| `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them. Look tunables are `LOOK` in `src/config.ts`. |
-| `deploy/` | Bridge Dockerfile and compose file, systemd unit, nginx configs. CI builds the image and checks the configs. |
+| `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. |
+| `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `docs/PLAN.md` | Plan. |
 
 ## Commands
@@ -34,7 +34,7 @@ npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile` and checks `deploy/compose.yml` (`docker compose config`) and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile` and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
@@ -44,6 +44,8 @@ CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `buil
 - **Style:** match the surrounding code: short doc comments on exported items, comments that explain why rather than what, no formatter-driven churn. `.editorconfig` sets the whitespace rules.
 - **Frontend hot path:** no allocations per particle or per frame in `src/sim/` and `src/render/`; keep state in the preallocated typed arrays.
 - **Shaders:** GLSL files in `frontend/src/render/shaders/`, imported with Vite's `?raw` suffix.
+- **Frontend URLs:** keep them relative (`base: "./"` in `vite.config.ts`, stream URL `"stream"` in `src/main.ts`), so one build works at a site root and under `/river/`.
+- **Content-Security-Policy:** the nginx configs send `default-src 'self'` with only inline styles allowed. The page must not load anything from other origins or use inline scripts. Keep every `add_header` at server level: one inside a location drops the others there.
 
 ## Invariants
 
@@ -61,6 +63,8 @@ These protect the point of the project. Do not break them without a change to `d
 - Bridge logic is pure where possible; add or update vitest tests in `bridge/test/` for every change to `config.ts`, `pipeline/` or `server.ts`.
 - `bridge/vitest.config.ts` sets coverage thresholds for those modules (90 % statements, functions and lines, 80 % branches); `npm run coverage` fails below them. Do not lower a threshold to make a change pass; add tests instead.
 - End-to-end bridge checks need a running Beszel hub and agent (release binaries from GitHub, run outside the repository). Watch frames with `curl -N http://127.0.0.1:8787/stream`.
+- Token mode (`BESZEL_TOKEN`): start the hub with `DISABLE_PASSWORD_AUTH=true` and get a token as a superuser with `POST /api/collections/users/impersonate/<user id>` and the body `{"duration": <seconds>}`.
+- Deployment files: run the CI `deploy` job's commands. `nginx -t` opens the listen sockets, so in a container without IPv6 remove the `listen [::]` lines first, as CI does.
 - The frontend has no unit tests. Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance. It also keeps every core busy, so do not run it on the machine whose metrics you are measuring; replay recorded frames instead.
 
 ## Git

@@ -37,7 +37,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
 2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT`.
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
-   - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge.
+   - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "5. Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
 3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored.
 4. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
@@ -66,12 +66,12 @@ The bridge runs next to the Beszel hub, in Docker or under systemd, and listens 
 ### 1. Configure
 
 ```sh
-git clone https://github.com/juusolatva/beszel-river.git /opt/beszel-river && cd /opt/beszel-river
+git clone https://github.com/juusolatva/beszel-river.git && cd beszel-river
 cp bridge/.env.example bridge/.env           # set BESZEL_EMAIL and BESZEL_PASSWORD (or BESZEL_TOKEN), STREAM_SALT, BESZEL_URL (below)
 cp bridge/mix.example.json bridge/mix.json   # then change the weights: the template is public
 ```
 
-Create the Beszel user as in "Bridge setup" above.
+Any directory works for Docker; the systemd unit (2b) expects `/opt/beszel-river`. Create the Beszel user as in "Bridge setup" above.
 
 ### 2a. Bridge in Docker (hub in Docker)
 
@@ -95,13 +95,13 @@ If the hub runs with `network_mode: host`, it is on no Docker network. Run the b
 docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml up -d --build
 ```
 
-The bridge then listens on the host's `127.0.0.1:8787` directly; `BESZEL_NETWORK` is not used. Pass the same two `-f` options to every later `docker compose` command (`ps`, `logs`, `down`).
+The bridge then listens on the host's `127.0.0.1:8787` directly; `BESZEL_NETWORK` is not used. Pass the same two `-f` options to every later `docker compose` command (`ps`, `logs`, `down`). The override uses `!reset`, which needs Docker Compose 2.24.0 or later (`docker compose version`).
 
 `bridge/mix.json` must exist; compose refuses to start without it. To update: `git pull`, then the same `up -d --build` command.
 
 ### 2b. Bridge under systemd (hub not in Docker)
 
-Needs Node 24. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
+Needs Node 24 and the checkout in `/opt/beszel-river` (the unit's `WorkingDirectory`). Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
 
 ```sh
 sudo useradd --system --home-dir /opt/beszel-river --shell /usr/sbin/nologin beszel-river
@@ -147,6 +147,24 @@ nginx older than 1.25.1 (Debian 12, Ubuntu 24.04) does not know `http2 on;`: del
 Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `limit_conn_zone $binary_remote_addr zone=river_stream:10m;` to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`.
 
 Check: `https://river.example.com/?debug` shows `alive` streams with live channel values.
+
+### 5. Maintenance
+
+The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts.
+
+- **Updates:** `git pull`, then rebuild the bridge (the 2a `up -d --build` command, or 2b's build and `sudo systemctl restart beszel-river-bridge`) and the frontend (3).
+- **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.
+  ```sh
+  docker compose -f deploy/compose.yml logs bridge | grep 'valid until'   # Docker
+  sudo journalctl -u beszel-river-bridge | grep 'valid until'             # systemd
+  ```
+  - `logs bridge`: the bridge service's output. With the host-network override, pass both `-f` options as in 2a.
+  - `journalctl -u <unit>`: that unit's log.
+  - `grep 'valid until'`: keeps the line with the date.
+
+  After that date the hub rejects the token, and the bridge does not start with it (`BESZEL_TOKEN expired on …`). Put a new token (see "Bridge setup") in `bridge/.env`, then run the same `up -d` command, which recreates the container with the new value (`docker compose restart` would keep the old one), or `sudo systemctl restart beszel-river-bridge`.
+- **Beszel upgrades:** Beszel renames fields between minor releases, and the bridge is tested with v0.21.0. After a hub upgrade, check that `?debug` still shows changing channel values. A hub image that updates itself (`:latest` with Watchtower or similar) can stop the river without notice; pin a version to upgrade on purpose.
+- **Certificate:** `sudo certbot renew --dry-run` checks that automatic renewal works. `renew` renews certificates close to expiry; `--dry-run` uses Let's Encrypt's test server and saves nothing. Certificates obtained with `--nginx` make certbot reload nginx after each renewal.
 
 ## License
 
