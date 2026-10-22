@@ -2,7 +2,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: deployed with live data (M5), with an optional 1 s realtime source (M6, `SOURCE=realtime`); next is polish (M7). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: all milestones done except the 60 fps check on a real GPU (M2); deployed with live data (M5), with an optional 1 s realtime source (M6, `SOURCE=realtime`). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout
 
@@ -55,7 +55,7 @@ The page reads frames from `stream` next to itself (`/stream` at the site root).
 | `?debug` | Panel with fps/particle stats. With demo frames: per-stream channel sliders, alive/hold/filaments toggles and add/remove stream buttons. With the bridge: the latest channel values and filaments, read-only. `d` hides it. |
 | `?streams=N` | Number of demo streams (default 4). |
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
-| `?particles=N` | Particle pool size (default 20000, 8000 on touch devices, halved with reduced motion). |
+| `?particles=N` | Fixed particle pool size. Without it the pool is 20000 (8000 on touch devices, halved with reduced motion) and thins out on devices that cannot keep up. |
 | `?seed=N` | Fixed random seed, for repeatable looks. |
 
 Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/config.ts` (`LOOK`).

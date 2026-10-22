@@ -48,6 +48,8 @@ export class StreamSlot {
 
   hueOffset = 0;
   phase = 0;
+  /** Braid swing angle, rad; advances with `braidSpeed`, slower with reduced motion. */
+  braidAngle = 0;
   particles = 0;
   spawnCarry = 0;
 
@@ -69,15 +71,19 @@ export class StreamSlot {
   }
 
   /** Centre line of the band at height `y`; it swings sideways so neighbouring streams braid. */
-  centerAt(y: number, t: number): number {
-    return this.center + this.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + this.phase) + t * LOOK.braidSpeed);
+  centerAt(y: number): number {
+    return this.center + this.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + this.phase) + this.braidAngle);
   }
 }
 
 export class StreamSet {
   readonly slots: StreamSlot[] = Array.from({ length: MAX_STREAMS }, () => new StreamSlot());
+  /** Scratch list for `layout`. */
+  private readonly ordered: StreamSlot[] = [...this.slots];
   private readonly byId = new Map<string, StreamSlot>();
   private started = false;
+  /** No live connection for a while: every stream thins out and greys as if its host were down. */
+  offline = false;
 
   constructor(private readonly motion: number) {}
 
@@ -109,8 +115,10 @@ export class StreamSet {
       slot.density = ease(slot.density, s.density, tau.density, dt);
       slot.turbulence = ease(slot.turbulence, s.turbulence, tau.turbulence, dt);
       slot.heat = ease(slot.heat, s.heat, tau.heat, dt);
-      slot.pulse = ease(slot.pulse, s.pulse, s.pulse > slot.pulse ? tau.pulseRise : tau.pulseFall, dt);
-      slot.vitality = ease(slot.vitality, s.alive ? 1 : 0, tau.vitality, dt);
+      // Reduced motion (motion < 1) softens and weakens pulse flashes and slows the braid.
+      slot.pulse = ease(slot.pulse, s.pulse, s.pulse > slot.pulse ? tau.pulseRise / this.motion : tau.pulseFall, dt);
+      slot.vitality = ease(slot.vitality, s.alive && !this.offline ? 1 : 0, tau.vitality, dt);
+      slot.braidAngle = (slot.braidAngle + dt * LOOK.braidSpeed * this.motion) % (2 * Math.PI);
       slot.presence = ease(slot.presence, slot.inFrame ? 1 : 0, tau.presence, dt);
       const filaments = s.filaments;
       slot.filamentMix = ease(slot.filamentMix, filaments ? 1 : 0, tau.filamentMix, dt);
@@ -136,8 +144,9 @@ export class StreamSet {
       slot.speed = LOOK.baseSpeed * lerp(LOOK.speedRange[0], LOOK.speedRange[1], slot.flow) * lerp(0.5, 1, v) * this.motion;
       slot.turbulenceAmp = lerp(LOOK.turbulenceRange[0], LOOK.turbulenceRange[1], slot.turbulence) * this.motion;
       slot.shareWeight = (0.6 + 0.8 * slot.width) * slot.presence;
-      slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * slot.pulse) * lerp(0.2, 1, v);
-      slot.brightness = (1 + 1.2 * slot.pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
+      const pulse = slot.pulse * this.motion * this.motion;
+      slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v);
+      slot.brightness = (1 + 1.2 * pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
       slot.chroma = LOOK.chroma * lerp(0.1, 1, v);
       slot.streakSeconds = lerp(LOOK.streakRange[0], LOOK.streakRange[1], slot.flow);
 
@@ -174,18 +183,35 @@ export class StreamSet {
     slot.latest = null;
   }
 
-  /** Bands in frame order, widths proportional to `width`; draining streams keep their last place. */
+  /**
+   * Bands in frame order, widths proportional to `width`; draining streams keep their last place.
+   * Runs every frame, so it sorts into the preallocated `ordered` instead of building arrays.
+   */
   private layout(aspect: number): void {
-    const active = this.slots.filter((s) => s.used && s.inFrame && s.latest).sort((a, b) => a.order - b.order);
-    const weights = active.map((s) => 0.6 + 0.8 * (s.latest?.width ?? 0));
-    const total = weights.reduce((sum, w) => sum + w, 0);
+    const { ordered } = this;
+    let count = 0;
+    let total = 0;
+    for (let s = 0; s < MAX_STREAMS; s++) {
+      const slot = this.slots[s];
+      if (!slot.used || !slot.inFrame || !slot.latest) continue;
+      let i = count++;
+      for (; i > 0 && ordered[i - 1].order > slot.order; i--) ordered[i] = ordered[i - 1];
+      ordered[i] = slot;
+      total += bandWeight(slot);
+    }
     const span = aspect * (1 - 2 * LOOK.bandMargin);
     let cumulative = 0;
-    active.forEach((slot, i) => {
-      const w = weights[i];
+    for (let i = 0; i < count; i++) {
+      const slot = ordered[i];
+      const w = bandWeight(slot);
       slot.centerTarget = aspect * LOOK.bandMargin + ((cumulative + w / 2) / total) * span;
       slot.halfTarget = ((w / total) * span) / 2;
       cumulative += w;
-    });
+    }
   }
+}
+
+/** A band's share of the width, before normalizing. */
+function bandWeight(slot: StreamSlot): number {
+  return 0.6 + 0.8 * (slot.latest?.width ?? 0);
 }
