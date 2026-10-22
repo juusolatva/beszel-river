@@ -4,6 +4,13 @@ import { ease, fract, hashString, lerp } from "../util/math";
 
 /** Slot count; particles store their slot index in a byte. Extra streams are ignored. */
 export const MAX_STREAMS = 32;
+/** Filament count in the message format. */
+export const FILAMENTS = 6;
+
+/** Centre of filament lane `j`, in band half-widths from the centre line. */
+export function laneCenter(j: number): number {
+  return (((j + 0.5) / FILAMENTS) * 2 - 1) * LOOK.filamentSpan;
+}
 
 /** One stream's eased state, layout and the motion parameters derived from them. */
 export class StreamSlot {
@@ -25,6 +32,12 @@ export class StreamSlot {
   vitality = 0;
   /** 1 while in the frame, eases to 0 after removal. */
   presence = 0;
+  /** Eased per-lane activity. */
+  readonly filaments = new Float32Array(FILAMENTS);
+  /** Share of spawns that follow the lanes: 1 with filaments, easing to 0 without. */
+  filamentMix = 0;
+  /** Cumulative spawn weight per lane, for `pickLane`. */
+  readonly laneWeights = new Float32Array(FILAMENTS);
 
   // Layout, world units.
   center = 0;
@@ -47,6 +60,13 @@ export class StreamSlot {
   brightness = 0;
   chroma = 0;
   streakSeconds = 0;
+
+  /** Lane index for a uniform random number `u` in [0, 1), weighted by lane activity. */
+  pickLane(u: number): number {
+    const target = u * this.laneWeights[FILAMENTS - 1];
+    for (let j = 0; j < FILAMENTS - 1; j++) if (target < this.laneWeights[j]) return j;
+    return FILAMENTS - 1;
+  }
 
   /** Centre line of the band at height `y`; it swings sideways so neighbouring streams braid. */
   centerAt(y: number, t: number): number {
@@ -92,6 +112,16 @@ export class StreamSet {
       slot.pulse = ease(slot.pulse, s.pulse, s.pulse > slot.pulse ? tau.pulseRise : tau.pulseFall, dt);
       slot.vitality = ease(slot.vitality, s.alive ? 1 : 0, tau.vitality, dt);
       slot.presence = ease(slot.presence, slot.inFrame ? 1 : 0, tau.presence, dt);
+      const filaments = s.filaments;
+      slot.filamentMix = ease(slot.filamentMix, filaments ? 1 : 0, tau.filamentMix, dt);
+      // Lanes near the edges get less, so the spawn profile keeps the band's soft shape.
+      let laneTotal = 0;
+      for (let j = 0; j < FILAMENTS; j++) {
+        if (filaments) slot.filaments[j] = ease(slot.filaments[j], filaments[j], tau.filaments, dt);
+        const c = laneCenter(j) / LOOK.spawnSpread;
+        laneTotal += Math.exp(-0.5 * c * c) * (LOOK.filamentFloor + slot.filaments[j]);
+        slot.laneWeights[j] = laneTotal;
+      }
       if (slot.snapLayout) {
         slot.center = slot.centerTarget;
         slot.half = slot.halfTarget;
@@ -126,6 +156,9 @@ export class StreamSet {
     slot.heat = stream.heat;
     slot.pulse = stream.pulse;
     slot.vitality = stream.alive ? 1 : 0;
+    slot.filaments.fill(0);
+    if (stream.filaments) slot.filaments.set(stream.filaments);
+    slot.filamentMix = stream.filaments ? 1 : 0;
     // Streams in the first frame appear at once; later ones fade in.
     slot.presence = this.started ? 0 : 1;
     slot.snapLayout = true;

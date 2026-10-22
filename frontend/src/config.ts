@@ -23,6 +23,17 @@ export const LOOK = {
   bandMargin: 0.07,
   /** Spawn spread (standard deviation) as a fraction of band half-width. */
   spawnSpread: 0.85,
+  /**
+   * Filaments (per-core lanes): lane centres span ±filamentSpan of the band's half-width, and an idle
+   * lane keeps filamentFloor of a busy lane's spawn weight. Spawns scatter around the lane centre by
+   * filamentSpread, [idle lane, busy lane], as a fraction of the half-width: idle lanes blur into the
+   * band, busy ones draw a tight strand.
+   */
+  filamentSpan: 0.75,
+  filamentSpread: [0.32, 0.05],
+  filamentFloor: 0.15,
+  /** Speed multiplier range for particles in a lane, mapped from its filament value. */
+  filamentSpeed: [0.85, 1.25],
 
   /** Average particle turnover; spawn rates are scaled so the pool refills about this often. */
   turnoverSeconds: 7,
@@ -64,6 +75,9 @@ export const LOOK = {
     vitality: 3,
     presence: 2,
     layout: 3,
+    filaments: 1.5,
+    /** Blend between lanes and the plain band when filaments appear or stop. */
+    filamentMix: 3,
   },
 
   /** Curl-noise grid: rows per screen height, spatial frequency, upward scroll and evolution speed. */
