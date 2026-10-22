@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { clamp01, FEATURES, type Feature, type Features } from "./features.js";
+import { webcrypto } from "node:crypto";
+// Workaround for TypeScript DOM lib conflict: using webcrypto as Crypto
+const crypto = webcrypto as unknown as Crypto;
 
 /** Channels the mixer produces; `width` and `alive` come from the host table instead. */
 export const MIXED = ["flow", "density", "turbulence", "pulse", "heat"] as const;
@@ -167,7 +170,7 @@ export class Mixer {
 
   constructor(
     private readonly config: MixConfig,
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = () => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000,
   ) {}
 
   /**

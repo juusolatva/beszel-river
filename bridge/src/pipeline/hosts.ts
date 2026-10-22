@@ -3,6 +3,9 @@ import type { SystemInfo, SystemRecord, SystemStats, SystemStatsRecord, SystemSt
 import { bandOrder, bandWidths, filamentOrder, streamId } from "./anonymize.js";
 import { Baseline, computeFeatures, coreProfile, FILAMENTS, sampleFromInfo, sampleFromStats, type Sample } from "./features.js";
 import { MIXED, Mixer, type MixConfig, type SampleKind } from "./mix.js";
+import { webcrypto } from "node:crypto";
+// Workaround for TypeScript DOM lib conflict: using webcrypto as Crypto
+const crypto = webcrypto as unknown as Crypto;
 
 interface Host {
   systemId: string;
@@ -38,7 +41,7 @@ export class HostTable {
     private readonly salt: string,
     private readonly mix: MixConfig,
     /** Times and sizes of scattered pulses; injectable for tests. */
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = () => crypto.getRandomValues(new Uint32Array(1))[0] / 0x100000000,
   ) {}
 
   /** Adds or updates a host from its `systems` record; returns whether the frame changed. */
