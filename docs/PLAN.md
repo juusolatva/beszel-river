@@ -19,7 +19,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge) | Normalization and mixing are pure functions; coverage thresholds gate the pure modules. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci`, `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image and runs `docker compose config` and `nginx -t` | `.github/workflows/ci.yml`; tests both ends of the supported range and keeps the deployment files valid. |
+| CI | GitHub Actions: `npm ci`, `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/dependabot.yml`; tests both ends of the supported range and keeps the deployment files valid. A tag can be moved to other code, a SHA cannot. |
 | Deployment | Bridge in Docker (`node:24-alpine`) next to the hub, or systemd; host nginx serves the static build and proxies `/stream` | See "Deployment". |
 
 ## Architecture
@@ -46,15 +46,14 @@ Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
 
 ## Repository layout
 
-Current files plus the planned ones (milestone in brackets).
-
 ```
 .github/workflows/ci.yml      CI
+.github/dependabot.yml        monthly updates for the pinned actions
 .dockerignore                 keeps secrets and build output out of the image build context
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
 docs/PLAN.md                  this plan
-shared/src/index.ts           message types [M1]
+shared/src/index.ts           message types
 bridge/
   .env.example                configuration template
   mix.example.json            mixing weights template; real bridge/mix.json is git-ignored
