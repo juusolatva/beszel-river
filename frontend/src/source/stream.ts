@@ -14,6 +14,8 @@ export interface StreamOptions {
   url: string;
   /** Called once if the first connection fails before any frame arrives (dev falls back to the demo). */
   onUnavailable?: () => void;
+  /** Called when the connection opens (true) or fails (false); closing it while hidden reports nothing. */
+  onStatus?: (connected: boolean) => void;
 }
 
 /**
@@ -32,11 +34,13 @@ export class StreamSource implements FrameSource {
   start(onFrame: (frame: Frame) => void): void {
     this.onFrame = onFrame;
     document.addEventListener("visibilitychange", this.onVisibility);
+    addEventListener("online", this.onOnline);
     if (!document.hidden) this.open();
   }
 
   stop(): void {
     document.removeEventListener("visibilitychange", this.onVisibility);
+    removeEventListener("online", this.onOnline);
     this.close();
     this.onFrame = undefined;
   }
@@ -45,6 +49,7 @@ export class StreamSource implements FrameSource {
     if (this.events) return;
     const events = new EventSource(this.options.url);
     for (const name of EVENTS) events.addEventListener(name, this.onMessage);
+    events.addEventListener("open", this.onOpen);
     events.addEventListener("error", this.onError);
     this.events = events;
   }
@@ -64,20 +69,36 @@ export class StreamSource implements FrameSource {
     this.onFrame?.(frame);
   };
 
+  private readonly onOpen = (): void => this.options.onStatus?.(true);
+
   private readonly onError = (): void => {
     // While CONNECTING the browser retries by itself (`retry: 5000`). An HTTP error such as nginx's 502
     // while the bridge restarts closes the source for good, so reconnect with backoff.
-    if (this.events?.readyState !== EventSource.CLOSED) return;
-    this.close();
-    if (!this.received && this.options.onUnavailable) {
-      this.options.onUnavailable();
+    const closed = this.events?.readyState === EventSource.CLOSED;
+    if (closed && !this.received && this.options.onUnavailable) {
+      // Handing over for good: stop listening, so showing the tab again does not reconnect alongside.
+      const onUnavailable = this.options.onUnavailable;
+      this.stop();
+      onUnavailable();
       return;
     }
+    this.options.onStatus?.(false);
+    if (!closed) return;
+    this.close();
     this.retryTimer = setTimeout(() => {
       this.retryTimer = undefined;
       if (!document.hidden) this.open();
     }, this.retryDelay);
     this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX);
+  };
+
+  /** Back online: reconnect now instead of waiting out the backoff, which can be up to a minute. */
+  private readonly onOnline = (): void => {
+    if (this.events || document.hidden) return;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    this.retryDelay = RETRY_MIN;
+    this.open();
   };
 
   private readonly onVisibility = (): void => {

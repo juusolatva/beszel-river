@@ -91,6 +91,8 @@ export const LOOK = {
 export interface Config {
   /** Particle pool size. `?particles=N` overrides. */
   particles: number;
+  /** `?particles=N` was given: keep that count instead of thinning out on slow devices. */
+  particlesFixed: boolean;
   /** Speed and turbulence scale; lowered for `prefers-reduced-motion`. */
   motion: number;
   /** Uses generated frames instead of the bridge. `?demo` enables. */
@@ -117,6 +119,7 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
 
   return {
     particles: int("particles", reducedMotion ? budget / 2 : budget, 100, 200000),
+    particlesFixed: params.has("particles"),
     motion: reducedMotion ? 0.5 : 1,
     demo: params.has("demo"),
     demoStreams: int("streams", 4, 0, 32),
