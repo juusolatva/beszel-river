@@ -2,7 +2,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: the page runs on live data from the bridge (M4); deployment files are ready (M5). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: deployed with live data (M5); next is the 1 s realtime source (M6). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout
 
