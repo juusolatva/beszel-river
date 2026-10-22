@@ -8,7 +8,9 @@ const STATS_FIELDS = "id,system,type,created,stats";
 export interface SystemsHandlers {
   system(record: SystemRecord): void;
   removed(systemId: string): void;
-  /** Called in time order: history first, then live records. */
+  /** Called in time order with the records loaded at startup, before any live ones. */
+  history(record: SystemStatsRecord): void;
+  /** Called in time order with live records. */
   stats(record: SystemStatsRecord): void;
 }
 
@@ -50,7 +52,7 @@ export class SystemsSource {
       fields: STATS_FIELDS,
       batch: 1000,
     });
-    for (const record of history) this.handlers.stats(record);
+    for (const record of history) this.handlers.history(record);
     const live = held.sort((a, b) => a.created.localeCompare(b.created));
     held = null;
     for (const record of live) this.handlers.stats(record);

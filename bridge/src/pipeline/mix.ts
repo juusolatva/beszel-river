@@ -7,7 +7,8 @@ export type Mixed = (typeof MIXED)[number];
 
 /**
  * channel = clamp01(bias + Σ weight × (feature − center)), then smoothed with time constant `tau`
- * seconds (0 = none). `pulse` is not smoothed: it jumps to each new value and decays between samples.
+ * seconds (0 = none). `pulse` is not smoothed: it rises to each sample's value (at once or scattered,
+ * see `SampleKind`) and decays between samples.
  */
 export interface Recipe {
   bias: number;
@@ -31,19 +32,24 @@ export interface FilamentRecipe {
 export const DEFAULT_FILAMENTS: FilamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
 
 /**
- * How the pulse from a minute record is spread out, so hosts do not all flash at the top of the minute
- * and the river keeps pulsing between records. The first pulse fires at full strength within
- * `FIRST_PULSE_JITTER_S`; then a Poisson-distributed number of weaker ones (mean `rate` × pulse, at most
- * `max`) at random times over the next `window` seconds. Realtime samples pulse at once instead.
+ * How the pulse p of a minute record is spread out, so hosts do not all flash at the top of the minute
+ * and the river keeps pulsing between records. The first pulse fires at full strength within `jitter`
+ * seconds (0 = at once). Then a Poisson-distributed number of weaker ones (mean `rate` × p, at most `max`,
+ * 0.4–0.8 × p) at random times within `window` seconds of the first, each at least `pulseDecay` + `TICK_S`
+ * after the one before, so that one has faded below the weakest later pulse.
  */
 export interface PulseScatter {
+  jitter: number;
   rate: number;
   max: number;
   window: number;
 }
 
-/** Used when `mix.json` has no `pulseScatter` entry: one to three pulses per record. */
-export const DEFAULT_PULSE_SCATTER: PulseScatter = { rate: 2, max: 2, window: 50 };
+/** Used for what `mix.json` leaves out of `pulseScatter`: one to three pulses per record. */
+export const DEFAULT_PULSE_SCATTER: PulseScatter = { jitter: 5, rate: 2, max: 2, window: 50 };
+
+/** Used when `mix.json` has no `glide`: the time to the next minute record. */
+export const DEFAULT_GLIDE = 60;
 
 export interface MixConfig {
   channels: Record<Mixed, Recipe>;
@@ -51,14 +57,49 @@ export interface MixConfig {
   pulseScatter: PulseScatter;
   /** Pulse decay time constant, seconds. */
   pulseDecay: number;
+  /** A minute record's other channels and filaments move to their new values over this long, seconds; 0 = at once. */
+  glide: number;
 }
 
-/** Spread of the first scattered pulse, seconds: short enough to stay within the update, long enough to spread hosts over two or three 2 s ticks. */
-const FIRST_PULSE_JITTER_S = 5;
+/**
+ * How `Mixer.apply` brings a sample in:
+ * - `realtime`: 1 s data; channels and pulse change at once.
+ * - `minute`: a live minute record; channels glide over `glide` and the pulse is scattered
+ *   (`PulseScatter`), so hosts that all report in the same second or two do not all change together.
+ * - `seed`: a record replayed at startup or an `info` summary; channels change at once and the pulse is
+ *   left out, since it is old news.
+ */
+export type SampleKind = "realtime" | "minute" | "seed";
+
+/** Interval of `Mixer.tick`, seconds. */
+export const TICK_S = 2;
+/**
+ * Latest a scattered pulse may be due after its record, seconds: the tick fires it up to `TICK_S` late,
+ * and the next record, about 60 s after this one, drops what is still pending.
+ */
+const SCATTER_SPAN_S = 55;
 /** Strength of the later scattered pulses, as a fraction of the first. */
 const LATER_PULSE = [0.4, 0.8] as const;
 /** Pulse values below this are not visible. */
 const VISIBLE = 0.005;
+/** Smallest glide move per tick worth a frame: half the frames' resolution of three decimals. */
+const GLIDE_STEP = 0.0005;
+
+interface Pulse {
+  /** Due time, ms. */
+  at: number;
+  value: number;
+}
+
+interface Glide {
+  /** Start and end, ms. */
+  start: number;
+  end: number;
+  from: Record<Mixed, number>;
+  to: Record<Mixed, number>;
+  /** Null when the filaments switch at once, because the record started or stopped them. */
+  filaments: { from: number[]; to: number[] } | null;
+}
 
 export function parseMixConfig(json: unknown): MixConfig {
   const fail = (message: string): never => {
@@ -68,6 +109,12 @@ export function parseMixConfig(json: unknown): MixConfig {
   const number = (v: unknown, path: string, fallback?: number): number => {
     if (v === undefined && fallback !== undefined) return fallback;
     return typeof v === "number" && Number.isFinite(v) ? v : fail(`${path} must be a number`);
+  };
+  /** An optional entry of numbers; it and each of its fields default to `defaults`. */
+  const section = <T extends object>(raw: unknown, name: string, defaults: T): T => {
+    if (raw === undefined) return defaults;
+    if (!isObject(raw)) return fail(`${name} must be an object`);
+    return Object.fromEntries(Object.entries(defaults).map(([field, fallback]) => [field, number(raw[field], `${name}.${field}`, fallback as number)])) as T;
   };
 
   if (!isObject(json)) return fail("expected an object");
@@ -85,34 +132,21 @@ export function parseMixConfig(json: unknown): MixConfig {
     if (tau < 0) fail(`${channel}.tau must be >= 0`);
     channels[channel] = { bias: number(raw.bias, `${channel}.bias`, 0), center: number(raw.center, `${channel}.center`, 0), tau, inputs };
   }
-  let filaments = DEFAULT_FILAMENTS;
-  if (json.filaments !== undefined) {
-    const raw = json.filaments;
-    if (!isObject(raw)) return fail("filaments must be an object");
-    filaments = {
-      bias: number(raw.bias, "filaments.bias", DEFAULT_FILAMENTS.bias),
-      center: number(raw.center, "filaments.center", DEFAULT_FILAMENTS.center),
-      weight: number(raw.weight, "filaments.weight", DEFAULT_FILAMENTS.weight),
-      tau: number(raw.tau, "filaments.tau", DEFAULT_FILAMENTS.tau),
-    };
-    if (filaments.tau < 0) fail("filaments.tau must be >= 0");
-  }
-  let pulseScatter = DEFAULT_PULSE_SCATTER;
-  if (json.pulseScatter !== undefined) {
-    const raw = json.pulseScatter;
-    if (!isObject(raw)) return fail("pulseScatter must be an object");
-    pulseScatter = {
-      rate: number(raw.rate, "pulseScatter.rate", DEFAULT_PULSE_SCATTER.rate),
-      max: number(raw.max, "pulseScatter.max", DEFAULT_PULSE_SCATTER.max),
-      window: number(raw.window, "pulseScatter.window", DEFAULT_PULSE_SCATTER.window),
-    };
-    if (pulseScatter.rate < 0) fail("pulseScatter.rate must be >= 0");
-    if (!Number.isInteger(pulseScatter.max) || pulseScatter.max < 0) fail("pulseScatter.max must be a whole number >= 0");
-    if (pulseScatter.window <= 0) fail("pulseScatter.window must be > 0");
-  }
   const pulseDecay = number(json.pulseDecay, "pulseDecay");
   if (pulseDecay <= 0) fail("pulseDecay must be > 0");
-  return { channels, filaments, pulseScatter, pulseDecay };
+  const filaments = section(json.filaments, "filaments", DEFAULT_FILAMENTS);
+  if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  const pulseScatter = section(json.pulseScatter, "pulseScatter", DEFAULT_PULSE_SCATTER);
+  const { jitter, rate, max, window } = pulseScatter;
+  if (jitter < 0) fail("pulseScatter.jitter must be >= 0");
+  if (rate < 0) fail("pulseScatter.rate must be >= 0");
+  if (!Number.isInteger(max) || max < 0) fail("pulseScatter.max must be a whole number >= 0");
+  const room = max * (pulseDecay + TICK_S);
+  if (window < room) fail(`pulseScatter.window must be >= max × (pulseDecay + ${TICK_S}) = ${room}, the room the later pulses need`);
+  if (jitter + window > SCATTER_SPAN_S) fail(`pulseScatter.jitter + pulseScatter.window must be <= ${SCATTER_SPAN_S}, so every pulse fires before the next record`);
+  const glide = number(json.glide, "glide", DEFAULT_GLIDE);
+  if (glide < 0) fail("glide must be >= 0");
+  return { channels, filaments, pulseScatter, pulseDecay, glide };
 }
 
 export function loadMixConfig(path: string): MixConfig {
@@ -125,8 +159,11 @@ export class Mixer {
   /** Mixed per-core profile; null while the host reports no per-core usage. */
   filaments: number[] | null = null;
   private primed = false;
-  /** Scattered pulses still to fire; `at` is a time in ms. */
-  private readonly pending: { at: number; value: number }[] = [];
+  /** The record's own pulse while it waits for its time. */
+  private firstPulse: Pulse | null = null;
+  /** Weaker scattered pulses still to fire, in time order. */
+  private readonly laterPulses: Pulse[] = [];
+  private glide: Glide | null = null;
 
   constructor(
     private readonly config: MixConfig,
@@ -134,11 +171,17 @@ export class Mixer {
   ) {}
 
   /**
-   * Mixes new features in; `dt` is the time since the previous sample, seconds. With `scatterAt`
-   * (the current time, ms) the pulse is spread out as `PulseScatter` describes; without it, it rises at
-   * once. Either way, pulses still pending from the previous sample are dropped.
+   * Mixes in new features and a per-core profile (`coreProfile`; null drops the filaments). `dt` is the
+   * time since the previous sample, seconds; `now` the current time, ms. Pulses still pending from the
+   * previous sample are dropped, except its first one, which rises at once if it has not yet.
    */
-  apply(features: Features, dt: number, scatterAt?: number): void {
+  apply(features: Features, profile: readonly number[] | null, dt: number, kind: SampleKind, now: number): void {
+    // The new sample continues from wherever the river is now.
+    this.glideTo(now);
+    this.glide = null;
+    const from = { ...this.values };
+    const fromFilaments = this.filaments;
+
     for (const channel of MIXED) {
       const recipe = this.config.channels[channel];
       let raw = recipe.bias;
@@ -148,15 +191,50 @@ export class Mixer {
       raw = clamp01(raw);
 
       const current = this.values[channel];
-      if (channel === "pulse") this.pulse(raw, scatterAt);
+      if (channel === "pulse") this.pulse(raw, kind, now);
       else if (!this.primed || recipe.tau === 0) this.values[channel] = raw;
       else this.values[channel] = current + (raw - current) * (1 - Math.exp(-Math.max(dt, 0) / recipe.tau));
+    }
+    this.applyFilaments(profile, dt);
+
+    if (kind === "minute" && this.primed && this.config.glide > 0) {
+      const to = { ...this.values };
+      // `to` is a copy, since gliding writes to `this.filaments` in place.
+      const filaments = fromFilaments && this.filaments?.length === fromFilaments.length ? { from: fromFilaments, to: [...this.filaments] } : null;
+      this.glide = { start: now, end: now + this.config.glide * 1000, from, to, filaments };
+      this.glideTo(now);
     }
     this.primed = true;
   }
 
-  /** Mixes a new per-core profile (`coreProfile`) in; null drops the filaments. */
-  applyFilaments(profile: readonly number[] | null, dt: number): void {
+  /**
+   * Advances to `now` (ms), `dt` seconds after the previous tick: lets `pulse` fade, fires the scattered
+   * pulses that are due and moves gliding channels on. Returns whether anything changed visibly.
+   */
+  tick(dt: number, now: number): boolean {
+    const before = this.values.pulse;
+    let after = before * Math.exp(-dt / this.config.pulseDecay);
+    if (after < VISIBLE) after = 0;
+    if (this.firstPulse && this.firstPulse.at <= now) {
+      after = Math.max(after, this.firstPulse.value);
+      this.firstPulse = null;
+    }
+    while (this.laterPulses.length > 0 && this.laterPulses[0].at <= now) {
+      after = Math.max(after, this.laterPulses[0].value);
+      this.laterPulses.shift();
+    }
+    this.values.pulse = after;
+    const glided = this.glideTo(now) >= GLIDE_STEP;
+    return Math.abs(before - after) >= VISIBLE || glided;
+  }
+
+  /** Drops the scattered pulses still to fire, for a host that stopped reporting. */
+  dropPulses(): void {
+    this.firstPulse = null;
+    this.laterPulses.length = 0;
+  }
+
+  private applyFilaments(profile: readonly number[] | null, dt: number): void {
     if (!profile) {
       this.filaments = null;
       return;
@@ -170,34 +248,55 @@ export class Mixer {
     });
   }
 
-  /** Lets `pulse` fade and fires the scattered pulses due by `now` (ms); returns whether it changed visibly. */
-  decay(dt: number, now = Date.now()): boolean {
-    const before = this.values.pulse;
-    let after = before * Math.exp(-dt / this.config.pulseDecay);
-    if (after < VISIBLE) after = 0;
-    for (let i = this.pending.length - 1; i >= 0; i--) {
-      if (this.pending[i].at > now) continue;
-      after = Math.max(after, this.pending[i].value);
-      this.pending.splice(i, 1);
+  /** Moves gliding channels and filaments to where they are at `now` (ms); returns the largest move. */
+  private glideTo(now: number): number {
+    const glide = this.glide;
+    if (!glide) return 0;
+    const f = Math.min(1, Math.max(0, (now - glide.start) / (glide.end - glide.start)));
+    let moved = 0;
+    for (const channel of MIXED) {
+      if (channel === "pulse") continue;
+      const value = glide.from[channel] + (glide.to[channel] - glide.from[channel]) * f;
+      moved = Math.max(moved, Math.abs(value - this.values[channel]));
+      this.values[channel] = value;
     }
-    this.values.pulse = after;
-    return Math.abs(before - after) >= VISIBLE;
+    const filaments = glide.filaments;
+    if (filaments && this.filaments) {
+      for (let i = 0; i < this.filaments.length; i++) {
+        const value = filaments.from[i] + (filaments.to[i] - filaments.from[i]) * f;
+        moved = Math.max(moved, Math.abs(value - this.filaments[i]));
+        this.filaments[i] = value;
+      }
+    }
+    if (f === 1) this.glide = null;
+    return moved;
   }
 
-  private pulse(strength: number, scatterAt: number | undefined): void {
-    this.pending.length = 0;
-    if (scatterAt === undefined) {
+  private pulse(strength: number, kind: SampleKind, now: number): void {
+    // The record's own strength is real data: a sample that arrives before it fires brings it forward.
+    if (this.firstPulse) this.values.pulse = Math.max(this.values.pulse, this.firstPulse.value);
+    this.dropPulses();
+    if (kind === "seed") return;
+    if (kind === "realtime") {
       this.values.pulse = Math.max(this.values.pulse, strength);
       return;
     }
     if (strength < VISIBLE) return;
-    const { rate, max, window } = this.config.pulseScatter;
-    this.pending.push({ at: scatterAt + this.random() * FIRST_PULSE_JITTER_S * 1000, value: strength });
-    const later = poisson(rate * strength, max, this.random);
-    for (let i = 0; i < later; i++) {
-      const at = scatterAt + this.random() * window * 1000;
-      this.pending.push({ at, value: strength * (LATER_PULSE[0] + (LATER_PULSE[1] - LATER_PULSE[0]) * this.random()) });
-    }
+    const { jitter, rate, max, window } = this.config.pulseScatter;
+    const first = now + this.random() * jitter * 1000;
+    if (first <= now) this.values.pulse = Math.max(this.values.pulse, strength);
+    else this.firstPulse = { at: first, value: strength };
+
+    if (strength * LATER_PULSE[0] < VISIBLE) return;
+    const count = poisson(rate * strength, max, this.random);
+    // Uniform times in what the gaps leave of the window, sorted, then pushed apart by one gap each.
+    const gap = (this.config.pulseDecay + TICK_S) * 1000;
+    const slack = window * 1000 - count * gap;
+    const offsets = Array.from({ length: count }, () => this.random() * slack).sort((a, b) => a - b);
+    offsets.forEach((offset, i) => {
+      const value = strength * (LATER_PULSE[0] + (LATER_PULSE[1] - LATER_PULSE[0]) * this.random());
+      this.laterPulses.push({ at: first + offset + (i + 1) * gap, value });
+    });
   }
 }
 

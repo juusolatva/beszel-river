@@ -47,13 +47,52 @@ describe("HostTable", () => {
   it("mixes stats in time order and ignores older or unknown records", () => {
     const table = new HostTable(salt, mix);
     table.upsertSystem(system("a", "up", null));
-    expect(table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 100))).toBe(true);
+    // History records apply at once, which keeps this to the order.
+    expect(table.addHistory(stats("a", "2026-10-22 11:58:00.000Z", 100))).toBe(true);
     expect(table.frame(now).streams[0]?.flow).toBe(0.7);
-    expect(table.addStats(stats("a", "2026-10-22 11:57:00.000Z", 0))).toBe(false);
+    expect(table.addHistory(stats("a", "2026-10-22 11:57:00.000Z", 0))).toBe(false);
     expect(table.addStats(stats("unknown", "2026-10-22 11:59:00.000Z", 0))).toBe(false);
-    expect(table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 0))).toBe(true);
+    expect(table.addHistory(stats("a", "2026-10-22 11:59:00.000Z", 0))).toBe(true);
     // CPU dropped to 0, so flow decays from 0.7 over the 60 s gap with the template's time constant.
     expect(table.frame(now).streams[0]?.flow).toBeCloseTo(0.7 * Math.exp(-60 / mix.channels.flow.tau), 3);
+  });
+
+  it("glides a live record's channels over the following minute", () => {
+    const t0 = Date.parse("2026-10-22T12:00:00Z");
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("a", "up", null));
+    table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 100), t0);
+    expect(table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 0), t0)).toBe(true);
+    const flowOf = () => table.frame(now).streams[0]?.flow ?? NaN;
+    const target = 0.7 * Math.exp(-60 / mix.channels.flow.tau);
+    expect(flowOf()).toBe(0.7);
+    expect(table.tick(2, t0 + 2000)).toBe(true);
+    expect(flowOf()).toBeCloseTo(0.7 + (target - 0.7) / 30, 3);
+    table.tick(2, t0 + 60_000);
+    expect(flowOf()).toBeCloseTo(target, 3);
+  });
+
+  it("applies history records at once and without pulses", () => {
+    const t0 = Date.parse("2026-10-22T12:00:00Z");
+    const table = new HostTable(salt, mix, () => 0.5);
+    table.upsertSystem(system("a", "up", null));
+    table.addHistory(stats("a", "2026-10-22 08:58:00.000Z", 0), t0);
+    // A CPU rise of 80 points three hours ago: burst 1, but old news.
+    table.addHistory(stats("a", "2026-10-22 08:59:00.000Z", 80), t0);
+    expect(table.frame(now).streams[0]?.flow).toBeCloseTo(0.7 * 0.8 * (1 - Math.exp(-60 / mix.channels.flow.tau)), 3);
+    for (let t = 2000; t <= 60_000; t += 2000) expect(table.tick(2, t0 + t)).toBe(false);
+    expect(table.frame(now).streams[0]?.pulse).toBe(0);
+  });
+
+  it("drops pending pulses when a host stops being up", () => {
+    const t0 = Date.parse("2026-10-22T12:00:00Z");
+    const table = new HostTable(salt, { ...mix, glide: 0 }, () => 0.5);
+    table.upsertSystem(system("a", "up", null));
+    table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
+    table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
+    expect(table.upsertSystem(system("a", "down", null))).toBe(true);
+    for (let t = 2000; t <= 60_000; t += 2000) expect(table.tick(2, t0 + t)).toBe(false);
+    expect(table.frame(now).streams[0]).toMatchObject({ alive: false, pulse: 0 });
   });
 
   it("uses the info summary until the first stats record", () => {
@@ -76,19 +115,24 @@ describe("HostTable", () => {
 
   it("scatters a minute record's pulse over the following minute", () => {
     const t0 = Date.parse("2026-10-22T12:00:00Z");
-    const table = new HostTable(salt, mix, () => 0.5);
+    // Without the glide, ticks report pulses only.
+    const table = new HostTable(salt, { ...mix, glide: 0 }, () => 0.5);
     table.upsertSystem(system("a", "up", null));
     table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
-    // A CPU rise of 80 points: burst 1, so pulse 1. First pulse at 2.5 s, two more at 25 s.
+    // A CPU rise of 80 points: burst 1, so pulse 1. First pulse at 2.5 s; two more, 0.6 each, 10 s gaps
+    // (pulseDecay + tick) apart in the middle of the window, at 27.5 s and 37.5 s.
     table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
     const pulseOf = () => table.frame(now).streams[0]?.pulse;
     expect(pulseOf()).toBe(0);
-    expect(table.decay(2, t0 + 2000)).toBe(false);
-    expect(table.decay(2, t0 + 4000)).toBe(true);
+    expect(table.tick(2, t0 + 2000)).toBe(false);
+    expect(table.tick(2, t0 + 4000)).toBe(true);
     expect(pulseOf()).toBe(1);
-    for (let t = 6000; t <= 24_000; t += 2000) table.decay(2, t0 + t);
+    for (let t = 6000; t <= 26_000; t += 2000) table.tick(2, t0 + t);
     expect(pulseOf()).toBeLessThan(0.1);
-    expect(table.decay(2, t0 + 26_000)).toBe(true);
+    expect(table.tick(2, t0 + 28_000)).toBe(true);
+    expect(pulseOf()).toBe(0.6);
+    for (let t = 30_000; t <= 36_000; t += 2000) table.tick(2, t0 + t);
+    expect(table.tick(2, t0 + 38_000)).toBe(true);
     expect(pulseOf()).toBe(0.6);
   });
 
@@ -112,8 +156,10 @@ describe("HostTable realtime", () => {
     expect(flowOf(table)).toBe(0.7);
     expect(table.addStats(stats("a", "2026-10-22 12:00:00.000Z", 0), t0 + REALTIME_STALE_MS - 1)).toBe(false);
     expect(flowOf(table)).toBe(0.7);
-    // Realtime stopped: minute records count again.
+    // Realtime stopped: minute records count again, gliding from where realtime left the river.
     expect(table.addStats(stats("a", "2026-10-22 12:01:00.000Z", 0), t0 + REALTIME_STALE_MS)).toBe(true);
+    expect(flowOf(table)).toBe(0.7);
+    table.tick(2, t0 + REALTIME_STALE_MS + 60_000);
     expect(flowOf(table)).toBeCloseTo(0.7 * Math.exp(-60 / mix.channels.flow.tau), 3);
   });
 
@@ -139,14 +185,20 @@ describe("HostTable realtime", () => {
     expect(fromMinute.frame(now).streams[0]?.pulse).toBe(0);
   });
 
-  it("drops scattered pulses when realtime samples take over", () => {
+  it("raises a minute record's first pulse at once and drops the rest when realtime samples take over", () => {
     const table = new HostTable(salt, mix, () => 0.5);
     table.upsertSystem(system("a", "up", null));
     table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
+    // Its first pulse would fire at 2.5 s, the later ones at 27.5 s and 37.5 s.
     table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
     table.addRealtime("a", { cpu: 80 }, t0 + 1000);
-    expect(table.decay(2, t0 + 60_000)).toBe(false);
-    expect(table.frame(now).streams[0]?.pulse).toBe(0);
+    const pulseOf = () => table.frame(now).streams[0]?.pulse ?? NaN;
+    expect(pulseOf()).toBe(1);
+    for (let t = 3000; t <= 61_000; t += 2000) {
+      const before = pulseOf();
+      table.tick(2, t0 + t);
+      expect(pulseOf()).toBeLessThanOrEqual(before);
+    }
   });
 
   it("keeps realtime samples out of the 24 h baseline", () => {
