@@ -42,9 +42,12 @@ Configuration and the mix format are described in [docs/PLAN.md](docs/PLAN.md) u
 
 ### Frontend URL parameters
 
+The page reads frames from `/stream`. In dev, when the bridge is not running, it falls back to generated demo frames.
+
 | Parameter | Effect |
 |---|---|
-| `?debug` | Panel with per-stream channel sliders, alive/hold toggles, add/remove stream buttons and fps/particle stats. `d` hides it. |
+| `?demo` | Generated demo frames instead of the bridge. |
+| `?debug` | Panel with fps/particle stats. With demo frames: per-stream channel sliders, alive/hold toggles and add/remove stream buttons. With the bridge: the latest channel values, read-only. `d` hides it. |
 | `?streams=N` | Number of demo streams (default 4). |
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
 | `?particles=N` | Particle pool size (default 20000, 8000 on touch devices, halved with reduced motion). |

@@ -1,10 +1,13 @@
+import type { Frame } from "@beszel-river/shared";
 import { LOOK, readConfig } from "./config";
-import { mountDebugPanel, type Stats } from "./debug/panel";
+import { mountDebugPanel, type DebugTarget, type Stats } from "./debug/panel";
 import { Renderer } from "./render/renderer";
 import { FlowField } from "./sim/noise";
 import { ParticleSystem } from "./sim/particles";
 import { StreamSet } from "./sim/streams";
 import { DemoSource } from "./source/demo";
+import type { FrameSource } from "./source/source";
+import { StreamSource } from "./source/stream";
 import { ease, mulberry32 } from "./util/math";
 
 const config = readConfig(location.search, (query) => matchMedia(query).matches);
@@ -16,8 +19,34 @@ const streams = new StreamSet(config.motion);
 const field = new FlowField(mulberry32(config.seed));
 const particles = new ParticleSystem(config.particles, mulberry32(config.seed + 1));
 const renderer = new Renderer(gl, config.particles);
-const source = new DemoSource({ streams: config.demoStreams, intervalMs: config.demoIntervalMs, random: mulberry32(config.seed + 2) });
-source.start((frame) => streams.apply(frame));
+const debug: DebugTarget = { demo: null, frame: null };
+const onFrame = (frame: Frame): void => {
+  debug.frame = frame;
+  streams.apply(frame);
+};
+const startDemo = (): DemoSource => {
+  const demo = new DemoSource({ streams: config.demoStreams, intervalMs: config.demoIntervalMs, random: mulberry32(config.seed + 2) });
+  debug.demo = demo;
+  demo.start(onFrame);
+  return demo;
+};
+
+// `?demo` forces generated frames. In dev they also stand in when the bridge is not running; in
+// production the stream keeps retrying instead.
+let source: FrameSource;
+if (config.demo) source = startDemo();
+else {
+  source = new StreamSource({
+    url: "/stream",
+    onUnavailable: import.meta.env.DEV
+      ? () => {
+          console.info("Bridge not reachable at /stream, using demo frames");
+          source = startDemo();
+        }
+      : undefined,
+  });
+  source.start(onFrame);
+}
 
 let aspect = 1;
 let pixelRatio = 1;
@@ -34,7 +63,7 @@ addEventListener("resize", resize);
 resize();
 
 const stats: Stats = { fps: 0, particles: 0, simMs: 0 };
-if (config.debug) mountDebugPanel(source, stats);
+if (config.debug) mountDebugPanel(debug, stats);
 
 let last = performance.now();
 let t = 0;
