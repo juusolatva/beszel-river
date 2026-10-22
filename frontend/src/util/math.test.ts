@@ -47,6 +47,18 @@ describe("hashString", () => {
   });
 });
 
+describe('gaussian', () => {
+  it('should generate numbers using Box-Muller transform and call random twice', () => {
+    let callCount = 0;
+    const mockRandom = () => {
+      callCount++;
+      return callCount === 1 ? 0.5 : 0;
+    };
+
+    const val = gaussian(mockRandom);
+    expect(callCount).toBe(2);
+    expect(val).toBeCloseTo(Math.sqrt(-2 * Math.log(0.5)) * Math.cos(0));
+  });
 describe("ease", () => {
   it("moves current towards target based on time constant and delta time", () => {
     const current = 0;
@@ -60,6 +72,41 @@ describe("ease", () => {
 
     // With infinite time, it reaches the target
     expect(ease(current, target, tau, 1000)).toBeCloseTo(10);
+  });
+
+  it('should handle typical values for u and v', () => {
+    // If random returns 0.2, u = 0.8. If second call returns 0.25, v = 0.25
+    let callCount = 0;
+    const mockRandom = () => {
+      callCount++;
+      return callCount === 1 ? 0.2 : 0.25;
+    };
+
+    const val = gaussian(mockRandom);
+    expect(val).toBeCloseTo(Math.sqrt(-2 * Math.log(0.8)) * Math.cos(2 * Math.PI * 0.25));
+  });
+
+  it('should handle edge cases like 0', () => {
+    let callCount = 0;
+    const mockRandom = () => {
+      callCount++;
+      return 0; // First call u = 1, second call v = 0
+    };
+
+    const val = gaussian(mockRandom);
+    // Math.sqrt(-2 * Math.log(1)) * Math.cos(0) = 0 * 1 = 0
+    expect(val).toBeCloseTo(0);
+  });
+
+  it('should handle large results when random is close to 1', () => {
+    let callCount = 0;
+    const mockRandom = () => {
+      callCount++;
+      return callCount === 1 ? 0.999999 : 0; // First call u = 0.000001, second call v = 0
+    };
+
+    const val = gaussian(mockRandom);
+    expect(val).toBeCloseTo(Math.sqrt(-2 * Math.log(0.000001)) * Math.cos(0));
   });
 });
 
