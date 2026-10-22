@@ -6,10 +6,9 @@ import { SystemsSource } from "./beszel/systems-source.js";
 import { loadConfig, type Config } from "./config.js";
 import { log } from "./log.js";
 import { HostTable } from "./pipeline/hosts.js";
-import { loadMixConfig } from "./pipeline/mix.js";
+import { loadMixConfig, TICK_S } from "./pipeline/mix.js";
 import { StreamServer } from "./server.js";
 
-const PULSE_TICK_S = 2;
 const BROADCAST_DEBOUNCE_MS = 250;
 /** Realtime subscriptions outlast the last viewer by this long, so a reload does not restart them. */
 const REALTIME_LINGER_MS = 30_000;
@@ -56,6 +55,7 @@ const source = new SystemsSource(client.pb, {
     changed(hosts.removeSystem(systemId));
     syncRealtime();
   },
+  history: (record) => changed(hosts.addHistory(record)),
   stats: (record) => changed(hosts.addStats(record)),
 });
 
@@ -102,7 +102,7 @@ async function connect(): Promise<void> {
 
 const port = await server.listen();
 log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz), source ${config.source}`);
-setInterval(() => changed(hosts.decay(PULSE_TICK_S)), PULSE_TICK_S * 1000);
+setInterval(() => changed(hosts.tick(TICK_S)), TICK_S * 1000);
 void connect();
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
