@@ -1,7 +1,12 @@
+/** How the bridge authenticates to the hub. */
+export type BeszelAuth =
+  | { kind: "password"; email: string; password: string }
+  /** Impersonation token minted by a superuser; for hubs with password auth disabled (OIDC only). */
+  | { kind: "token"; token: string; expires: Date };
+
 export interface Config {
   beszelUrl: string;
-  email: string;
-  password: string;
+  auth: BeszelAuth;
   source: "systems";
   bindHost: string;
   bindPort: number;
@@ -11,7 +16,7 @@ export interface Config {
 }
 
 /** Reads and validates the environment; throws one error listing every problem. */
-export function loadConfig(env: NodeJS.ProcessEnv): Config {
+export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
   const errors: string[] = [];
   const value = (name: string, fallback?: string): string => {
     const v = env[name]?.trim() || fallback;
@@ -34,8 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
 
   const config: Config = {
     beszelUrl,
-    email: value("BESZEL_EMAIL"),
-    password: value("BESZEL_PASSWORD"),
+    auth: loadAuth(env, now, errors, value),
     source: "systems",
     bindHost: value("BIND_HOST", "127.0.0.1"),
     bindPort: port,
@@ -44,4 +48,30 @@ export function loadConfig(env: NodeJS.ProcessEnv): Config {
   };
   if (errors.length > 0) throw new Error(`Invalid configuration:\n  ${errors.join("\n  ")}`);
   return config;
+}
+
+function loadAuth(env: NodeJS.ProcessEnv, now: Date, errors: string[], value: (name: string) => string): BeszelAuth {
+  const token = env.BESZEL_TOKEN?.trim();
+  if (!token) return { kind: "password", email: value("BESZEL_EMAIL"), password: value("BESZEL_PASSWORD") };
+
+  if (env.BESZEL_EMAIL?.trim() || env.BESZEL_PASSWORD?.trim()) {
+    errors.push("Set either BESZEL_TOKEN or BESZEL_EMAIL and BESZEL_PASSWORD, not both");
+  }
+  const expires = tokenExpiry(token);
+  if (!expires) errors.push("BESZEL_TOKEN is not a PocketBase auth token (JWT with an exp claim)");
+  else if (expires <= now) errors.push(`BESZEL_TOKEN expired on ${expires.toISOString()}`);
+  return { kind: "token", token, expires: expires ?? now };
+}
+
+/** Expiry of a JWT from its `exp` claim, or null when the value is not a JWT. The signature is the hub's to check. */
+export function tokenExpiry(token: string): Date | null {
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const payload: unknown = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const exp = (payload as { exp?: unknown } | null)?.exp;
+    return typeof exp === "number" && Number.isFinite(exp) ? new Date(exp * 1000) : null;
+  } catch {
+    return null;
+  }
 }

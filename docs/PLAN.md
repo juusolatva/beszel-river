@@ -107,6 +107,7 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
 
 - **API:** PocketBase REST and realtime at `BESZEL_URL`.
 - **Login:** `POST /api/collections/users/auth-with-password`; renew with `POST /api/collections/users/auth-refresh`.
+  - A hub with password auth disabled (`DISABLE_PASSWORD_AUTH=true`, OIDC only) answers that login with 403. A superuser can instead mint an impersonation token for the bridge user (`POST /api/collections/users/impersonate/{id}` with a `duration`, or **Impersonate** in the PocketBase dashboard). Such tokens have `refreshable: false`: `auth-refresh` accepts them but returns the same token, so they end at their `exp`. Setting the user's password or **Reset issued tokens** revokes them. Checked against v0.21.0.
 - **Access:** Beszel sets the API rules in `internal/hub/collections.go`. A user can list `systems` and `system_stats` when they are in the system's `users` list, or for every system when the hub runs with `SHARE_ALL_SYSTEMS=true`. Give the bridge user the `readonly` role: it can read but not change systems.
 - **`systems` collection:** one record per host with `id`, `name`, `status` and `info`. Relevant `info` keys: `cpu`, `mp` (memory %), `dp` (disk %), `bb` (bandwidth bytes/s), `la` (load averages), `t` (threads), `dt` (dashboard temperature). The hub refreshes these every 60 s (`interval int = 60_000` in `internal/hub/systems/system_manager.go`).
 - **`system_stats` collection:** history records with a `type` tier (`1m`, `10m`, `20m`, `120m`, `480m`) and a `stats` object.
@@ -135,8 +136,9 @@ Environment variables (template: `bridge/.env.example`):
 | Variable | Default | Meaning |
 |---|---|---|
 | `BESZEL_URL` | `http://127.0.0.1:8090` | Hub address as reached from the bridge. |
-| `BESZEL_EMAIL` | (required) | Bridge user's email. |
-| `BESZEL_PASSWORD` | (required) | Bridge user's password. |
+| `BESZEL_EMAIL` | (required without `BESZEL_TOKEN`) | Bridge user's email. |
+| `BESZEL_PASSWORD` | (required without `BESZEL_TOKEN`) | Bridge user's password. |
+| `BESZEL_TOKEN` | (none) | Impersonation token for the bridge user, instead of email and password, for hubs without password auth. Rejected together with them, when it is not a JWT with `exp`, or when expired. The bridge checks it with `auth-refresh` at startup and every 6 h, and warns from 14 days before `exp`. |
 | `SOURCE` | `systems` | Adapter: `systems` or `realtime`. |
 | `BIND_HOST` | `127.0.0.1` | Listen address. |
 | `BIND_PORT` | `8787` | Listen port. |
@@ -292,7 +294,8 @@ Commands and steps are in README, "Deployment".
     - nginx 1.29 with `river.conf` (self-signed certificate; the sandbox has no IPv6, so the `[::]` listens were removed for the test): HTTP redirects to HTTPS; the page and assets are served over HTTP/2 with the cache and security headers; `/stream` delivers each update as it is sent; `/healthz` is 404; a ninth concurrent stream gets 429.
     - Headless Chromium through nginx, at the root and under `/river/` with `river-path.conf`: no CSP violations, `/stream` connected, the river rendered from live frames.
     - With `compose.host-network.yml` and the hub on `127.0.0.1:8090` and no `beszel_default` network: healthy, logged in through `http://127.0.0.1:8090`, frames on `127.0.0.1:8787`; a connection from another container to the host's bridge address on 8787 was refused.
-    - Remaining: deploy on the VPS and check the public URL.
+    - Deployed at `https://river.example.com`: page, headers, `/stream` and the private `/healthz` check out, but the hub there has password auth disabled (OIDC), so the bridge got 403 and served no streams. `BESZEL_TOKEN` was added for that and checked against a local hub with `DISABLE_PASSWORD_AUTH=true`: password mode reproduces the 403; with a token the container became healthy and streamed frames; setting the user's password made the token fail with 401.
+    - Remaining: deploy with a token on the VPS and check the public URL.
 - [ ] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
 - [ ] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
 
