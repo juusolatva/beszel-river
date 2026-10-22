@@ -5,5 +5,6 @@
   "pulse": { "inputs": { "burst": 1.0, "netChange": 0.5 } },
   "heat": { "bias": 0.5, "center": 0.5, "inputs": { "txShare": 0.6, "temp": 0.6 }, "tau": 600 },
   "filaments": { "bias": 0.05, "weight": 1.2, "tau": 3 },
+  "pulseScatter": { "rate": 2, "max": 2, "window": 50 },
   "pulseDecay": 8
 }
