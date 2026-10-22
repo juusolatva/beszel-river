@@ -3,6 +3,9 @@ import type { SystemInfo, SystemRecord, SystemStats, SystemStatsRecord, SystemSt
 import { bandOrder, bandWidths, filamentOrder, streamId } from "./anonymize.js";
 import { Baseline, computeFeatures, coreProfile, FILAMENTS, sampleFromInfo, sampleFromStats, type Sample } from "./features.js";
 import { MIXED, Mixer, type MixConfig, type SampleKind } from "./mix.js";
+import { webcrypto } from "node:crypto";
+// Workaround for TypeScript DOM lib conflict: using webcrypto as Crypto
+const crypto = webcrypto as unknown as Crypto;
 
 interface Host {
   systemId: string;

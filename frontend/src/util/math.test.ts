@@ -9,6 +9,7 @@ describe("mulberry32", () => {
     expect(random1()).toBe(random2());
     expect(random1()).toBe(random2());
   });
+});
 
   it("returns different values for different seeds", () => {
     const random1 = mulberry32(12345);
@@ -32,7 +33,6 @@ describe("gaussian", () => {
     const random = mulberry32(12345);
     expect(typeof gaussian(random)).toBe("number");
   });
-});
 
 describe("hashString", () => {
   it("returns consistent hashes for the same string", () => {

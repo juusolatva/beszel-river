@@ -33,7 +33,13 @@ export class DemoSource implements FrameSource {
   private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly options: DemoOptions) {
-    for (let i = 0; i < options.streams; i++) this.streams.push(this.createStream());
+    this.initStreams();
+  }
+
+  private initStreams(): void {
+    for (let i = 0; i < this.options.streams; i++) {
+      this.streams.push(this.createStream());
+    }
   }
 
   start(onFrame: (frame: Frame) => void): void {
