@@ -19,7 +19,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 (bridge) | Normalization and mixing are pure functions. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci`, `typecheck`, `build` | `.github/workflows/ci.yml` |
+| CI | GitHub Actions: `npm ci`, `typecheck`, `test`, `build` on Node 22.12.0 and 24 | `.github/workflows/ci.yml`; tests both ends of the supported range. |
 
 ## Architecture
 
@@ -49,6 +49,8 @@ Current files plus the planned ones (milestone in brackets).
 
 ```
 .github/workflows/ci.yml      CI
+AGENTS.md                     instructions for coding agents
+CLAUDE.md                     imports AGENTS.md
 docs/PLAN.md                  this plan
 shared/src/index.ts           message types [M1]
 bridge/
@@ -116,7 +118,7 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
   - On startup, read the last 24 h of `1m` records per host to seed baselines.
 - **`realtime` (M6):** subscribe to `rt_metrics` per host, but only while at least one viewer is connected, so agents are not polled every second around the clock.
 
-All knowledge of Beszel field names stays in `bridge/src/beszel/`. Beszel's docs warn the data structure can change in minor releases, and fields are already being renamed (`b` → `bb`, `m`/`mu` → `mem`).
+Knowledge of Beszel field names stays in `bridge/src/beszel/` plus the two places that convert records: `pipeline/features.ts` (stats and info → samples) and `pipeline/hosts.ts` (status, thread count). Beszel's docs warn the data structure can change in minor releases, and fields are already being renamed (`b` → `bb`, `m`/`mu` → `mem`).
 
 ## Bridge
 
