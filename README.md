@@ -11,17 +11,18 @@ Status: renderer with generated demo data (M2) and the bridge reading Beszel (M3
 | `shared/` | Message types shared by bridge and frontend (type-only). |
 | `bridge/` | Node service: reads the Beszel hub, mixes metrics into abstract channels, serves them over SSE at `/stream`. |
 | `frontend/` | Static WebGL2 page built with Vite. |
-| `docs/PLAN.md` | Plan. |
+| `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
+| `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
 
 ## Requirements
 
-- Node.js ≥ 22.12.0 (production target: Node 24 LTS, see `.nvmrc`)
+- Node.js ≥ 22.12.0 (production target: Node 24 LTS, see `.nvmrc`); CI checks both versions
 - npm
 
 ## Development
 
 ```sh
-npm install            # install all workspaces
+npm ci                 # install all workspaces exactly as package-lock.json lists them
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
 npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
 npm test               # bridge unit tests (vitest)
