@@ -26,6 +26,7 @@ npm ci                 # install all workspaces exactly as package-lock.json lis
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
 npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
 npm test               # bridge unit tests (vitest)
+npm run coverage       # bridge tests with coverage; HTML report in bridge/coverage/index.html
 npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
