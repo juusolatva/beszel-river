@@ -80,7 +80,7 @@ frontend/
     main.ts                   entry: wiring and frame loop
     config.ts                 look tunables (LOOK) and URL parameters
     source/source.ts          FrameSource interface
-    source/stream.ts          EventSource client [M4]
+    source/stream.ts          EventSource client, frame validation
     source/demo.ts            generated channels for development
     sim/streams.ts            per-stream eased state, band layout, lifecycle
     sim/particles.ts          particle pool and motion
@@ -208,6 +208,8 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 ## Frontend
 
 - **Sources:** `StreamSource` (`EventSource` on `/stream`) and `DemoSource` (generated channels) share one interface. `?demo` in the URL forces the demo source; in dev it is also the fallback when the bridge is not running.
+  - `StreamSource` accepts only `v: 1` frames and clamps every channel to 0..1.
+  - The browser reconnects by itself after a dropped connection. An HTTP error (nginx's 502 while the bridge restarts) closes an `EventSource` for good, so `StreamSource` then reopens it after 5 s, doubling up to 60 s.
 - **Smoothing:** each channel eases exponentially toward its latest value (time constant 1–5 s), so 60 s and 1 s updates both look continuous.
 - **Simulation:**
   - The particle pool is fixed-size, held in `Float32Array`s and updated on the CPU.
