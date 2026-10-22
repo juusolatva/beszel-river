@@ -95,6 +95,7 @@ frontend/
 deploy/
   bridge.Dockerfile           bridge image, built from the repository root
   compose.yml                 bridge service on the hub's Docker network
+  compose.host-network.yml    override for a hub with network_mode: host
   beszel-river-bridge.service systemd unit, when the hub does not run in Docker
   nginx/river.conf            own server block: TLS, static root, /stream proxy
   nginx/river-path.conf       alternative: locations for /river/ in an existing server block
@@ -249,6 +250,7 @@ Commands and steps are in README, "Deployment".
   - `.dockerignore` keeps `.env`, `mix.json`, `node_modules` and build output out of the context, so the image holds no secrets.
   - The compose service joins the hub's network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
   - Environment from `bridge/.env`; compose overrides `BIND_HOST=0.0.0.0` and `BIND_PORT=8787` inside the container and publishes `127.0.0.1:8787:8787`.
+  - A hub with `network_mode: host` is on no Docker network. `deploy/compose.host-network.yml` then puts the bridge on the host network too (`!reset` removes the network and port mapping), with `BIND_HOST=127.0.0.1` and `BESZEL_URL=http://127.0.0.1:8090`.
   - `bridge/mix.json` is bind-mounted read-only and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it.
   - Read-only root filesystem, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
 - **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options.
@@ -289,6 +291,7 @@ Commands and steps are in README, "Deployment".
     - `docker compose up` with `deploy/compose.yml` unchanged: the container became healthy, logged in through `http://beszel:8090` and streamed frames; `docker compose stop` shut it down in 0.3 s through the SIGTERM handler. Without `bridge/mix.json`, compose refuses to start.
     - nginx 1.29 with `river.conf` (self-signed certificate; the sandbox has no IPv6, so the `[::]` listens were removed for the test): HTTP redirects to HTTPS; the page and assets are served over HTTP/2 with the cache and security headers; `/stream` delivers each update as it is sent; `/healthz` is 404; a ninth concurrent stream gets 429.
     - Headless Chromium through nginx, at the root and under `/river/` with `river-path.conf`: no CSP violations, `/stream` connected, the river rendered from live frames.
+    - With `compose.host-network.yml` and the hub on `127.0.0.1:8090` and no `beszel_default` network: healthy, logged in through `http://127.0.0.1:8090`, frames on `127.0.0.1:8787`; a connection from another container to the host's bridge address on 8787 was refused.
     - Remaining: deploy on the VPS and check the public URL.
 - [ ] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
 - [ ] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
