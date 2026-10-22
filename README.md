@@ -2,7 +2,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: deployed with live data (M5); next is the 1 s realtime source (M6). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: deployed with live data (M5), with an optional 1 s realtime source (M6, `SOURCE=realtime`); next is polish (M7). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Layout
 
@@ -39,8 +39,9 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "5. Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
-3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored.
-4. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
+3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored. Files without a `filaments` entry use its defaults.
+4. Optionally set `SOURCE=realtime` for 1 s updates instead of 60 s ones. The bridge then asks the hub for each up host's live metrics while at least one page is open, and for 30 s after the last one closes; meanwhile the hub fetches from those agents every second, as it does while someone watches a system's 1-minute chart in Beszel.
+5. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
 
 Configuration and the mix format are described in [docs/PLAN.md](docs/PLAN.md) under "Bridge".
 
@@ -51,7 +52,7 @@ The page reads frames from `stream` next to itself (`/stream` at the site root).
 | Parameter | Effect |
 |---|---|
 | `?demo` | Generated demo frames instead of the bridge. |
-| `?debug` | Panel with fps/particle stats. With demo frames: per-stream channel sliders, alive/hold toggles and add/remove stream buttons. With the bridge: the latest channel values, read-only. `d` hides it. |
+| `?debug` | Panel with fps/particle stats. With demo frames: per-stream channel sliders, alive/hold/filaments toggles and add/remove stream buttons. With the bridge: the latest channel values and filaments, read-only. `d` hides it. |
 | `?streams=N` | Number of demo streams (default 4). |
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
 | `?particles=N` | Particle pool size (default 20000, 8000 on touch devices, halved with reduced motion). |
@@ -152,6 +153,7 @@ Check: `https://river.example.com/?debug` shows `alive` streams with live channe
 
 The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts.
 
+- **Configuration changes:** after editing `bridge/.env` (e.g. `SOURCE=realtime`), run the same 2a `up -d` command: it recreates the container with the new environment, which `docker compose restart` would not. After editing only `bridge/mix.json`, `up -d` sees no change; use `restart bridge` instead (with the same `-f` options), since the bridge reads the file at startup. Under systemd, `sudo systemctl restart beszel-river-bridge` covers both.
 - **Updates:** `git pull`, then rebuild the bridge (the 2a `up -d --build` command, or 2b's build and `sudo systemctl restart beszel-river-bridge`) and the frontend (3).
 - **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.
   ```sh
