@@ -36,7 +36,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
 2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT`.
-   - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**, and give it a duration in seconds, e.g. `31536000` for a year.
+   - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge.
    - To revoke it, use **Reset issued tokens** in the same menu.
 3. Optionally `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored.
