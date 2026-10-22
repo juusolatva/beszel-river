@@ -1,7 +1,7 @@
 import type { Frame, Stream } from "@beszel-river/shared";
 import type { SystemInfo, SystemRecord, SystemStatsRecord, SystemStatus } from "../beszel/types.js";
 import { bandOrder, bandWidths, streamId } from "./anonymize.js";
-import { Baseline, computeFeatures, sampleFromInfo, sampleFromStats, type Features, type Sample } from "./features.js";
+import { Baseline, computeFeatures, sampleFromInfo, sampleFromStats, type Sample } from "./features.js";
 import { MIXED, Mixer, type MixConfig } from "./mix.js";
 
 interface Host {
@@ -13,7 +13,8 @@ interface Host {
   info: SystemInfo | null;
   baseline: Baseline;
   mixer: Mixer;
-  features: Features | null;
+  /** Latest mixed sample, for change-based features; null before the first one. */
+  sample: Sample | null;
   /** Time of the last mixed `system_stats` sample, ms. */
   sampledAt: number | null;
 }
@@ -43,7 +44,7 @@ export class HostTable {
         info: record.info,
         baseline: new Baseline(),
         mixer: new Mixer(this.mix),
-        features: null,
+        sample: null,
         sampledAt: null,
       });
       return true;
@@ -84,7 +85,7 @@ export class HostTable {
     const visible = [...this.hosts.values()].filter((h) => h.status !== "paused");
     for (const host of visible) {
       // Until a host's first `system_stats` record, its `info` summary stands in.
-      if (!host.features && host.info) this.mixSample(host, sampleFromInfo(host.info), FIRST_SAMPLE_DT);
+      if (!host.sample && host.info) this.mixSample(host, sampleFromInfo(host.info), FIRST_SAMPLE_DT);
     }
     const widths = bandWidths(new Map(visible.flatMap((h) => (h.threads ? [[h.systemId, h.threads] as const] : []))));
     const byId = new Map(visible.map((h) => [h.systemId, h]));
@@ -100,8 +101,7 @@ export class HostTable {
 
   private mixSample(host: Host, sample: Sample, dt: number): void {
     host.baseline.add(sample);
-    const features = computeFeatures(sample, host.baseline, host.threads ?? 1, host.features);
-    host.mixer.apply(features, dt);
-    host.features = features;
+    host.mixer.apply(computeFeatures(sample, host.baseline, host.threads ?? 1, host.sample), dt);
+    host.sample = sample;
   }
 }

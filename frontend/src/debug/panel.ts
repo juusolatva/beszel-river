@@ -1,4 +1,4 @@
-import type { Channel } from "@beszel-river/shared";
+import type { Channel, Frame } from "@beszel-river/shared";
 import { CHANNELS, type DemoSource, type DemoStream } from "../source/demo";
 
 export interface Stats {
@@ -15,8 +15,17 @@ const STYLE = `
 .debug button { font: inherit; margin-right: 4px; }
 `;
 
-/** Demo controls (`?debug`): per-stream channel sliders, add/remove streams, stats. `d` toggles it. */
-export function mountDebugPanel(demo: DemoSource, stats: Stats): void {
+/** What the panel shows: sliders for the demo source, or the latest frame from the bridge, read-only. */
+export interface DebugTarget {
+  demo: DemoSource | null;
+  frame: Frame | null;
+}
+
+/**
+ * `?debug` panel: stats, plus per-stream channel sliders and add/remove buttons for the demo source, or
+ * the bridge's latest channel values. `d` toggles it.
+ */
+export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
   const style = document.createElement("style");
   style.textContent = STYLE;
   document.head.append(style);
@@ -39,15 +48,30 @@ export function mountDebugPanel(demo: DemoSource, stats: Stats): void {
     return b;
   };
   buttons.append(
-    button("+ stream", () => demo.addStream()),
-    button("− stream", () => demo.removeStream()),
+    button("+ stream", () => target.demo?.addStream()),
+    button("− stream", () => target.demo?.removeStream()),
   );
 
   let sliders: { stream: DemoStream; channel: Channel; input: HTMLInputElement; value: HTMLSpanElement }[] = [];
+  let built: DemoSource | null = null;
 
   function build(): void {
+    const demo = target.demo;
     sliders = [];
-    list.replaceChildren(...demo.streams.map(row));
+    built = demo;
+    buttons.hidden = !demo;
+    list.replaceChildren(...(demo ? demo.streams.map((stream) => row(demo, stream)) : []));
+  }
+
+  function liveRows(frame: Frame | null): void {
+    const rows = (frame?.streams ?? []).map((stream) => {
+      const box = document.createElement("div");
+      box.className = "stream";
+      box.textContent = `${stream.id} ${stream.alive ? "alive" : "down"}\n${CHANNELS.map((c) => `${c.padEnd(11)}${stream[c].toFixed(3)}`).join("\n")}`;
+      box.style.whiteSpace = "pre";
+      return box;
+    });
+    list.replaceChildren(...rows);
   }
 
   function checkbox(text: string, checked: boolean, onChange: (checked: boolean) => void): HTMLLabelElement {
@@ -61,7 +85,7 @@ export function mountDebugPanel(demo: DemoSource, stats: Stats): void {
     return label;
   }
 
-  function row(stream: DemoStream): HTMLElement {
+  function row(demo: DemoSource, stream: DemoStream): HTMLElement {
     const box = document.createElement("div");
     box.className = "stream";
     const title = document.createElement("div");
@@ -99,8 +123,14 @@ export function mountDebugPanel(demo: DemoSource, stats: Stats): void {
   }
 
   build();
+  let shownFrame: Frame | null = null;
   setInterval(() => {
     header.textContent = `${stats.fps.toFixed(0)} fps · ${stats.particles} particles · sim ${stats.simMs.toFixed(1)} ms`;
+    if (target.demo !== built) build();
+    if (!target.demo && target.frame !== shownFrame) {
+      shownFrame = target.frame;
+      liveRows(shownFrame);
+    }
     for (const s of sliders) {
       const v = s.stream.values[s.channel];
       if (document.activeElement !== s.input) s.input.value = String(v);

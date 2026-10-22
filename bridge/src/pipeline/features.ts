@@ -106,21 +106,32 @@ export const FEATURES = ["cpu", "mem", "net", "netChange", "disk", "diskChange",
 export type Feature = (typeof FEATURES)[number];
 export type Features = Record<Feature, number>;
 
-/** Turns a sample into 0..1 features. `previous` is the host's previous features, for change-based ones. */
-export function computeFeatures(sample: Sample, baseline: Baseline, threads: number, previous: Features | null): Features {
+/**
+ * Turns a sample into 0..1 features. `previous` is the host's previous sample, for change-based ones.
+ *
+ * Changes are linear fractions of the reference, not differences on the log scale: the log scale
+ * magnifies the low end, so an idle host's trickle going from 1 to 4 KiB/s would read as a large change.
+ */
+export function computeFeatures(sample: Sample, baseline: Baseline, threads: number, previous: Sample | null): Features {
   const netRef = baseline.netReference();
-  const net = logRatio(sample.tx + sample.rx, netRef);
-  const disk = logRatio(sample.diskRead + sample.diskWrite, baseline.diskReference());
+  const diskRef = baseline.diskReference();
   const total = sample.tx + sample.rx;
-  const cpuBurst = clamp01((sample.cpuPeak - sample.cpu) / 50);
-  const netBurst = clamp01(logRatio(sample.txPeak + sample.rxPeak, netRef) - net);
+  const diskTotal = sample.diskRead + sample.diskWrite;
+  const net = logRatio(total, netRef);
+  const prevTotal = previous ? previous.tx + previous.rx : total;
+  const prevDisk = previous ? previous.diskRead + previous.diskWrite : diskTotal;
+  // Peaks exist only in Beszel's aggregated tiers; `1m` records leave them out, so rises since the
+  // previous sample count as bursts too.
+  const cpuRise = previous ? sample.cpu - previous.cpu : 0;
+  const cpuBurst = clamp01(Math.max(sample.cpuPeak - sample.cpu, cpuRise) / 50);
+  const netBurst = clamp01(Math.max(logRatio(sample.txPeak + sample.rxPeak, netRef) - net, (total - prevTotal) / netRef));
   return {
     cpu: clamp01(sample.cpu / 100),
     mem: clamp01(sample.mem / 100),
     net,
-    netChange: previous ? Math.abs(net - previous.net) : 0,
-    disk,
-    diskChange: previous ? Math.abs(disk - previous.disk) : 0,
+    netChange: clamp01(Math.abs(total - prevTotal) / netRef),
+    disk: logRatio(diskTotal, diskRef),
+    diskChange: clamp01(Math.abs(diskTotal - prevDisk) / diskRef),
     load: clamp01(sample.load1 / Math.max(threads, 1)),
     burst: Math.max(cpuBurst, netBurst),
     // 0.5 when idle, so direction only matters once there is traffic.

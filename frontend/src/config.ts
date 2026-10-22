@@ -79,6 +79,8 @@ export interface Config {
   particles: number;
   /** Speed and turbulence scale; lowered for `prefers-reduced-motion`. */
   motion: number;
+  /** Uses generated frames instead of the bridge. `?demo` enables. */
+  demo: boolean;
   /** Demo stream count. `?streams=N` overrides. */
   demoStreams: number;
   /** Demo update interval, ms. `?interval=N` overrides (60000 mimics the `systems` source). */
@@ -102,6 +104,7 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
   return {
     particles: int("particles", reducedMotion ? budget / 2 : budget, 100, 200000),
     motion: reducedMotion ? 0.5 : 1,
+    demo: params.has("demo"),
     demoStreams: int("streams", 4, 0, 32),
     demoIntervalMs: int("interval", 1000, 100, 600000),
     seed: int("seed", Math.floor(Math.random() * 2 ** 31), 0, 2 ** 31),
