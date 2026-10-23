@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32 } from '../src/util/math.js';
+import { clamp, mulberry32, ease } from '../src/util/math.js';
 
 describe('clamp', () => {
   it('should return the value if it is within the range', () => {
@@ -66,5 +66,41 @@ describe('mulberry32', () => {
     for (let i = 0; i < 10; i++) {
       expect(random1()).toBe(random2());
     }
+  });
+});
+
+describe('ease', () => {
+  it('should return current when dt is 0', () => {
+    expect(ease(0, 10, 1, 0)).toBe(0);
+    expect(ease(5, 10, 1, 0)).toBe(5);
+  });
+
+  it('should return current when target is equal to current', () => {
+    expect(ease(5, 5, 1, 0.5)).toBe(5);
+    expect(ease(10, 10, 2, 1)).toBe(10);
+  });
+
+  it('should move towards target when dt > 0', () => {
+    const result = ease(0, 10, 1, 0.5);
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBeLessThan(10);
+  });
+
+  it('should approach target closely for large dt', () => {
+    const result = ease(0, 10, 1, 100);
+    expect(result).toBeCloseTo(10, 4);
+  });
+
+  it('should move approximately 63.2% (1 - 1/e) to target when dt === tau', () => {
+    const expectedProgress = 1 - Math.exp(-1);
+    const result = ease(0, 100, 1, 1);
+    expect(result).toBeCloseTo(100 * expectedProgress, 5);
+  });
+
+  it('should handle decreasing values (current > target)', () => {
+    const result = ease(10, 0, 1, 1);
+    const expectedProgress = 1 - Math.exp(-1);
+    // starts at 10, target is 0, so it decreases by 10 * expectedProgress
+    expect(result).toBeCloseTo(10 - 10 * expectedProgress, 5);
   });
 });
