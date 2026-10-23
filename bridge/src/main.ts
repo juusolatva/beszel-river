@@ -108,6 +108,12 @@ void connect();
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     log("info", `${signal} received, shutting down`);
-    Promise.all([server.close(), client.close()]).then(() => process.exit(0)).catch(() => process.exit(1));
+    void Promise.all([server.close(), client.close()]).then(
+      () => process.exit(0),
+      (error: unknown) => {
+        log("error", "Shutdown failed", error);
+        process.exit(1);
+      },
+    );
   });
 }
