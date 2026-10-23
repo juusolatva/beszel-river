@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32, ease } from '../src/util/math.js';
+import { clamp, mulberry32, ease, lerp } from '../src/util/math.js';
 
 describe('clamp', () => {
   it('should return the value if it is within the range', () => {
@@ -102,5 +102,47 @@ describe('ease', () => {
     const expectedProgress = 1 - Math.exp(-1);
     // starts at 10, target is 0, so it decreases by 10 * expectedProgress
     expect(result).toBeCloseTo(10 - 10 * expectedProgress, 5);
+  });
+});
+
+describe('lerp', () => {
+  it('should return a when t is 0', () => {
+    expect(lerp(0, 10, 0)).toBe(0);
+    expect(lerp(5, 10, 0)).toBe(5);
+  });
+
+  it('should return b when t is 1', () => {
+    expect(lerp(0, 10, 1)).toBe(10);
+    expect(lerp(5, -10, 1)).toBe(-10);
+  });
+
+  it('should return the midpoint when t is 0.5', () => {
+    expect(lerp(0, 10, 0.5)).toBe(5);
+    expect(lerp(-10, 10, 0.5)).toBe(0);
+    expect(lerp(10, 20, 0.5)).toBe(15);
+  });
+
+  it('should interpolate correctly for arbitrary t between 0 and 1', () => {
+    expect(lerp(0, 10, 0.25)).toBe(2.5);
+    expect(lerp(0, 100, 0.75)).toBe(75);
+    expect(lerp(10, 20, 0.1)).toBe(11);
+  });
+
+  it('should extrapolate correctly for t outside [0, 1]', () => {
+    expect(lerp(0, 10, -0.5)).toBe(-5);
+    expect(lerp(0, 10, 1.5)).toBe(15);
+    expect(lerp(10, 20, 2)).toBe(30);
+    expect(lerp(10, 20, -1)).toBe(0);
+  });
+
+  it('should handle negative bounds', () => {
+    expect(lerp(-10, -20, 0)).toBe(-10);
+    expect(lerp(-10, -20, 1)).toBe(-20);
+    expect(lerp(-10, -20, 0.5)).toBe(-15);
+  });
+
+  it('should handle floating point numbers properly', () => {
+    expect(lerp(1.5, 2.5, 0.5)).toBeCloseTo(2.0);
+    expect(lerp(0.1, 0.2, 0.5)).toBeCloseTo(0.15);
   });
 });
