@@ -30,6 +30,11 @@ export const REALTIME_STALE_MS = 10_000;
 /** Assumed gap before the first realtime sample of a run, seconds. */
 const FIRST_REALTIME_DT = 1;
 
+/** Secure random number generator [0, 1) to replace Math.random. */
+function secureRandom(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
+}
+
 /** Every known host's pipeline state; turns it into frames. */
 export class HostTable {
   private readonly hosts = new Map<string, Host>();
@@ -38,7 +43,7 @@ export class HostTable {
     private readonly salt: string,
     private readonly mix: MixConfig,
     /** Times and sizes of scattered pulses; injectable for tests. */
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = secureRandom,
   ) {}
 
   /** Adds or updates a host from its `systems` record; returns whether the frame changed. */
