@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32, ease, lerp, fract } from '../src/util/math.js';
+import { clamp, mulberry32, ease, lerp, fract, gaussian } from '../src/util/math.js';
 
 describe('clamp', () => {
   it('should return the value if it is within the range', () => {
@@ -164,5 +164,60 @@ describe('fract', () => {
     expect(fract(0)).toBe(0);
     expect(fract(5)).toBe(0);
     expect(fract(-5)).toBe(0);
+  });
+});
+
+describe('gaussian', () => {
+  it('should return correct value for known inputs', () => {
+    // When random() returns 1 - Math.exp(-0.5) (so u = Math.exp(-0.5))
+    // and then 0 (so v = 0), the result should be:
+    // Math.sqrt(-2 * Math.log(Math.exp(-0.5))) * Math.cos(0)
+    // = Math.sqrt(-2 * -0.5) * 1 = Math.sqrt(1) = 1
+    let calls = 0;
+    const mockRandom = () => {
+      calls++;
+      if (calls === 1) return 1 - Math.exp(-0.5);
+      return 0;
+    };
+    expect(gaussian(mockRandom)).toBeCloseTo(1);
+  });
+
+  it('should return correct value for another set of inputs', () => {
+    // When random() returns 1 - Math.exp(-2) (so u = Math.exp(-2))
+    // and then 0.25 (so v = 0.25), the result should be:
+    // Math.sqrt(-2 * -2) * Math.cos(PI/2)
+    // = 2 * 0 = 0
+    let calls = 0;
+    const mockRandom = () => {
+      calls++;
+      if (calls === 1) return 1 - Math.exp(-2);
+      return 0.25;
+    };
+    expect(gaussian(mockRandom)).toBeCloseTo(0);
+  });
+
+  it('should handle edge case when random returns 0', () => {
+    // u = 1 - 0 = 1, v = 0
+    // Math.sqrt(-2 * Math.log(1)) * Math.cos(0)
+    // = Math.sqrt(0) * 1 = 0
+    let calls = 0;
+    const mockRandom = () => {
+      calls++;
+      return 0;
+    };
+    expect(gaussian(mockRandom)).toBeCloseTo(0);
+  });
+
+  it('should handle values near 1', () => {
+    // u = 1 - 0.999 = 0.001
+    // v = 0.999
+    // Math.sqrt(-2 * Math.log(0.001)) * Math.cos(2 * Math.PI * 0.999)
+    let calls = 0;
+    const mockRandom = () => {
+      calls++;
+      return 0.999;
+    };
+    const expected = Math.sqrt(-2 * Math.log(1 - 0.999)) * Math.cos(2 * Math.PI * 0.999);
+    expect(gaussian(mockRandom)).toBeCloseTo(expected);
   });
 });
