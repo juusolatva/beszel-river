@@ -112,7 +112,7 @@ export class StreamSource implements FrameSource {
  * `filaments` is kept only with the expected length.
  */
 export function parseFrame(data: string): Frame | null {
-  let raw: Partial<Frame>;
+  let raw: { v?: unknown; t?: unknown; streams?: unknown[] };
   try {
     raw = JSON.parse(data);
   } catch {
