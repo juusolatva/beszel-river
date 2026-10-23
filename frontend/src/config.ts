@@ -124,7 +124,7 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
     demo: params.has("demo"),
     demoStreams: int("streams", 4, 0, 32),
     demoIntervalMs: int("interval", 1000, 100, 600000),
-    seed: int("seed", crypto.getRandomValues(new Uint32Array(1))[0] >>> 1, 0, 2 ** 31),
+    seed: int("seed", Math.floor(Math.random() * 2 ** 31), 0, 2 ** 31),
     debug: params.has("debug"),
   };
 }

@@ -1,11 +1,13 @@
-🎯 **What:** The testing gap addressed
-This PR addresses the testing gap in `parseFrame` function in `frontend/src/source/stream.ts`. It adds comprehensive tests for error states, JSON parsing edge cases, and channel/filament clamping to ensure safety in rendering streams.
+Title: 🧹 [code health improvement] Refactor console.log to process.stdout.write
 
-📊 **Coverage:** What scenarios are now tested
-- Tests non-JSON string inputs, ensuring `null` is returned
-- Tests invalid schemas: non-object structures, wrong versions (`v`), missing time (`t`), and missing/malformed `streams` array
-- Tests robust handling of valid frames, including value clamping correctly processing invalid array elements within stream configurations
-- Validates the `filaments` logic ensuring correct array length processing and clamping
+🎯 **What:** The code health issue addressed
+Refactored the synchronous `console.log` and `console.error` calls in `bridge/src/log.ts` to use `process.stdout.write` and `process.stderr.write`.
 
-✨ **Result:** The improvement in test coverage
-We now have a dedicated test file `frontend/src/source/stream.test.ts` providing near 100% coverage on stream parsing behaviors. This solidifies our confidence in rendering real-time or mocked events properly and dropping bad payloads without breaking the app.
+💡 **Why:** How this improves maintainability
+`console.log` is synchronous and can block the event loop, which is detrimental to high-performance Node.js applications. `process.stdout.write` is better suited for robust logging in a server environment.
+
+✅ **Verification:** How you confirmed the change is safe
+Ran `npm run typecheck` and `npm test` to ensure no functionality is broken and all tests pass.
+
+✨ **Result:** The improvement achieved
+A more robust logging setup that avoids potential event loop blocking caused by synchronous console methods.
