@@ -76,7 +76,13 @@ export class HostTable {
 
   /** Hosts worth an `rt_metrics` subscription: the hub would poll the others' agents in vain. */
   realtimeTargets(): string[] {
-    return [...this.hosts.values()].filter((h) => h.status === "up").map((h) => h.systemId);
+    const targets: string[] = [];
+    for (const host of this.hosts.values()) {
+      if (host.status === "up") {
+        targets.push(host.systemId);
+      }
+    }
+    return targets;
   }
 
   /**
