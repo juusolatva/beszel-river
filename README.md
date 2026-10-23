@@ -10,7 +10,7 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 |---|---|
 | `shared/` | Message types shared by bridge and frontend (type-only). |
 | `bridge/` | Node service: reads the Beszel hub, mixes metrics into abstract channels, serves them over SSE at `/stream`. |
-| `frontend/` | Static WebGL2 page built with Vite. |
+| `frontend/` | Static WebGL2 page built with Vite; unit tests for its pure modules. |
 | `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `.github/` | CI workflow and Dependabot config for its actions. |
@@ -27,8 +27,8 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 npm ci                 # install all workspaces exactly as package-lock.json lists them
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
 npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
-npm test               # bridge unit tests (vitest)
-npm run coverage       # bridge tests with coverage; HTML report in bridge/coverage/index.html
+npm test               # bridge and frontend unit tests (vitest)
+npm run coverage       # the same with coverage; HTML reports in bridge/coverage/ and frontend/coverage/
 npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
@@ -103,7 +103,7 @@ The bridge then listens on the host's `127.0.0.1:8787` directly; `BESZEL_NETWORK
 
 ### 2b. Bridge under systemd (hub not in Docker)
 
-Needs Node 24 and the checkout in `/opt/beszel-river` (the unit's `WorkingDirectory`). Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
+Needs Node 24 and the checkout in `/opt/beszel-river`; the unit's `WorkingDirectory` is `/opt/beszel-river/bridge`. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
 
 ```sh
 sudo useradd --system --home-dir /opt/beszel-river --shell /usr/sbin/nologin beszel-river
