@@ -44,8 +44,11 @@ export function bandWidths(threads: ReadonlyMap<string, number>): Map<string, nu
   }
 
   const widths = new Map<string, number>();
+  const span = max - min;
+
   for (const [id, l] of logs) {
-    widths.set(id, max > min ? Math.round(((l - min) / (max - min)) * 4) / 4 : 0.5);
+    widths.set(id, span > 0 ? Math.round(((l - min) / span) * 4) / 4 : 0.5);
   }
+
   return widths;
 }
