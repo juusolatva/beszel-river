@@ -139,18 +139,31 @@ export class HostTable {
 
   /** Paused hosts are left out; the rest are anonymized and ordered for the day. */
   frame(now: Date): Frame {
-    const visible = [...this.hosts.values()].filter((h) => h.status !== "paused");
-    for (const host of visible) {
+    const threadCounts = new Map<string, number>();
+    const systemIds: string[] = [];
+    const byId = new Map<string, Host>();
+    const timeMs = now.getTime();
+
+    for (const host of this.hosts.values()) {
+      if (host.status === "paused") continue;
+
       // Until a host's first `system_stats` record, its `info` summary stands in.
       if (!host.sample && host.info) {
         const sample = sampleFromInfo(host.info);
         host.baseline.add(sample);
-        this.mixSample(host, sample, FIRST_SAMPLE_DT, null, "seed", now.getTime());
+        this.mixSample(host, sample, FIRST_SAMPLE_DT, null, "seed", timeMs);
       }
+
+      if (host.threads) {
+        threadCounts.set(host.systemId, host.threads);
+      }
+      systemIds.push(host.systemId);
+      byId.set(host.systemId, host);
     }
-    const widths = bandWidths(new Map(visible.flatMap((h) => (h.threads ? [[h.systemId, h.threads] as const] : []))));
-    const byId = new Map(visible.map((h) => [h.systemId, h]));
-    const streams = bandOrder(this.salt, [...byId.keys()], now).map((systemId): Stream => {
+
+    const widths = bandWidths(threadCounts);
+    const order = bandOrder(this.salt, systemIds, now);
+    const streams = order.map((systemId): Stream => {
       const host = byId.get(systemId) as Host;
       const stream: Stream = { id: host.streamId, alive: host.status === "up", width: widths.get(systemId) ?? 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
       // Three decimals is plenty for the visuals and keeps raw precision out of the payload.
@@ -159,7 +172,7 @@ export class HostTable {
       if (filaments) stream.filaments = filamentOrder(this.salt, systemId, FILAMENTS, now).map((i) => round3(filaments[i]));
       return stream;
     });
-    return { v: 1, t: now.getTime(), streams };
+    return { v: 1, t: timeMs, streams };
   }
 
   private realtimeLive(host: Host, now: number): boolean {
