@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { webcrypto } from "node:crypto";
 import { clamp01, FEATURES, type Feature, type Features } from "./features.js";
 
 /** Channels the mixer produces; `width` and `alive` come from the host table instead. */
@@ -159,6 +160,13 @@ export function loadMixConfig(path: string): MixConfig {
   return parseMixConfig(JSON.parse(readFileSync(path, "utf8")));
 }
 
+
+function secureRandom(): number {
+  const array = new Uint32Array(1);
+  webcrypto.getRandomValues(array);
+  return array[0] / 4294967296;
+}
+
 /** Per-host channel state. */
 export class Mixer {
   readonly values: Record<Mixed, number> = { flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
@@ -173,7 +181,7 @@ export class Mixer {
 
   constructor(
     private readonly config: MixConfig,
-    private readonly random: () => number = Math.random,
+    private readonly random: () => number = secureRandom,
   ) {}
 
   /**
