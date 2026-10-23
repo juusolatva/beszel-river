@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32, ease, lerp, fract, gaussian } from '../src/util/math.js';
+import { clamp, mulberry32, ease, lerp, fract, gaussian, hashString } from '../src/util/math.js';
 
 describe('clamp', () => {
   it('should return the value if it is within the range', () => {
@@ -219,5 +219,41 @@ describe('gaussian', () => {
     };
     const expected = Math.sqrt(-2 * Math.log(1 - 0.999)) * Math.cos(2 * Math.PI * 0.999);
     expect(gaussian(mockRandom)).toBeCloseTo(expected);
+  });
+});
+
+describe('hashString', () => {
+  it('should return a number between 0 (inclusive) and 1 (exclusive)', () => {
+    const hash = hashString('test');
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThan(1);
+  });
+
+  it('should be deterministic (same input produces same output)', () => {
+    expect(hashString('hello world')).toBe(hashString('hello world'));
+    expect(hashString('')).toBe(hashString(''));
+  });
+
+  it('should produce different outputs for different strings', () => {
+    const hash1 = hashString('foo');
+    const hash2 = hashString('bar');
+    expect(hash1).not.toBe(hash2);
+  });
+
+  it('should handle empty string correctly', () => {
+    const hash = hashString('');
+    // The FNV-1a offset basis is 0x811c9dc5, which is 2166136261.
+    // 2166136261 / 4294967296 ≈ 0.5043429
+    expect(hash).toBeCloseTo(0.5043429, 6);
+  });
+
+  it('should handle long strings and special characters', () => {
+    const hash = hashString('abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+');
+    expect(hash).toBeGreaterThanOrEqual(0);
+    expect(hash).toBeLessThan(1);
+
+    const hashUnicode = hashString('こんにちは世界'); // Hello World in Japanese
+    expect(hashUnicode).toBeGreaterThanOrEqual(0);
+    expect(hashUnicode).toBeLessThan(1);
   });
 });
