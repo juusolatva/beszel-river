@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32, ease, lerp } from '../src/util/math.js';
+import { clamp, mulberry32, ease, lerp, fract } from '../src/util/math.js';
 
 describe('clamp', () => {
   it('should return the value if it is within the range', () => {
@@ -144,5 +144,25 @@ describe('lerp', () => {
   it('should handle floating point numbers properly', () => {
     expect(lerp(1.5, 2.5, 0.5)).toBeCloseTo(2.0);
     expect(lerp(0.1, 0.2, 0.5)).toBeCloseTo(0.15);
+  });
+});
+
+describe('fract', () => {
+  it('should return the fractional part of a positive number', () => {
+    expect(fract(1.5)).toBe(0.5);
+    expect(fract(2.25)).toBe(0.25);
+    expect(fract(0.1)).toBeCloseTo(0.1);
+  });
+
+  it('should return the fractional part of a negative number', () => {
+    expect(fract(-1.5)).toBe(0.5);
+    expect(fract(-2.25)).toBe(0.75); // -2.25 - floor(-2.25) = -2.25 - (-3) = 0.75
+    expect(fract(-0.1)).toBeCloseTo(0.9);
+  });
+
+  it('should return 0 for whole numbers', () => {
+    expect(fract(0)).toBe(0);
+    expect(fract(5)).toBe(0);
+    expect(fract(-5)).toBe(0);
   });
 });
