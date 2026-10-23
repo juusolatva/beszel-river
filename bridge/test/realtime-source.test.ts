@@ -3,6 +3,8 @@ import { RealtimeSource } from "../src/beszel/realtime-source.js";
 import type PocketBase from "pocketbase";
 import type { SystemStats } from "../src/beszel/types.js";
 
+vi.mock("../src/log.js", () => ({ log: vi.fn() }));
+
 describe("RealtimeSource", () => {
   let pb: any;
   let onStats: (systemId: string, stats: SystemStats) => void;
