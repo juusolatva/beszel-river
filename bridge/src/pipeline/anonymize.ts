@@ -32,9 +32,23 @@ export function filamentOrder(salt: string, systemId: string, count: number, now
  * (unknown thread count) get 0.5 from the caller.
  */
 export function bandWidths(threads: ReadonlyMap<string, number>): Map<string, number> {
-  const logs = new Map([...threads].map(([id, t]) => [id, Math.log2(Math.max(t, 1))]));
-  const values = [...logs.values()];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  return new Map([...logs].map(([id, l]) => [id, max > min ? Math.round(((l - min) / (max - min)) * 4) / 4 : 0.5]));
+  const logs = new Map<string, number>();
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const [id, t] of threads) {
+    const l = Math.log2(Math.max(t, 1));
+    logs.set(id, l);
+    if (l < min) min = l;
+    if (l > max) max = l;
+  }
+
+  const widths = new Map<string, number>();
+  const span = max - min;
+
+  for (const [id, l] of logs) {
+    widths.set(id, span > 0 ? Math.round(((l - min) / span) * 4) / 4 : 0.5);
+  }
+
+  return widths;
 }
