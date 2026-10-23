@@ -112,7 +112,7 @@ export class StreamSource implements FrameSource {
  * `filaments` is kept only with the expected length.
  */
 export function parseFrame(data: string): Frame | null {
-  let raw: { v?: unknown; t?: unknown; streams?: unknown[] };
+  let raw: unknown;
   try {
     raw = JSON.parse(data);
   } catch {
@@ -120,7 +120,7 @@ export function parseFrame(data: string): Frame | null {
   }
   if (!isObject(raw) || raw.v !== 1 || typeof raw.t !== "number" || !Array.isArray(raw.streams)) return null;
   const streams: Stream[] = [];
-  for (const s of raw.streams) {
+  for (const s of raw.streams as unknown[]) {
     if (!isObject(s) || typeof s.id !== "string") continue;
     const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
     for (const channel of CHANNELS) {
