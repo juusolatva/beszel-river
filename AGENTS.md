@@ -16,7 +16,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 |---|---|
 | `shared/src/index.ts` | `Frame` and `Stream` message types. Type-only: `exports` has only a `types` condition, so consumers must use `import type`. |
 | `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
-| `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. |
+| `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. Tests of the pure modules in `frontend/test/`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `.github/` | `workflows/ci.yml` and `dependabot.yml` (updates for the pinned actions). |
 | `docs/PLAN.md` | Plan. |
@@ -28,20 +28,20 @@ Run from the repository root.
 ```sh
 npm ci                 # install exactly what package-lock.json lists
 npm run typecheck      # tsc in every workspace
-npm test               # bridge unit tests (vitest run)
-npm run coverage       # the same with coverage; report in bridge/coverage/ (index.html)
+npm test               # bridge and frontend unit tests (vitest run)
+npm run coverage       # the same with coverage; reports in bridge/coverage/ and frontend/coverage/ (index.html)
 npm run build          # bridge → bridge/dist, frontend → frontend/dist
 npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0.0.1:8787
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes the coverage table to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes both workspaces' coverage tables to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
 - **Node:** production runs Node 24 (`.nvmrc`); `engines` allows ≥ 22.12.0, the minimum for `vite` 8 and `eventsource` 5. Do not use APIs newer than 22.12.0. If either version changes, update `package.json`, `.nvmrc`, the CI matrix, `README.md` and the decisions table in `docs/PLAN.md` together.
-- **Dependencies:** exact versions only (`.npmrc` sets `save-exact=true`). Add few; the bridge uses `node:http` and the frontend uses no rendering library on purpose. Commit `package-lock.json` changes with the dependency change.
-- **TypeScript:** strict settings from `tsconfig.base.json`. `noUncheckedIndexedAccess` is off on purpose so typed-array code stays readable. ES modules everywhere; bridge imports use `.js` extensions (NodeNext resolution).
+- **Dependencies:** exact versions only (`.npmrc` sets `save-exact=true`). Add few; the bridge uses `node:http` and the frontend uses no rendering library on purpose. Commit `package-lock.json` changes with the dependency change, and make them with npm 11 (Node 24): npm 10 from Node 22 adds `"peer": true` to the `@esbuild/*` entries. `vitest` and `@vitest/coverage-v8` are devDependencies of both `bridge` and `frontend`; bump them together so the lock keeps one copy.
+- **TypeScript:** strict settings from `tsconfig.base.json`, whose `lib` is ES2023 only; `frontend/tsconfig.json` adds the DOM libs, so `window` and `document` do not type-check in the bridge. `noUncheckedIndexedAccess` is off on purpose so typed-array code stays readable. ES modules everywhere; bridge imports use `.js` extensions (NodeNext resolution).
 - **Style:** match the surrounding code: short doc comments on exported items, comments that explain why rather than what, no formatter-driven churn. `.editorconfig` sets the whitespace rules.
 - **Frontend hot path:** no allocations per particle or per frame in `src/sim/` and `src/render/`; keep state in the preallocated typed arrays.
 - **CI:** pin actions to a full commit SHA with the version in a comment (`uses: actions/checkout@<sha> # v7.0.1`); Dependabot updates both. Pass `${{ }}` values to `run` scripts through `env`, not inline. Check workflow changes with `actionlint` (with `shellcheck` on the path) and `zizmor --persona=auditor .github`; both should report nothing above informational.
@@ -62,13 +62,13 @@ These protect the point of the project. Do not break them without a change to `d
 
 ## Testing
 
-- Bridge logic is pure where possible; add or update vitest tests in `bridge/test/` for every change to `config.ts`, `pipeline/` or `server.ts`.
-- `bridge/vitest.config.ts` sets coverage thresholds for those modules (90 % statements, functions and lines, 80 % branches); `npm run coverage` fails below them. Do not lower a threshold to make a change pass; add tests instead.
+- Bridge logic is pure where possible; add or update vitest tests in `bridge/test/` for every change to `config.ts`, `pipeline/` or `server.ts`, and in `frontend/test/` for every change to `frontend/src/config.ts` or `src/util/`.
+- `bridge/vitest.config.ts` and `frontend/vitest.config.ts` set coverage thresholds for those modules (90 % statements, functions and lines, 80 % branches); `npm run coverage` fails below them. Do not lower a threshold to make a change pass; add tests instead. Under a coding agent, vitest leaves fully covered files out of the terminal table; CI shows them all.
 - End-to-end bridge checks need a running Beszel hub and agent (release binaries from GitHub, run outside the repository). Watch frames with `curl -N http://127.0.0.1:8787/stream`. With `SOURCE=realtime`, the bridge logs "Realtime metrics on/off" as viewers come and go.
 - Token mode (`BESZEL_TOKEN`): start the hub with `DISABLE_PASSWORD_AUTH=true` and get a token as a superuser with `POST /api/collections/users/impersonate/<user id>` and the body `{"duration": <seconds>}`.
 - Deployment files: run the CI `deploy` job's commands. `nginx -t` opens the listen sockets, so in a container without IPv6 remove the `listen [::]` lines first, as CI does.
 - Vite's dev proxy keeps `/stream` open when the bridge dies, so check lost-connection behaviour behind nginx (the CI configs work locally with `nginx:stable-alpine`) or against the bridge directly.
-- The frontend has no unit tests. Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance. It also keeps every core busy, so do not run it on the machine whose metrics you are measuring; replay recorded frames instead.
+- The frontend's unit tests cover only code without a browser (`config.ts`, `util/math.ts`, `parseFrame`). Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance. It also keeps every core busy, so do not run it on the machine whose metrics you are measuring; replay recorded frames instead.
 
 ## Git
 
