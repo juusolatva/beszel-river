@@ -114,7 +114,13 @@ export function parseMixConfig(json: unknown): MixConfig {
   const section = <T extends object>(raw: unknown, name: string, defaults: T): T => {
     if (raw === undefined) return defaults;
     if (!isObject(raw)) return fail(`${name} must be an object`);
-    return Object.fromEntries(Object.entries(defaults).map(([field, fallback]) => [field, number(raw[field], `${name}.${field}`, fallback as number)])) as T;
+    const result = {} as T;
+    for (const field in defaults) {
+      if (Object.prototype.hasOwnProperty.call(defaults, field)) {
+        result[field] = number(raw[field], `${name}.${field}`, defaults[field] as number) as any;
+      }
+    }
+    return result;
   };
 
   if (!isObject(json)) return fail("expected an object");
