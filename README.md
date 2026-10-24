@@ -15,6 +15,7 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `.github/` | CI workflow and Dependabot config for its actions. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
+| `.serena/` | [Serena](https://github.com/oraios/serena) project config and memories for coding agents. |
 
 ## Requirements
 

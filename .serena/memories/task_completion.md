@@ -19,3 +19,4 @@
 5. **Documentation Sync:**
    - Update `docs/PLAN.md` if behaviour, configuration, message format, or file layout changed.
    - Update `README.md` (and `bridge/.env.example`) if commands, env vars, URL parameters, or deployment files changed.
+   - Update `AGENTS.md` and the Serena memories if layout, commands, conventions, or facts stated in them changed.

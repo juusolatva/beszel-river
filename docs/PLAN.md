@@ -52,6 +52,7 @@ Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
 .dockerignore                 keeps secrets and build output out of the image build context
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
+.serena/                      Serena project config and agent memories
 docs/PLAN.md                  this plan
 shared/src/index.ts           message types
 bridge/

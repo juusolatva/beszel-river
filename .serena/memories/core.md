@@ -8,6 +8,8 @@ Turns live server metrics from a Beszel hub into an abstract upward-flowing WebG
 - `bridge/` — Node service that ingests Beszel metrics, normalizes/mixes/anonymizes them into abstract channels, and broadcasts SSE frames on `/stream`.
 - `frontend/` — Static Vite + raw WebGL2 client that eases stream channels, simulates particles on the CPU, and renders trails.
 - `deploy/` — Production `bridge.Dockerfile`, `compose.yml`, `compose.host-network.yml`, systemd service unit, and nginx configs (`river.conf`, `river-path.conf`).
+- `.github/` — CI workflow (`workflows/ci.yml`) and Dependabot config for the SHA-pinned actions.
+- `.serena/` — Serena `project.yml` and these memories (`cache/`, `project.local.yml` git-ignored; excluded from the Docker build context).
 - `docs/PLAN.md` — Authoritative specification for architecture, configuration, math, message format, and milestones.
 - `AGENTS.md` — Repository instructions and invariants (`CLAUDE.md` imports it).
 
@@ -19,6 +21,7 @@ Turns live server metrics from a Beszel hub into an abstract upward-flowing WebG
 - **Documentation sync:**
   - Read and update `docs/PLAN.md` in the same change whenever behaviour, configuration, message format, or file layout changes. Tick milestone checkboxes only after verifying their "Done when" conditions and recording how they were checked.
   - Update `README.md` (and `bridge/.env.example` for new env vars) whenever commands, environment variables, URL parameters, or deployment files change.
+  - Update `AGENTS.md` and these memories when the layout, commands, conventions, or facts they state change.
 
 ## Memory Graph
 
