@@ -181,10 +181,11 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
    - Some inputs are changes since the previous sample rather than levels.
    - Weights come from `mix.json`.
-   - `filaments`: only with an explicit complete recipe, each profile value through that recipe, smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
+   - `filaments`: only with an explicit complete recipe, each profile value through that recipe with ±0.025 uniform jitter (`FILAMENT_JITTER`, so hosts with fewer than 6 cores do not leave exact linear interpolation spacings in the public array), smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
 4. **Anonymize:**
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
+   - Band width = one of 0, 0.25, 0.5, 0.75, 1, seeded by `STREAM_SALT`, the system ID and the UTC date (not from thread counts, which leaked core-count ratios and stayed fixed across days).
    - Filament order = shuffle of the profile seeded by `STREAM_SALT`, the system ID and the UTC date, so the busiest core is not always in the same place and hosts differ.
 5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, live minute records scattered, see below) and decays with time constant `pulseDecay` (8 s). A 2 s tick lets pulses decay, fires scattered pulses that are due and moves gliding channels on, and broadcasts when that changed anything visibly (a pulse by 0.005, a gliding value by 0.0005). Channels are rounded to three decimals.
 

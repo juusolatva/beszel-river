@@ -26,29 +26,15 @@ export function filamentOrder(salt: string, systemId: string, count: number, now
   return keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).map((k) => k.index);
 }
 
+/** Number of steps between the narrowest and widest band. */
+const WIDTH_STEPS = 4;
+
 /**
- * Relative band width from thread counts: log scale between the smallest and largest host,
- * quantized to quarters so it does not reveal exact core counts. All equal → 0.5; hosts left out
- * (unknown thread count) get 0.5 from the caller.
+ * Relative band width for the day, one of 0, 0.25, … 1, seeded by the salt, the system ID and the
+ * UTC date. It carries no data: widths taken from thread counts gave away the ratios between hosts'
+ * core counts and marked the same host from one day to the next.
  */
-export function bandWidths(threads: ReadonlyMap<string, number>): Map<string, number> {
-  const logs = new Map<string, number>();
-  let min = Infinity;
-  let max = -Infinity;
-
-  for (const [id, t] of threads) {
-    const l = Math.log2(Math.max(t, 1));
-    logs.set(id, l);
-    if (l < min) min = l;
-    if (l > max) max = l;
-  }
-
-  const widths = new Map<string, number>();
-  const span = max - min;
-
-  for (const [id, l] of logs) {
-    widths.set(id, span > 0 ? Math.round(((l - min) / span) * 4) / 4 : 0.5);
-  }
-
-  return widths;
+export function bandWidths(salt: string, systemIds: readonly string[], now: Date): Map<string, number> {
+  const day = now.toISOString().slice(0, 10);
+  return new Map(systemIds.map((id) => [id, (parseInt(hmac(salt, `${day}:${id}:width`).slice(0, 8), 16) % (WIDTH_STEPS + 1)) / WIDTH_STEPS]));
 }

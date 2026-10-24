@@ -58,7 +58,7 @@ These protect the point of the project. Do not break them without a change to `d
 
 - Raw metrics, hostnames, system IDs and Beszel field names never leave the bridge. Frames carry only the `Stream` channels, rounded to 3 decimals.
 - Beszel record types are declared in `bridge/src/beszel/types.ts`. Only `bridge/src/beszel/`, `pipeline/features.ts` (stats and info → samples) and `pipeline/hosts.ts` (status, thread count) may read Beszel fields; everything after them works on samples and features. Beszel renames fields between minor releases.
-- Stream IDs are HMAC-SHA256 of the system ID with `STREAM_SALT`; band order is reshuffled daily from the salt and the UTC date; band widths are quantized; `filaments` are always 6 values resampled from the sorted per-core usage, mixed through `mix.json` and reordered daily. Do not add fields that reveal host count, core count or exact rates.
+- Stream IDs are HMAC-SHA256 of the system ID with `STREAM_SALT`; band order and quantized band widths are seeded daily from the salt and the UTC date; `filaments` are always 6 values resampled from the sorted per-core usage, mixed and jittered through `mix.json` and reordered daily. Do not add fields that reveal host count, core count or exact rates.
 - The mixing recipe lives in `bridge/mix.json`, which is git-ignored. Only `bridge/mix.example.json` is committed; the frontend never learns the recipe.
 - The public page never mentions Beszel or hostnames in its title or visible text.
 - Secrets live in `bridge/.env` (git-ignored). Never commit real credentials, salts or `mix.json`.
