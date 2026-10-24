@@ -157,7 +157,11 @@ Environment variables (template: `bridge/.env.example`):
 | `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
-Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults. The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5 s, 2, 2, 50 s) spreads the pulse of each minute record out, and the optional `glide` (default 60 s) its other channels, see "Minute records"; each missing field takes its default. `window` must leave room for the later pulses, at least `max` × (`pulseDecay` + 2 s), and `jitter` + `window` must be at most 55 s, so every pulse fires before the next record. `"jitter": 0`, `"max": 0` and `"glide": 0` together apply each minute record at once, with one pulse, as before the scattering.
+Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
+
+The optional `filaments` entry maps each value of the per-core profile the same way. Omitted or `null` disables filaments; enabling them requires explicit finite `bias`, `center`, `weight` and `tau` values, with `tau >= 0`. Incomplete sections fail startup. There is no implicit recipe: the old defaults (0, 0, 1, 3 s) preserved normalized CPU percentages, and sorting public filament arrays recovered profile extrema despite daily shuffling. Smoothing and rounding reduce precision but do not hide sustained CPU levels. An explicit recipe is an operator choice to publish a transformed CPU profile, not a confidentiality guarantee; leave it disabled if those levels must remain private. Existing partial recipes must be completed deliberately or removed; copies of the earlier example need `"center": 0` added. The example includes every field and its public weights must still be changed before production use.
+
+The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5 s, 2, 2, 50 s) spreads the pulse of each minute record out, and the optional `glide` (default 60 s) its other channels, see "Minute records"; each missing field takes its default. `window` must leave room for the later pulses, at least `max` × (`pulseDecay` + 2 s), and `jitter` + `window` must be at most 55 s, so every pulse fires before the next record. `"jitter": 0`, `"max": 0` and `"glide": 0` together apply each minute record at once, with one pulse, as before the scattering.
 
 ### Pipeline
 
@@ -176,7 +180,7 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
    - Some inputs are changes since the previous sample rather than levels.
    - Weights come from `mix.json`.
-   - `filaments`: each profile value through the `filaments` recipe, smoothed with its `tau`. A host without per-core usage has none.
+   - `filaments`: only with an explicit complete recipe, each profile value through that recipe, smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
 4. **Anonymize:**
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
@@ -238,7 +242,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 | `turbulence` | number 0..1 | Sideways noise strength. |
 | `pulse` | number 0..1 | Burst strength. |
 | `heat` | number 0..1 | Hue drift; 0.5 is neutral. |
-| `filaments` | number[] (optional, length 6) | Per-core activity: the profile resampled to 6 values, mixed and shuffled for the day. Present when the host's agent reports per-core usage; every second with the `realtime` source. Hides the core count. |
+| `filaments` | number[] (optional, length 6) | Per-core activity: the profile resampled to 6 values, mixed and shuffled for the day. Present only with an explicit complete recipe and agent per-core usage; every second with the `realtime` source. The array length does not reveal the core count. |
 
 ## Frontend
 

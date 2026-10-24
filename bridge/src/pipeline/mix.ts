@@ -28,9 +28,6 @@ export interface FilamentRecipe {
   tau: number;
 }
 
-/** Used when `mix.json` has no `filaments` entry (files from before M6). */
-export const DEFAULT_FILAMENTS: FilamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
-
 /**
  * How the pulse p of a minute record is spread out, so hosts do not all flash at the top of the minute
  * and the river keeps pulsing between records. The first pulse fires at full strength within `jitter`
@@ -53,7 +50,8 @@ export const DEFAULT_GLIDE = 60;
 
 export interface MixConfig {
   channels: Record<Mixed, Recipe>;
-  filaments: FilamentRecipe;
+  /** Null unless an operator supplies a complete filament recipe. */
+  filaments: FilamentRecipe | null;
   pulseScatter: PulseScatter;
   /** Pulse decay time constant, seconds. */
   pulseDecay: number;
@@ -134,8 +132,18 @@ export function parseMixConfig(json: unknown): MixConfig {
   }
   const pulseDecay = number(json.pulseDecay, "pulseDecay");
   if (pulseDecay <= 0) fail("pulseDecay must be > 0");
-  const filaments = section(json.filaments, "filaments", DEFAULT_FILAMENTS);
-  if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  let filaments: FilamentRecipe | null = null;
+  if (json.filaments !== undefined && json.filaments !== null) {
+    if (!isObject(json.filaments)) return fail("filaments must be an object");
+    // No compatibility defaults: a known single-metric mapping would disclose CPU percentages.
+    filaments = {
+      bias: number(json.filaments.bias, "filaments.bias"),
+      center: number(json.filaments.center, "filaments.center"),
+      weight: number(json.filaments.weight, "filaments.weight"),
+      tau: number(json.filaments.tau, "filaments.tau"),
+    };
+    if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  }
   const pulseScatter = section(json.pulseScatter, "pulseScatter", DEFAULT_PULSE_SCATTER);
   const { jitter, rate, max, window } = pulseScatter;
   if (jitter < 0) fail("pulseScatter.jitter must be >= 0");
@@ -156,7 +164,7 @@ export function loadMixConfig(path: string): MixConfig {
 /** Per-host channel state. */
 export class Mixer {
   readonly values: Record<Mixed, number> = { flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
-  /** Mixed per-core profile; null while the host reports no per-core usage. */
+  /** Mixed per-core profile; null when disabled or the host reports no per-core usage. */
   filaments: number[] | null = null;
   private primed = false;
   /** The record's own pulse while it waits for its time. */
@@ -235,7 +243,7 @@ export class Mixer {
   }
 
   private applyFilaments(profile: readonly number[] | null, dt: number): void {
-    if (!profile) {
+    if (!profile || !this.config.filaments) {
       this.filaments = null;
       return;
     }

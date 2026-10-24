@@ -149,6 +149,21 @@ describe("HostTable realtime", () => {
   const t0 = Date.parse("2026-10-22T12:00:00Z");
   const flowOf = (table: HostTable) => table.frame(now).streams[0]?.flow;
 
+  it.each(["seed", "minute", "realtime"] as const)("omits CPU filaments from legacy recipes for %s samples", (kind) => {
+    const legacy = parseMixConfig({ flow: { inputs: { cpu: 1 } }, density: { inputs: {} }, turbulence: { inputs: {} }, pulse: { inputs: {} }, heat: { inputs: {} }, pulseDecay: 8 });
+    const table = new HostTable(salt, legacy);
+    table.upsertSystem(system("a", "up", null));
+    for (let i = 0; i < 3; i++) {
+      const record = { ...stats("a", new Date(t0 + i * 60_000).toISOString(), 50), stats: { cpu: 50, cpus: [10, 90] } };
+      if (kind === "realtime") table.addRealtime("a", record.stats, t0 + i * 60_000);
+      else if (kind === "minute") table.addStats(record, t0 + i * 60_000);
+      else table.addHistory(record, t0 + i * 60_000);
+      table.tick(2, t0 + i * 60_000 + 60_000);
+      expect(table.frame(now).streams[0]).not.toHaveProperty("filaments");
+      expect(flowOf(table)).toBe(0.5);
+    }
+  });
+
   it("mixes realtime samples and holds minute records back while they arrive", () => {
     const table = new HostTable(salt, mix);
     table.upsertSystem(system("a", "up", null));
@@ -237,7 +252,7 @@ describe("HostTable realtime", () => {
     const streams = new Map(table.frame(now).streams.map((s) => [s.id, s]));
     const filaments = streams.get(streamId(salt, "a"))?.filaments ?? [];
     expect(filaments).toHaveLength(6);
-    const { bias, center, weight } = mix.filaments;
+    const { bias, center, weight } = mix.filaments!;
     const expected = (coreProfile([10, 90, 35, 70]) as number[]).map((v) => Math.round(Math.min(1, Math.max(0, bias + weight * (v - center))) * 1000) / 1000);
     expect([...filaments].sort()).toEqual([...expected].sort());
     expect(streams.get(streamId(salt, "b"))).not.toHaveProperty("filaments");
