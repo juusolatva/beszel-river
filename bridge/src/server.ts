@@ -56,8 +56,12 @@ export class StreamServer {
   }
 
   private handle(request: IncomingMessage, response: ServerResponse): void {
-    const path = new URL(request.url ?? "/", "http://localhost").pathname;
-    if (request.method !== "GET") {
+    // URL.parse rather than new URL: the target comes from the client (nginx can pass it on
+    // verbatim, e.g. "//x:abc/../stream"), and a throw here would end the process.
+    const path = URL.parse(request.url ?? "/", "http://localhost")?.pathname;
+    if (path === undefined) {
+      response.writeHead(400).end();
+    } else if (request.method !== "GET") {
       response.writeHead(405, { Allow: "GET" }).end();
     } else if (path === "/healthz") {
       const ok = this.options.healthy();
