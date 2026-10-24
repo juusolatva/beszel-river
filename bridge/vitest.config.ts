@@ -5,8 +5,9 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
-      // Terminal table, the same table as a file for the CI job summary, and a browsable report.
-      reporter: ["text", ["text", { file: "coverage.txt" }], "html"],
+      // Terminal table, the same table as a file for the CI job summary, a browsable report, and
+      // lcov.info for SonarQube Cloud.
+      reporter: ["text", ["text", { file: "coverage.txt" }], "html", "lcov"],
       // Only the pure modules are gated. main.ts, log.ts and src/beszel/ do I/O against a live hub
       // and are checked end to end (see AGENTS.md), with unit tests for some error paths; they still
       // appear in the report.

@@ -1,5 +1,10 @@
 # beszel-river
 
+[![CI](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=coverage)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
+[![License: MIT](https://img.shields.io/github/license/juusolatva/beszel-river)](LICENSE)
+
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
 Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
@@ -24,6 +29,7 @@ Four moments of the live page. Each vertical band is one server; the bands overl
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `docs/images/` | Screenshots used in this README. |
 | `.github/` | CI workflow and Dependabot config for its actions. |
+| `sonar-project.properties` | SonarQube Cloud project settings; the CI scan needs the `SONAR_TOKEN` secret. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
 | `.serena/` | [Serena](https://github.com/oraios/serena) project config and memories for coding agents. |
 
@@ -39,7 +45,7 @@ npm ci                 # install all workspaces exactly as package-lock.json lis
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
 npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
 npm test               # bridge and frontend unit tests (vitest)
-npm run coverage       # the same with coverage; HTML reports in bridge/coverage/ and frontend/coverage/
+npm run coverage       # the same with coverage; HTML and lcov reports in bridge/coverage/ and frontend/coverage/
 npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
