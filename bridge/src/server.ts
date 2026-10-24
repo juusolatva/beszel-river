@@ -56,12 +56,11 @@ export class StreamServer {
   }
 
   private handle(request: IncomingMessage, response: ServerResponse): void {
-    // URL.parse rather than new URL: the target comes from the client (nginx can pass it on
-    // verbatim, e.g. "//x:abc/../stream"), and a throw here would end the process.
-    const path = URL.parse(request.url ?? "/", "http://localhost")?.pathname;
-    if (path === undefined) {
-      response.writeHead(400).end();
-    } else if (request.method !== "GET") {
+    // The raw path, not a URL parser's: only two exact paths exist, a parser throws on some
+    // client targets ("//") and resolves "..", "\" and "//host" in ways the proxy that routed
+    // the request need not share. Exact matching cannot throw and answers only what was asked.
+    const path = (request.url ?? "/").split("?", 1)[0];
+    if (request.method !== "GET") {
       response.writeHead(405, { Allow: "GET" }).end();
     } else if (path === "/healthz") {
       const ok = this.options.healthy();

@@ -91,10 +91,13 @@ describe("StreamServer", () => {
     expect((await fetch(`${base}/stream`, { method: "POST" })).status).toBe(405);
   });
 
-  it("answers 400 to request-targets that do not parse and keeps serving", async () => {
+  it("routes on the raw path only, so odd request-targets get 404 and the server keeps serving", async () => {
     const base = await start();
-    for (const path of ["//", "//:/x", "//x:abc/../stream"]) expect(await rawStatus(base, path)).toBe(400);
-    expect(await rawStatus(base, "//", "POST")).toBe(400);
-    expect((await fetch(`${base}/healthz`)).status).toBe(200);
+    // None is exactly /stream or /healthz; a URL parser throws on the first three and turns several others into /stream.
+    const odd = ["//", "//:/x", "//x:abc/../stream", "//x/stream", "/x/../stream", "/%73tream", "/stream/..\\healthz\\x/..", "http://localhost/stream"];
+    for (const path of odd) expect(await rawStatus(base, path)).toBe(404);
+    expect(await rawStatus(base, "//", "POST")).toBe(405);
+    expect(await rawStatus(base, "/healthz?probe=1")).toBe(200);
+    expect(await rawStatus(base, "/stream?x=1")).toBe(200);
   });
 });
