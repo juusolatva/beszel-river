@@ -14,7 +14,7 @@ export interface DemoStream {
   held: boolean;
   values: Channels;
   means: Channels;
-  /** Sends `filaments`, as the bridge does with the `realtime` source; toggled in the debug panel. */
+  /** Sends `filaments`, as the bridge does when the agent reports per-core usage; toggled in the debug panel. */
   filaments: boolean;
   /** Per-lane activity, wandering around `flow`. */
   lanes: number[];

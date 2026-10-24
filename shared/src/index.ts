@@ -34,7 +34,7 @@ export interface Stream {
   pulse: number;
   /** Hue drift; 0.5 is neutral. */
   heat: number;
-  /** Per-core activity resampled to 6 values; `realtime` source only. */
+  /** Per-core activity resampled to 6 values; present when the agent reports per-core usage. */
   filaments?: number[];
 }
 
