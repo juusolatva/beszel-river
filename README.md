@@ -4,6 +4,14 @@ A web page that turns live server metrics from a [Beszel](https://beszel.dev) hu
 
 Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
+## Screenshots
+
+Two moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order changes daily and widths are quantized, so the picture does not tell which server is which.
+
+| | |
+|---|---|
+| ![River of rainbow-coloured particle trails in several bands flowing upwards on a black background](docs/images/river1.jpg) | ![The same river at another moment, with different hues and band widths](docs/images/river2.jpg) |
+
 ## Layout
 
 | Path | Contents |
@@ -13,6 +21,7 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 | `frontend/` | Static WebGL2 page built with Vite; unit tests for its pure modules. |
 | `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
+| `docs/images/` | Screenshots used in this README. |
 | `.github/` | CI workflow and Dependabot config for its actions. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
 | `.serena/` | [Serena](https://github.com/oraios/serena) project config and memories for coding agents. |

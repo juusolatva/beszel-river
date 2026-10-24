@@ -10,6 +10,7 @@ Turns live server metrics from a Beszel hub into an abstract upward-flowing WebG
 - `deploy/` — Production `bridge.Dockerfile`, `compose.yml`, `compose.host-network.yml`, systemd service unit, and nginx configs (`river.conf`, `river-path.conf`).
 - `.github/` — CI workflow (`workflows/ci.yml`) and Dependabot config for the SHA-pinned actions.
 - `.serena/` — Serena `project.yml` and these memories (`cache/`, `project.local.yml` git-ignored; excluded from the Docker build context).
+- `docs/images/` — README screenshots (JPEG, 1280 px wide, metadata stripped).
 - `docs/PLAN.md` — Authoritative specification for architecture, configuration, math, message format, and milestones.
 - `AGENTS.md` — Repository instructions and invariants (`CLAUDE.md` imports it).
 
