@@ -1,9 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Features } from "../src/pipeline/features.js";
-import { DEFAULT_FILAMENTS, DEFAULT_GLIDE, DEFAULT_PULSE_SCATTER, loadMixConfig, Mixer, parseMixConfig, TICK_S, type MixConfig } from "../src/pipeline/mix.js";
+import { DEFAULT_GLIDE, DEFAULT_PULSE_SCATTER, loadMixConfig, Mixer, parseMixConfig, TICK_S, type MixConfig } from "../src/pipeline/mix.js";
 
 const zero: Features = { cpu: 0, mem: 0, net: 0, netChange: 0, disk: 0, diskChange: 0, load: 0, burst: 0, txShare: 0.5, temp: 0.5 };
+const filamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
 
 const config: MixConfig = parseMixConfig({
   flow: { inputs: { cpu: 1 }, tau: 60 },
@@ -27,8 +28,8 @@ describe("parseMixConfig", () => {
     expect(() => parseMixConfig({ ...valid, flow: { inputs: {}, tau: "slow" } })).toThrow(/flow.tau/);
     expect(() => parseMixConfig({ ...valid, pulseDecay: 0 })).toThrow(/pulseDecay/);
     expect(() => parseMixConfig({ ...valid, filaments: 1 })).toThrow(/filaments must be an object/);
-    expect(() => parseMixConfig({ ...valid, filaments: { weight: "x" } })).toThrow(/filaments.weight/);
-    expect(() => parseMixConfig({ ...valid, filaments: { tau: -1 } })).toThrow(/filaments.tau/);
+    expect(() => parseMixConfig({ ...valid, filaments: { ...filamentRecipe, weight: "x" } })).toThrow(/filaments.weight/);
+    expect(() => parseMixConfig({ ...valid, filaments: { ...filamentRecipe, tau: -1 } })).toThrow(/filaments.tau/);
     expect(() => parseMixConfig({ ...valid, glide: -1 })).toThrow(/glide/);
   });
 
@@ -46,11 +47,21 @@ describe("parseMixConfig", () => {
 
   it("defaults the optional entries, also for single missing fields", () => {
     const parsed = parseMixConfig(valid);
-    expect(parsed.filaments).toEqual(DEFAULT_FILAMENTS);
+    expect(parsed.filaments).toBeNull();
     expect(parsed.pulseScatter).toEqual(DEFAULT_PULSE_SCATTER);
     expect(parsed.glide).toBe(DEFAULT_GLIDE);
-    expect(parseMixConfig({ ...valid, filaments: { weight: 2 } }).filaments).toEqual({ ...DEFAULT_FILAMENTS, weight: 2 });
     expect(parseMixConfig({ ...valid, pulseScatter: { max: 0 } }).pulseScatter).toEqual({ ...DEFAULT_PULSE_SCATTER, max: 0 });
+  });
+
+  it("requires an explicit complete filament recipe, or disables filaments", () => {
+    expect(parseMixConfig({ ...valid, filaments: null }).filaments).toBeNull();
+    expect(parseMixConfig({ ...valid, filaments: filamentRecipe }).filaments).toEqual(filamentRecipe);
+    for (const field of ["bias", "center", "weight", "tau"] as const) {
+      const partial: Partial<typeof filamentRecipe> = { ...filamentRecipe };
+      delete partial[field];
+      expect(() => parseMixConfig({ ...valid, filaments: partial })).toThrow(`filaments.${field} must be a number`);
+    }
+    expect(() => parseMixConfig({ ...valid, filaments: {} })).toThrow(/filaments.bias/);
   });
 });
 
@@ -107,7 +118,7 @@ describe("Mixer filaments", () => {
   });
 
   it("takes each profile as is with tau 0, and drops the filaments without one", () => {
-    const m = new Mixer(recipe({ ...DEFAULT_FILAMENTS, tau: 0 }));
+    const m = new Mixer(recipe({ ...filamentRecipe, tau: 0 }));
     m.apply(zero, [0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 1, "realtime", 0);
     m.apply(zero, [0.7, 0.7, 0.7, 0.7, 0.7, 0.7], 1, "realtime", 0);
     expect(m.filaments).toEqual([0.7, 0.7, 0.7, 0.7, 0.7, 0.7]);
@@ -117,7 +128,7 @@ describe("Mixer filaments", () => {
 });
 
 describe("Mixer glide", () => {
-  const flat = { ...config, channels: { ...config.channels, flow: { ...config.channels.flow, tau: 0 } }, filaments: { ...DEFAULT_FILAMENTS, tau: 0 } };
+  const flat = { ...config, channels: { ...config.channels, flow: { ...config.channels.flow, tau: 0 } }, filaments: { ...filamentRecipe, tau: 0 } };
 
   it("moves a minute record's channels and filaments to their new values over the glide", () => {
     const m = new Mixer(flat, () => 0.5);
