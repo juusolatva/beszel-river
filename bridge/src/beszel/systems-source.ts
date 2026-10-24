@@ -26,21 +26,24 @@ export class SystemsSource {
 
   /** Loads hosts and the last `historyHours` of records, then streams live changes. */
   async start(historyHours = 24): Promise<void> {
+    const onSystem = (event: { action: string; record: SystemRecord }): void =>
+      event.action === "delete" ? this.handlers.removed(event.record.id) : this.handlers.system(event.record);
+    // Changes arriving while the initial lists load are held back, so a /stream snapshot mid-load
+    // cannot seed hosts from `info` before their 24 h history is applied.
+    let heldSystems: { action: string; record: SystemRecord }[] | null = [];
     await this.pb.collection("systems").subscribe<SystemRecord>(
       "*",
-      (event) => (event.action === "delete" ? this.handlers.removed(event.record.id) : this.handlers.system(event.record)),
+      (event) => (heldSystems ? heldSystems.push(event) : onSystem(event)),
       { fields: SYSTEM_FIELDS },
     );
     const systems = await this.pb.collection("systems").getFullList<SystemRecord>({ fields: SYSTEM_FIELDS });
-    for (const system of systems) this.handlers.system(system);
 
-    // Live records arriving while history loads are held back, so everything is handled in time order.
-    let held: SystemStatsRecord[] | null = [];
+    let heldStats: SystemStatsRecord[] | null = [];
     await this.pb.collection("system_stats").subscribe<SystemStatsRecord>(
       "*",
       (event) => {
         if (event.action !== "create") return;
-        if (held) held.push(event.record);
+        if (heldStats) heldStats.push(event.record);
         else this.handlers.stats(event.record);
       },
       { filter: 'type = "1m"', fields: STATS_FIELDS },
@@ -52,9 +55,13 @@ export class SystemsSource {
       fields: STATS_FIELDS,
       batch: 1000,
     });
+    for (const system of systems) this.handlers.system(system);
+    const systemEvents = heldSystems;
+    heldSystems = null;
+    for (const event of systemEvents) onSystem(event);
     for (const record of history) this.handlers.history(record);
-    const live = held.sort((a, b) => a.created.localeCompare(b.created));
-    held = null;
+    const live = heldStats.sort((a, b) => a.created.localeCompare(b.created));
+    heldStats = null;
     for (const record of live) this.handlers.stats(record);
 
     log("info", `Loaded ${systems.length} systems and ${history.length} history records`);
