@@ -157,7 +157,11 @@ Environment variables (template: `bridge/.env.example`):
 | `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
-Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`. The optional `filaments` entry (`bias`, `center`, `weight`, `tau`; defaults 0, 0, 1, 3 s) maps each value of the per-core profile the same way; files without it use the defaults. The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5 s, 2, 2, 50 s) spreads the pulse of each minute record out, and the optional `glide` (default 60 s) its other channels, see "Minute records"; each missing field takes its default. `window` must leave room for the later pulses, at least `max` × (`pulseDecay` + 2 s), and `jitter` + `window` must be at most 55 s, so every pulse fires before the next record. `"jitter": 0`, `"max": 0` and `"glide": 0` together apply each minute record at once, with one pulse, as before the scattering.
+Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
+
+The optional `filaments` entry maps each value of the per-core profile the same way. Omitted or `null` disables filaments; enabling them requires explicit finite `bias`, `center`, `weight` and `tau` values, with `tau >= 0`. Incomplete sections fail startup. There is no implicit recipe: the old defaults (0, 0, 1, 3 s) preserved normalized CPU percentages, and sorting public filament arrays recovered profile extrema despite daily shuffling. Smoothing and rounding reduce precision but do not hide sustained CPU levels. An explicit recipe is an operator choice to publish a transformed CPU profile, not a confidentiality guarantee; leave it disabled if those levels must remain private. Existing partial recipes must be completed deliberately or removed; copies of the earlier example need `"center": 0` added. The example includes every field and its public weights must still be changed before production use.
+
+The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5 s, 2, 2, 50 s) spreads the pulse of each minute record out, and the optional `glide` (default 60 s) its other channels, see "Minute records"; each missing field takes its default. `window` must leave room for the later pulses, at least `max` × (`pulseDecay` + 2 s), and `jitter` + `window` must be at most 55 s, so every pulse fires before the next record. `"jitter": 0`, `"max": 0` and `"glide": 0` together apply each minute record at once, with one pulse, as before the scattering.
 
 ### Pipeline
 
@@ -176,7 +180,7 @@ Mixing weights are read from `bridge/mix.json`; when it is missing the bridge lo
    - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
    - Some inputs are changes since the previous sample rather than levels.
    - Weights come from `mix.json`.
-   - `filaments`: each profile value through the `filaments` recipe, smoothed with its `tau`. A host without per-core usage has none.
+   - `filaments`: only with an explicit complete recipe, each profile value through that recipe, smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
 4. **Anonymize:**
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
@@ -211,6 +215,7 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - Then an `update` event after each upstream change, and a `: ping` comment every 15 s so proxies keep the connection open.
   - Sends `X-Accel-Buffering: no`, so nginx streams it even without `proxy_buffering off`.
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
+  - All snapshot, update and heartbeat writes share a 256 KiB per-response queued-byte budget (UTF-8 bytes, including already queued response output). An event that would exceed it closes the response before writing. If `write()` signals backpressure, no further chunks are enqueued for that client until `drain`; heartbeats are skipped and only whether an update was missed is retained. The latest broadcast is shared across clients and sent after drain when needed. A response blocked for 10 s is destroyed and removed from the viewer count exactly once, allowing normal realtime linger cleanup; shutdown also destroys queued responses instead of waiting for a flush. Healthy clients keep receiving updates. Limits are internal `StreamServerOptions` (`maxBufferedBytes`, `drainTimeoutMs`), not environment variables.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
 - Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405; any other target, including `//`, `/x/../stream` and absolute-form ones, gets 404.
 
@@ -238,7 +243,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 | `turbulence` | number 0..1 | Sideways noise strength. |
 | `pulse` | number 0..1 | Burst strength. |
 | `heat` | number 0..1 | Hue drift; 0.5 is neutral. |
-| `filaments` | number[] (optional, length 6) | Per-core activity: the profile resampled to 6 values, mixed and shuffled for the day. Present when the host's agent reports per-core usage; every second with the `realtime` source. Hides the core count. |
+| `filaments` | number[] (optional, length 6) | Per-core activity: the profile resampled to 6 values, mixed and shuffled for the day. Present only with an explicit complete recipe and agent per-core usage; every second with the `realtime` source. The array length does not reveal the core count. |
 
 ## Frontend
 
