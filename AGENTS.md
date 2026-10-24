@@ -21,6 +21,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `.github/` | `workflows/ci.yml` and `dependabot.yml` (updates for the pinned actions). |
 | `.serena/` | Serena's `project.yml` and `memories/`; `cache/` and `project.local.yml` are git-ignored, and `.dockerignore` keeps the directory out of the image. |
+| `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. |
 | `docs/PLAN.md` | Plan. |
 | `docs/images/` | README screenshots: JPEG, 1280 px wide, metadata stripped. |
 
@@ -38,7 +39,7 @@ npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0
 npm run dev:bridge     # tsx watch; needs bridge/.env (template: bridge/.env.example)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes both workspaces' coverage tables to the job summary. Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `typecheck`, `coverage` and `build` on Node 22.12.0 and 24, and writes both workspaces' coverage tables to the job summary. On the Node 24 job it also runs a SonarQube Cloud scan (`SONAR_TOKEN` secret; skipped for forks and Dependabot, whose PRs get no secrets). Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 

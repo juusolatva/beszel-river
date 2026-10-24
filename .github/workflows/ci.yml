@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0 # full history for Sonar blame and new-code detection
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -48,6 +49,25 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           done
       - run: npm run build
+      # SONAR_TOKEN is not available to pull requests from forks or Dependabot. The scan runs once,
+      # on the Node version used in production, with the coverage from this run.
+      - name: Prefix lcov paths with the workspace
+        if: ${{ matrix.node == '24' }}
+        # vitest writes workspace-relative paths into lcov.info; Sonar resolves them from the repo root.
+        run: |
+          for workspace in bridge frontend; do
+            sed -i "s|^SF:|SF:$workspace/|" "$workspace/coverage/lcov.info"
+          done
+      - name: SonarQube Cloud scan
+        if: >-
+          matrix.node == '24' &&
+          (github.event_name == 'push' ||
+           (github.event_name == 'pull_request' &&
+            github.event.pull_request.head.repo.full_name == github.repository &&
+            github.event.pull_request.user.login != 'dependabot[bot]'))
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   deploy:
     runs-on: ubuntu-latest

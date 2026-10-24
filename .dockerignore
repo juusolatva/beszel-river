@@ -11,3 +11,4 @@ frontend/src
 frontend/index.html
 docs
 *.log
+sonar-project.properties
