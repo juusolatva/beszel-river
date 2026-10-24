@@ -155,7 +155,7 @@ Environment variables (template: `bridge/.env.example`):
 | `SOURCE` | `systems` | Adapter: `systems` (60 s updates) or `realtime` (1 s updates while viewers are connected, see "Adapters"). |
 | `BIND_HOST` | `127.0.0.1` | Listen address. |
 | `BIND_PORT` | `8787` | Listen port. |
-| `STREAM_SALT` | (required) | Secret for stream IDs and band order, at least 16 characters. |
+| `STREAM_SALT` | (required) | Secret for stream IDs, band order and band widths, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Mixing weights, relative to the bridge's working directory. |
 
 Mixing weights are read from `bridge/mix.json`; when it is missing the bridge logs a warning and uses `bridge/mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.

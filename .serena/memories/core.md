@@ -30,5 +30,6 @@ Turns live server metrics from a Beszel hub into an abstract upward-flowing WebG
 - Read `mem:conventions` when writing or reviewing TypeScript code, imports, comments, commits, or GitHub Actions workflows.
 - Read `mem:suggested_commands` when running local dev servers, unit tests, builds, or inspecting the SSE stream.
 - Read `mem:task_completion` before finishing any coding, CI, or deployment task to run required verification gates and coverage checks.
+- Read `mem:memory_maintenance` when maintaining, adding, or pruning agent memories.
 - Read `mem:bridge/core` when working in `bridge/` on Beszel hub adapters, metric normalization, channel mixing, anonymization, or the SSE HTTP server.
 - Read `mem:frontend/core` when working in `frontend/` on the WebGL2 renderer, particle simulation, frame sources, URL parameters, or browser testing.
