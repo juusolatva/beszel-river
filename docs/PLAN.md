@@ -211,6 +211,7 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - Sends `X-Accel-Buffering: no`, so nginx streams it even without `proxy_buffering off`.
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
+- A request-target that does not parse as a URL path (`//`, `//x:abc/../stream`) gets 400, whatever the method; other methods get 405, other paths 404.
 
 ## Message format
 
