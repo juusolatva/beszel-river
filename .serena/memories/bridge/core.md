@@ -1,0 +1,24 @@
+# Bridge Module (`bridge/`)
+
+Node service that subscribes to a Beszel (PocketBase) hub, converts host metrics into anonymized `0..1` visual channels, and streams full-state frames over SSE.
+
+## Source Map (`bridge/src/`)
+
+- `main.ts` — Entry point: loads config/mix recipe, wires Beszel source + SSE server, debounces broadcasts (250 ms), and runs the 2 s tick for pulse decay, scattered pulses, and channel gliding.
+- `config.ts` — Parses and validates env vars (`BESZEL_URL`, `BESZEL_EMAIL`/`BESZEL_PASSWORD` or `BESZEL_TOKEN`, `SOURCE`, `BIND_HOST`, `BIND_PORT`, `STREAM_SALT`, `MIX_FILE`).
+- `log.ts` — Timestamped logging with error `cause` chain formatting.
+- `beszel/types.ts` — Beszel collection record type declarations (`systems`, `system_stats`, `rt_metrics`).
+- `beszel/client.ts` — PocketBase login (`auth-with-password` or pre-minted `BESZEL_TOKEN` JWT with expiry check), 6 h `auth-refresh`, and `EventSource` polyfill wiring.
+- `beszel/systems-source.ts` — Default 60 s adapter (`SOURCE=systems`): seeds 24 h of `1m` `system_stats` records without pulses, then subscribes to `systems` and `1m` `system_stats`.
+- `beszel/realtime-source.ts` — Optional 1 s adapter (`SOURCE=realtime`): wraps `systems-source` and subscribes to `rt_metrics` per `up` host on a dedicated second PocketBase client only while `/stream` viewers are connected (plus a 30 s grace period after the last viewer disconnects). Changes subscriptions sequentially so a refused system topic is isolated, dropped, and retried after 60 s.
+- `pipeline/features.ts` — Converts Beszel records to host samples, maintains rolling 24 h `1m` baselines (p95 for network/disk byte rates), normalizes features to `0..1` (`cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`), and resamples sorted per-core busy % into a 6-value profile.
+- `pipeline/mix.ts` — Loads `mix.json` (falling back to `mix.example.json` with a warning), blends features into channels with exponential smoothing (`tau`), maps `filaments`, and handles minute-record `glide` and Poisson `pulseScatter`.
+- `pipeline/anonymize.ts` — Derives 8-hex stream IDs via HMAC-SHA256(`STREAM_SALT`, system ID), shuffles band order daily (`STREAM_SALT` + UTC date), shuffles filament order daily per host, and quantizes band widths.
+- `pipeline/hosts.ts` — Coordinates per-host baseline/mixer state, transitions between 1 s realtime samples (10 s fallback timeout) and `1m` records, and emits rounded `Frame` snapshots.
+- `server.ts` — `node:http` server exposing `GET /stream` (SSE with `retry: 5000`, initial `snapshot`, `update` events, 15 s `: ping`, `X-Accel-Buffering: no`, 500 client cap returning 503 + `Retry-After: 30`) and `GET /healthz` (200 when upstream is healthy, 503 otherwise).
+
+## Bridge Invariants
+
+- **Beszel field boundary:** Beszel renames fields between minor releases. Only `bridge/src/beszel/`, `pipeline/features.ts`, and `pipeline/hosts.ts` may access Beszel record field names; all downstream code works strictly on internal `Sample` and `Features` types.
+- **Cross-tier isolation:** Only `1m` records feed the 24 h baseline; `netChange`, `diskChange`, and rise-based bursts are computed only between two `1m` records or two `realtime` samples, never across tiers.
+- **Unreachable host zero-fill:** Treat thread count `t <= 0` as unknown and temperatures `<= 0` as missing.
