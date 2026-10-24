@@ -8,7 +8,7 @@
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.0. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Screenshots
 
@@ -186,7 +186,7 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
   - `grep 'valid until'`: keeps the line with the date.
 
   After that date the hub rejects the token: a running bridge logs `Beszel connection lost` and the river dries up, and a restarted one does not start with it (`BESZEL_TOKEN expired on …`). Put a new token (see "Bridge setup") in `bridge/.env`, then run the same `up -d` command, which recreates the container with the new value (`docker compose restart` would keep the old one), or `sudo systemctl restart beszel-river-bridge`.
-- **Beszel upgrades:** Beszel renames fields between minor releases, and the bridge is tested with v0.21.0. After a hub upgrade, check that `?debug` still shows changing channel values. A hub image that updates itself (`:latest` with Watchtower or similar) can stop the river without notice; pin a version to upgrade on purpose.
+- **Beszel upgrades:** Beszel renames fields between minor releases, and the bridge is tested with v0.21.1. After a hub upgrade, check that `?debug` still shows changing channel values. A hub image that updates itself (`:latest` with Watchtower or similar) can stop the river without notice; pin a version to upgrade on purpose.
 - **Certificate:** `sudo certbot renew --dry-run` checks that automatic renewal works. `renew` renews certificates close to expiry; `--dry-run` uses Let's Encrypt's test server and saves nothing. Certificates obtained with `--nginx` make certbot reload nginx after each renewal.
 
 ## License
