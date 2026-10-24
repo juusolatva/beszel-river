@@ -1,3 +1,4 @@
+import { request } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Frame } from "@beszel-river/shared";
 import { StreamServer } from "../src/server.js";
@@ -26,6 +27,16 @@ async function read(response: Response, until: RegExp): Promise<string> {
   }
   await reader.cancel();
   return text;
+}
+
+/** Sends `path` as the request-target as is; fetch would normalize it first. */
+function rawStatus(base: string, path: string, method = "GET"): Promise<number> {
+  return new Promise((resolve, reject) => {
+    request(base, { path, method }, (response) => {
+      response.resume();
+      resolve(response.statusCode!);
+    }).on("error", reject).end();
+  });
 }
 
 describe("StreamServer", () => {
@@ -78,5 +89,12 @@ describe("StreamServer", () => {
     const base = await start();
     expect((await fetch(`${base}/`)).status).toBe(404);
     expect((await fetch(`${base}/stream`, { method: "POST" })).status).toBe(405);
+  });
+
+  it("answers 400 to request-targets that do not parse and keeps serving", async () => {
+    const base = await start();
+    for (const path of ["//", "//:/x", "//x:abc/../stream"]) expect(await rawStatus(base, path)).toBe(400);
+    expect(await rawStatus(base, "//", "POST")).toBe(400);
+    expect((await fetch(`${base}/healthz`)).status).toBe(200);
   });
 });
