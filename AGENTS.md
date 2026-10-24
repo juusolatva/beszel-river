@@ -22,6 +22,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `.github/` | `workflows/ci.yml` and `dependabot.yml` (updates for the pinned actions). |
 | `.serena/` | Serena's `project.yml` and `memories/`; `cache/` and `project.local.yml` are git-ignored, and `.dockerignore` keeps the directory out of the image. |
 | `docs/PLAN.md` | Plan. |
+| `docs/images/` | README screenshots: JPEG, 1280 px wide, metadata stripped. |
 
 ## Commands
 
