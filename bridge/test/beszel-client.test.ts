@@ -1,45 +1,35 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BeszelClient } from "../src/beszel/client.js";
+import { log } from "../src/log.js";
 
 vi.mock("../src/log.js", () => ({ log: vi.fn() }));
+
+const REFRESH_MS = 6 * 60 * 60 * 1000;
 
 describe("BeszelClient", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
   });
 
-  describe("refresh fallback", () => {
-    it("calls login when authRefresh fails", async () => {
-      const client = new BeszelClient("http://localhost:8090", { kind: "password", email: "test@example.com", password: "password" });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-      const authRefreshMock = vi.fn().mockRejectedValue(new Error("authRefresh failed"));
-      const loginSpy = vi.spyOn(client, "login").mockResolvedValue();
+  it("logs in again when token refresh fails, and logs when re-login also fails", async () => {
+    const client = new BeszelClient("http://localhost:8090", { kind: "password", email: "bridge@example.com", password: "pw" });
+    const authRefresh = vi.fn().mockRejectedValue(new Error("authRefresh failed"));
+    const authWithPassword = vi.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("login failed"));
+    client.pb.collection = vi.fn().mockReturnValue({ authRefresh, authWithPassword });
 
-      // Access the inner pb collection mock
-      client.pb.collection = vi.fn().mockReturnValue({ authRefresh: authRefreshMock });
+    client.keepAlive();
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    expect(authRefresh).toHaveBeenCalledTimes(1);
+    expect(authWithPassword).toHaveBeenCalledWith("bridge@example.com", "pw");
 
-      // Call the private refresh method
-      await (client as any).refresh();
-
-      expect(authRefreshMock).toHaveBeenCalled();
-      expect(loginSpy).toHaveBeenCalled();
-    });
-
-    it("logs error when login also fails", async () => {
-      const { log } = await import("../src/log.js");
-      const client = new BeszelClient("http://localhost:8090", { kind: "password", email: "test@example.com", password: "password" });
-
-      const authRefreshMock = vi.fn().mockRejectedValue(new Error("authRefresh failed"));
-      const loginSpy = vi.spyOn(client, "login").mockRejectedValue(new Error("login failed"));
-
-      client.pb.collection = vi.fn().mockReturnValue({ authRefresh: authRefreshMock });
-
-      await (client as any).refresh();
-
-      expect(authRefreshMock).toHaveBeenCalled();
-      expect(loginSpy).toHaveBeenCalled();
-      expect(log).toHaveBeenCalledWith("warn", "Token refresh failed, logging in again", expect.any(Error));
-      expect(log).toHaveBeenCalledWith("error", "Login failed", expect.any(Error));
-    });
+    await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    expect(log).toHaveBeenCalledWith("warn", "Token refresh failed, logging in again", expect.any(Error));
+    expect(log).toHaveBeenCalledWith("error", "Login failed", expect.any(Error));
+    await client.close();
   });
 });
