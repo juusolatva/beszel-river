@@ -211,7 +211,7 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - Sends `X-Accel-Buffering: no`, so nginx streams it even without `proxy_buffering off`.
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
-- A request-target that does not parse as a URL path (`//`, `//x:abc/../stream`) gets 400, whatever the method; other methods get 405, other paths 404.
+- Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405; any other target, including `//`, `/x/../stream` and absolute-form ones, gets 404.
 
 ## Message format
 
@@ -297,7 +297,7 @@ Commands and steps are in README, "Deployment".
 - **nginx** (`deploy/nginx/river.conf`, own server block):
   - HTTP → HTTPS redirect; HTTP/2, because HTTP/1.1 browsers open at most 6 connections per host and every open tab holds one stream.
   - `location = /stream` proxied to `127.0.0.1:8787` with:
-    - `proxy_pass` naming the URI `/stream`: nginx forwards its normalized path, not the client's raw request-target.
+    - `proxy_pass` naming the URI `/stream`: nginx forwards its normalized path, not the client's raw request-target, so the bridge always sees `/stream` from here.
     - `proxy_buffering off`: send events immediately.
     - `proxy_http_version 1.1` and `proxy_set_header Connection ""`: keep the upstream connection open.
     - `proxy_read_timeout 1h`: do not cut quiet streams.
