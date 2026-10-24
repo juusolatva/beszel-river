@@ -54,6 +54,7 @@ AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
 .serena/                      Serena project config and agent memories
 docs/PLAN.md                  this plan
+docs/images/                  README screenshots
 shared/src/index.ts           message types
 bridge/
   .env.example                configuration template
