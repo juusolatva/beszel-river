@@ -6,11 +6,12 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 
 ## Screenshots
 
-Two moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order and widths change daily from a secret salt, so the picture does not tell which server is which.
+Four moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order and widths change daily from a secret salt, so the picture does not tell which server is which.
 
 | | |
 |---|---|
-| ![River of rainbow-coloured particle trails in several bands flowing upwards on a black background](docs/images/river1.jpg) | ![The same river at another moment, with different hues and band widths](docs/images/river2.jpg) |
+| ![River of rainbow-coloured particle trails in four bands flowing upwards on a black background, two dense on the left and two sparser on the right](docs/images/river1.jpg) | ![The same river with brighter, denser bands and longer trails on the right](docs/images/river2.jpg) |
+| ![Four distinct, fast-flowing bands with long trails in violet, orange, cyan and gold](docs/images/river3.jpg) | ![Four wide bands braiding together across the canvas in rose, cyan, blue and green](docs/images/river4.jpg) |
 
 ## Layout
 
