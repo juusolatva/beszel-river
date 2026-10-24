@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Features } from "../src/pipeline/features.js";
-import { DEFAULT_GLIDE, DEFAULT_PULSE_SCATTER, loadMixConfig, Mixer, parseMixConfig, TICK_S, type MixConfig } from "../src/pipeline/mix.js";
+import { DEFAULT_GLIDE, DEFAULT_PULSE_SCATTER, FILAMENT_JITTER, loadMixConfig, Mixer, parseMixConfig, TICK_S, type MixConfig } from "../src/pipeline/mix.js";
 
 const zero: Features = { cpu: 0, mem: 0, net: 0, netChange: 0, disk: 0, diskChange: 0, load: 0, burst: 0, txShare: 0.5, temp: 0.5 };
 const filamentRecipe = { bias: 0, center: 0, weight: 1, tau: 3 };
@@ -108,7 +108,7 @@ describe("Mixer filaments", () => {
   const recipe = (filaments: MixConfig["filaments"]): MixConfig => ({ ...config, filaments });
 
   it("applies the recipe to the first profile, then smooths with tau", () => {
-    const m = new Mixer(recipe({ bias: 0.1, center: 0.5, weight: 2, tau: 5 }));
+    const m = new Mixer(recipe({ bias: 0.1, center: 0.5, weight: 2, tau: 5 }), () => 0.5);
     expect(m.filaments).toBeNull();
     m.apply(zero, [0, 0.5, 0.6, 0.9, 1, 1], 1, "realtime", 0);
     expect(m.filaments?.map((f) => +f.toFixed(6))).toEqual([0, 0.1, 0.3, 0.9, 1, 1]);
@@ -118,12 +118,21 @@ describe("Mixer filaments", () => {
   });
 
   it("takes each profile as is with tau 0, and drops the filaments without one", () => {
-    const m = new Mixer(recipe({ ...filamentRecipe, tau: 0 }));
+    const m = new Mixer(recipe({ ...filamentRecipe, tau: 0 }), () => 0.5);
     m.apply(zero, [0.2, 0.2, 0.2, 0.2, 0.2, 0.2], 1, "realtime", 0);
     m.apply(zero, [0.7, 0.7, 0.7, 0.7, 0.7, 0.7], 1, "realtime", 0);
     expect(m.filaments).toEqual([0.7, 0.7, 0.7, 0.7, 0.7, 0.7]);
     m.apply(zero, null, 1, "realtime", 0);
     expect(m.filaments).toBeNull();
+  });
+
+  it("jitters each filament within ±FILAMENT_JITTER before clamping, breaking linear core spacing", () => {
+    const r = [0, 0.2, 0.4, 0.6, 0.8, 1];
+    let i = 0;
+    const m = new Mixer(recipe({ ...filamentRecipe, tau: 0 }), () => r[i++ % r.length]);
+    m.apply(zero, [0.2, 0.3, 0.4, 0.5, 0.6, 0.7], 1, "realtime", 0);
+    const expected = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7].map((v, j) => v + (r[j] * 2 - 1) * FILAMENT_JITTER);
+    expect(m.filaments?.map((f) => +f.toFixed(6))).toEqual(expected.map((f) => +f.toFixed(6)));
   });
 });
 

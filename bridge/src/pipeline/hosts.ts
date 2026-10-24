@@ -139,7 +139,6 @@ export class HostTable {
 
   /** Paused hosts are left out; the rest are anonymized and ordered for the day. */
   frame(now: Date): Frame {
-    const threadCounts = new Map<string, number>();
     const systemIds: string[] = [];
     const byId = new Map<string, Host>();
     const timeMs = now.getTime();
@@ -154,18 +153,15 @@ export class HostTable {
         this.mixSample(host, sample, FIRST_SAMPLE_DT, null, "seed", timeMs);
       }
 
-      if (host.threads) {
-        threadCounts.set(host.systemId, host.threads);
-      }
       systemIds.push(host.systemId);
       byId.set(host.systemId, host);
     }
 
-    const widths = bandWidths(threadCounts);
+    const widths = bandWidths(this.salt, systemIds, now);
     const order = bandOrder(this.salt, systemIds, now);
     const streams = order.map((systemId): Stream => {
       const host = byId.get(systemId) as Host;
-      const stream: Stream = { id: host.streamId, alive: host.status === "up", width: widths.get(systemId) ?? 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+      const stream: Stream = { id: host.streamId, alive: host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
       // Three decimals is plenty for the visuals and keeps raw precision out of the payload.
       for (const channel of MIXED) stream[channel] = round3(host.mixer.values[channel]);
       const filaments = host.mixer.filaments;
