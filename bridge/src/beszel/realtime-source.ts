@@ -44,7 +44,7 @@ export class RealtimeSource {
     for (const systemId of wanted) {
       const triedAt = this.refused.get(systemId);
       if (this.subscriptions.has(systemId) || (triedAt !== undefined && now - triedAt < RETRY_MS)) continue;
-      const pending = this.enqueue(() => this.subscribe(systemId)).then((unsubscribe) => {
+      const pending = this.enqueue(() => this.subscribe(systemId, now)).then((unsubscribe) => {
         if (!unsubscribe && this.subscriptions.get(systemId) === pending) this.subscriptions.delete(systemId);
         return unsubscribe;
       });
@@ -61,7 +61,7 @@ export class RealtimeSource {
     return run;
   }
 
-  private async subscribe(systemId: string): Promise<UnsubscribeFunc | null> {
+  private async subscribe(systemId: string, now: number): Promise<UnsubscribeFunc | null> {
     try {
       const unsubscribe = await this.pb.realtime.subscribe(
         TOPIC,
@@ -76,7 +76,7 @@ export class RealtimeSource {
       // The SDK keeps a refused topic and would resend it with every later change, failing them all.
       await this.pb.realtime.unsubscribeByPrefix(topicKey(systemId)).catch(() => undefined);
       if (!this.refused.has(systemId)) log("warn", `Realtime subscription refused, retrying every ${RETRY_MS / 1000} s`, error);
-      this.refused.set(systemId, Date.now());
+      this.refused.set(systemId, now);
       return null;
     }
   }
