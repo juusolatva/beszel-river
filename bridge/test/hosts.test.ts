@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { SystemRecord, SystemStatsRecord } from "../src/beszel/types.js";
-import { streamId } from "../src/pipeline/anonymize.js";
+import { bandWidths, streamId } from "../src/pipeline/anonymize.js";
 import { coreProfile } from "../src/pipeline/features.js";
 import { HostTable, REALTIME_STALE_MS } from "../src/pipeline/hosts.js";
 import { loadMixConfig, parseMixConfig } from "../src/pipeline/mix.js";
@@ -108,9 +108,17 @@ describe("HostTable", () => {
     // As sent by Beszel 0.21.0 for a system it cannot reach.
     table.upsertSystem(system("unreachable", "down", { dt: 0, bb: 0, la: [0, 0, 0], t: 0, cpu: 0, mp: 0 }));
     const streams = new Map(table.frame(now).streams.map((s) => [s.id, s]));
-    expect(streams.get(streamId(salt, "unreachable"))).toMatchObject({ alive: false, width: 0.5, heat: 0.5 });
-    expect(streams.get(streamId(salt, "big"))?.width).toBe(1);
-    expect(streams.get(streamId(salt, "small"))?.width).toBe(0);
+    expect(streams.get(streamId(salt, "unreachable"))).toMatchObject({ alive: false, heat: 0.5 });
+  });
+
+  it("takes band widths from the day's seed, not from thread counts", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("big", "up", { t: 32 }));
+    table.upsertSystem(system("small", "up", { t: 2 }));
+    table.upsertSystem(system("unknown", "up", null));
+    const widths = bandWidths(salt, ["big", "small", "unknown"], now);
+    const streams = new Map(table.frame(now).streams.map((s) => [s.id, s.width]));
+    for (const id of ["big", "small", "unknown"]) expect(streams.get(streamId(salt, id))).toBe(widths.get(id));
   });
 
   it("scatters a minute record's pulse over the following minute", () => {
@@ -244,7 +252,7 @@ describe("HostTable realtime", () => {
   });
 
   it("sends six filaments from per-core usage, in a daily order, and none without it", () => {
-    const table = new HostTable(salt, mix);
+    const table = new HostTable(salt, mix, () => 0.5);
     table.upsertSystem(system("a", "up", null));
     table.upsertSystem(system("b", "up", null));
     table.addRealtime("a", { cpu: 50, cpus: [10, 90, 35, 70] }, t0);
