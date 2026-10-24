@@ -45,12 +45,19 @@ describe("filamentOrder", () => {
 });
 
 describe("bandWidths", () => {
-  it("quantizes a log scale between the smallest and largest host", () => {
-    const widths = bandWidths(new Map([["a", 2], ["b", 4], ["c", 8], ["d", 32]]));
-    expect([...widths.values()]).toEqual([0, 0.25, 0.5, 1]);
+  const ids = Array.from({ length: 40 }, (_, i) => `system${i}`);
+  const day = (d: string) => new Date(`${d}T12:00:00Z`);
+
+  it("gives every host one of five steps, stable within a UTC day", () => {
+    const widths = bandWidths(salt, ids, day("2026-10-22"));
+    expect([...widths.keys()]).toEqual(ids);
+    expect(new Set(widths.values())).toEqual(new Set([0, 0.25, 0.5, 0.75, 1]));
+    expect(bandWidths(salt, ids, new Date("2026-10-22T23:59:00Z"))).toEqual(widths);
   });
 
-  it("is 0.5 when all hosts are equal", () => {
-    expect([...bandWidths(new Map([["a", 4], ["b", 4]])).values()]).toEqual([0.5, 0.5]);
+  it("changes across days and with the salt", () => {
+    const widths = (s: string, d: string) => [...bandWidths(s, ids, day(d)).values()].join();
+    expect(widths(salt, "2026-10-23")).not.toBe(widths(salt, "2026-10-22"));
+    expect(widths(`${salt}x`, "2026-10-22")).not.toBe(widths(salt, "2026-10-22"));
   });
 });

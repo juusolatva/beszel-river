@@ -6,7 +6,7 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 
 ## Screenshots
 
-Two moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order changes daily and widths are quantized, so the picture does not tell which server is which.
+Two moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order and widths change daily from a secret salt, so the picture does not tell which server is which.
 
 | | |
 |---|---|

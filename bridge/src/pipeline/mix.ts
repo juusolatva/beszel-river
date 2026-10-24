@@ -18,8 +18,10 @@ export interface Recipe {
 }
 
 /**
- * filament = clamp01(bias + weight × (core − center)), smoothed with time constant `tau` seconds, where
- * `core` is one value of the resampled per-core profile (0..1).
+ * filament = clamp01(bias + weight × (core − center) + jitter), smoothed with time constant `tau`
+ * seconds, where `core` is one value of the resampled per-core profile (0..1) and `jitter` is
+ * uniform in [−`FILAMENT_JITTER`, +`FILAMENT_JITTER`] so hosts with < 6 cores do not leave exact
+ * linear interpolation spacings in the public array.
  */
 export interface FilamentRecipe {
   bias: number;
@@ -27,6 +29,9 @@ export interface FilamentRecipe {
   weight: number;
   tau: number;
 }
+
+/** Half-range of random jitter added to each raw filament value before smoothing. */
+export const FILAMENT_JITTER = 0.025;
 
 /**
  * How the pulse p of a minute record is spread out, so hosts do not all flash at the top of the minute
@@ -251,7 +256,8 @@ export class Mixer {
     const previous = this.filaments?.length === profile.length ? this.filaments : null;
     const k = previous && tau > 0 ? 1 - Math.exp(-Math.max(dt, 0) / tau) : 1;
     this.filaments = profile.map((core, i) => {
-      const raw = clamp01(bias + weight * (core - center));
+      const jitter = (this.random() * 2 - 1) * FILAMENT_JITTER;
+      const raw = clamp01(bias + weight * (core - center) + jitter);
       return previous ? previous[i] + (raw - previous[i]) * k : raw;
     });
   }
