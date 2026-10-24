@@ -36,5 +36,5 @@ const WIDTH_STEPS = 4;
  */
 export function bandWidths(salt: string, systemIds: readonly string[], now: Date): Map<string, number> {
   const day = now.toISOString().slice(0, 10);
-  return new Map(systemIds.map((id) => [id, (parseInt(hmac(salt, `${day}:${id}:width`).slice(0, 8), 16) % (WIDTH_STEPS + 1)) / WIDTH_STEPS]));
+  return new Map(systemIds.map((id) => [id, (Number.parseInt(hmac(salt, `${day}:${id}:width`).slice(0, 8), 16) % (WIDTH_STEPS + 1)) / WIDTH_STEPS]));
 }
