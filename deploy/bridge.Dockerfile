@@ -10,7 +10,7 @@ COPY package.json package-lock.json .npmrc ./
 COPY shared/package.json shared/
 COPY bridge/package.json bridge/
 COPY frontend/package.json frontend/
-RUN npm ci -w @beszel-river/bridge --include-workspace-root
+RUN npm ci -w @beszel-river/bridge --include-workspace-root --ignore-scripts
 COPY tsconfig.base.json ./
 COPY shared/ shared/
 COPY bridge/ bridge/

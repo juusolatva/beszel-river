@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       # Runs the tests with coverage; fails when a threshold in bridge/ or frontend/vitest.config.ts is not met.
       - run: npm run coverage
