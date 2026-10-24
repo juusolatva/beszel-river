@@ -4,10 +4,10 @@ Static Vite + raw WebGL2 application that renders `Frame` streams as an upward r
 
 ## Source Map (`frontend/src/`)
 
-- `main.ts` — Entry point: selects `StreamSource` or `DemoSource` (with dev fallback to demo on connection error), manages tab visibility pause/resume, and drives the `requestAnimationFrame` loop.
+- `main.ts` — Entry point: selects `StreamSource` or `DemoSource` (with dev fallback to demo on connection error), manages tab visibility pause/resume, marks all streams offline (dry up) after 20 s without a connection, and drives the `requestAnimationFrame` loop.
 - `config.ts` — Visual constants (`LOOK`) and URL query parameter parser (`?demo`, `?debug`, `?streams=N`, `?interval=MS`, `?particles=N`, `?seed=N`).
 - `source/source.ts` — `FrameSource` interface.
-- `source/stream.ts` — `StreamSource` (`EventSource` on relative URL `"stream"`, exponential reconnect backoff 5 s → 60 s, immediate retry on `online`, 20 s stale-connection drain) and `parseFrame` validator (`v === 1`, channels clamped to `0..1`, `filaments` kept only when length is 6).
+- `source/stream.ts` — `StreamSource` (`EventSource` on relative URL `"stream"`, exponential reconnect backoff 5 s → 60 s, immediate retry on `online`) and `parseFrame` validator (`v === 1`, channels clamped to `0..1`, `filaments` kept only when length is 6).
 - `source/demo.ts` — `DemoSource` procedural channel and filament generator.
 - `sim/streams.ts` — Per-stream exponential channel easing, soft-edged braiding band layout, and stream lifecycle (ease-in, offline grey/thinning, removal drain).
 - `sim/particles.ts` — Fixed-size CPU particle pool stored in `Float32Array`s; handles bottom-edge band/filament lane spawning, curl-noise turbulence, and ±18° heading clamp.

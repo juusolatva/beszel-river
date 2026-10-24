@@ -9,6 +9,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 - `docs/PLAN.md` is the source of truth for design, configuration, message format and milestones. Read the relevant section before changing behaviour, and update it in the same change when the behaviour, configuration or file layout changes.
 - `README.md` holds setup, deployment and maintenance. Update it when commands, environment variables, URL parameters or deployment files change; new environment variables also go in `bridge/.env.example`.
 - Milestone status is the checklist under "Milestones" in `docs/PLAN.md`. Tick a milestone only when its "Done when" condition has been checked, and note how it was checked.
+- `.serena/memories/` holds dense notes for agents using Serena, starting from `core.md`. They repeat facts from this file and the code (source maps, constants, commands), so update them in the same change when those facts change.
 
 ## Layout
 
@@ -19,6 +20,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. Tests of the pure modules in `frontend/test/`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `.github/` | `workflows/ci.yml` and `dependabot.yml` (updates for the pinned actions). |
+| `.serena/` | Serena's `project.yml` and `memories/`; `cache/` and `project.local.yml` are git-ignored, and `.dockerignore` keeps the directory out of the image. |
 | `docs/PLAN.md` | Plan. |
 
 ## Commands
