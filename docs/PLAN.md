@@ -297,6 +297,7 @@ Commands and steps are in README, "Deployment".
 - **nginx** (`deploy/nginx/river.conf`, own server block):
   - HTTP → HTTPS redirect; HTTP/2, because HTTP/1.1 browsers open at most 6 connections per host and every open tab holds one stream.
   - `location = /stream` proxied to `127.0.0.1:8787` with:
+    - `proxy_pass` naming the URI `/stream`: nginx forwards its normalized path, not the client's raw request-target.
     - `proxy_buffering off`: send events immediately.
     - `proxy_http_version 1.1` and `proxy_set_header Connection ""`: keep the upstream connection open.
     - `proxy_read_timeout 1h`: do not cut quiet streams.
