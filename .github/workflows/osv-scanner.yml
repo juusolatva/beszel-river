@@ -27,6 +27,7 @@ permissions: {}
 jobs:
   scan-scheduled:
     permissions:
+      actions: read # Required for SARIF upload
       contents: read # Read commit contents
       security-events: write # Upload SARIF file to GitHub code scanning
     if: ${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
@@ -37,6 +38,7 @@ jobs:
         ./
   scan-pr:
     permissions:
+      actions: read # Required for SARIF upload
       contents: read # Read commit contents
       security-events: write # Upload SARIF file to GitHub code scanning
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
