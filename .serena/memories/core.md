@@ -8,7 +8,7 @@ Turns live server metrics from a Beszel hub into an abstract upward-flowing WebG
 - `bridge/` — Node service that ingests Beszel metrics, normalizes/mixes/anonymizes them into abstract channels, and broadcasts SSE frames on `/stream`.
 - `frontend/` — Static Vite + raw WebGL2 client that eases stream channels, simulates particles on the CPU, and renders trails.
 - `deploy/` — Production `bridge.Dockerfile`, `compose.yml`, `compose.host-network.yml`, systemd service unit, and nginx configs (`river.conf`, `river-path.conf`).
-- `.github/` — CI workflow (`workflows/ci.yml`) and Dependabot config for the SHA-pinned actions.
+- `.github/` — CI workflows (`workflows/ci.yml`, `workflows/scorecard.yml`) and Dependabot config for the SHA-pinned actions.
 - `sonar-project.properties` — SonarQube Cloud settings (key `juusolatva_beszel-river`); the Node 24 CI job scans with lcov from both workspaces after prefixing the `SF:` paths.
 - `.serena/` — Serena `project.yml` and these memories (`cache/`, `project.local.yml` git-ignored; excluded from the Docker build context).
 - `docs/images/` — README screenshots (JPEG, 1280 px wide, metadata stripped).
