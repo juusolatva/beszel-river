@@ -79,11 +79,13 @@ jobs:
       - name: Build bridge image
         run: docker build -f deploy/bridge.Dockerfile -t beszel-river-bridge .
       # Catches runtime dependencies missing from the production stage. Without a hub the bridge keeps
-      # retrying the login, but /stream still answers with an empty snapshot.
+      # retrying the login, but /stream still answers with an empty snapshot. Explicitly use the
+      # public recipe here: this isolated smoke test has no real hub or private metrics.
       - name: Smoke-test bridge image
         run: |
           docker run -d --name bridge -p 127.0.0.1:8787:8787 -e BIND_HOST=0.0.0.0 \
-            -e BESZEL_EMAIL=ci@example.com -e BESZEL_PASSWORD=ci -e STREAM_SALT=ci-smoke-test-salt beszel-river-bridge
+            -e BESZEL_EMAIL=ci@example.com -e BESZEL_PASSWORD=ci -e STREAM_SALT=ci-smoke-test-salt \
+            -e MIX_FILE=mix.example.json beszel-river-bridge
           ok=
           for _ in $(seq 30); do
             if curl -sN --max-time 2 http://127.0.0.1:8787/stream | grep -q '^event: snapshot'; then ok=1; break; fi

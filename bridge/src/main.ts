@@ -22,9 +22,7 @@ try {
   process.exit(1);
 }
 
-const mixFile = existsSync(config.mixFile) ? config.mixFile : "mix.example.json";
-if (mixFile !== config.mixFile) log("warn", `${config.mixFile} not found, using ${mixFile}`);
-const hosts = new HostTable(config.salt, loadMixConfig(mixFile));
+const hosts = new HostTable(config.salt, loadMixConfig(config.mixFile));
 const client = new BeszelClient(config.beszelUrl, config.auth);
 let live = false;
 
