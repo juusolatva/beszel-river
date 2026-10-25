@@ -19,7 +19,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. Tests of the pure modules in `frontend/test/`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
-| `.github/` | Workflows (`ci.yml`, `scorecard.yml`) and `dependabot.yml` (updates for the pinned actions). |
+| `.github/` | Workflows (`ci.yml`, `osv-scanner.yml`) and `dependabot.yml` (updates for the pinned actions). |
 | `.serena/` | Serena's `project.yml` and `memories/`; `cache/` and `project.local.yml` are git-ignored, and `.dockerignore` keeps the directory out of the image. |
 | `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. |
 | `docs/PLAN.md` | Plan. |

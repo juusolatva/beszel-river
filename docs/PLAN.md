@@ -19,7 +19,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge and frontend, same versions) | Normalization and mixing are pure functions; coverage thresholds gate the pure modules of both workspaces. The frontend's simulation and renderer are checked in a browser. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci --ignore-scripts` (also in the bridge Dockerfile, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OpenSSF Scorecard workflow runs supply-chain security checks on pushes to main and weekly. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/scorecard.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and audits supply-chain security. A tag can be moved to other code, a SHA cannot. |
+| CI | GitHub Actions: `npm ci --ignore-scripts` (also in the bridge Dockerfile, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
 | Deployment | Bridge in Docker (`node:24-alpine`) next to the hub, or systemd; host nginx serves the static build and proxies `/stream` | See "Deployment". |
 
 ## Architecture
@@ -48,7 +48,7 @@ Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
 
 ```
 .github/workflows/ci.yml         CI
-.github/workflows/scorecard.yml  OpenSSF Scorecard supply-chain security analysis
+.github/workflows/osv-scanner.yml OSV-Scanner dependency vulnerability scanning
 .github/dependabot.yml           monthly updates for the pinned actions
 sonar-project.properties      SonarQube Cloud project settings
 .dockerignore                 keeps secrets and build output out of the image build context
