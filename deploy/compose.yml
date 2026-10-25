@@ -16,8 +16,8 @@ services:
       BIND_PORT: "8787"
       MIX_FILE: mix.json
     volumes:
-      # Required: without it the bridge would run the public template recipe. create_host_path: false
-      # makes a missing file an error instead of Docker creating an empty directory in its place.
+      # Required by the bridge. create_host_path: false makes a missing file an error at Compose
+      # setup instead of Docker creating an empty directory in its place.
       - type: bind
         source: ../bridge/mix.json
         target: /app/bridge/mix.json
