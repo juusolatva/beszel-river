@@ -1,6 +1,7 @@
 # beszel-river
 
 [![CI](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/juusolatva/beszel-river/badge)](https://scorecard.dev/viewer/?repo=github.com/juusolatva/beszel-river)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=coverage)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
 [![License: MIT](https://img.shields.io/github/license/juusolatva/beszel-river)](LICENSE)
@@ -28,7 +29,7 @@ Four moments of the live page. Each vertical band is one server; the bands overl
 | `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `docs/images/` | Screenshots used in this README. |
-| `.github/` | CI workflow and Dependabot config for its actions. |
+| `.github/` | CI workflows (`ci.yml`, `scorecard.yml`) and Dependabot config for their actions. |
 | `sonar-project.properties` | SonarQube Cloud project settings; the CI scan needs the `SONAR_TOKEN` secret. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
 | `.serena/` | [Serena](https://github.com/oraios/serena) project config and memories for coding agents. |
