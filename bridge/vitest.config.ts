@@ -8,11 +8,12 @@ export default defineConfig({
       // Terminal table, the same table as a file for the CI job summary, a browsable report, and
       // lcov.info for SonarQube Cloud.
       reporter: ["text", ["text", { file: "coverage.txt" }], "html", "lcov"],
-      // Only the pure modules are gated. main.ts, log.ts and src/beszel/ do I/O against a live hub
-      // and are checked end to end (see AGENTS.md), with unit tests for some error paths; they still
-      // appear in the report.
+      // Everything but main.ts is gated; src/beszel/ is tested against a fake PocketBase. main.ts only
+      // wires the modules together and is checked end to end against a live hub (see AGENTS.md); it
+      // still appears in the report.
       thresholds: {
-        "src/{config,server}.ts": { statements: 90, branches: 80, functions: 90, lines: 90 },
+        "src/{config,log,server}.ts": { statements: 90, branches: 80, functions: 90, lines: 90 },
+        "src/beszel/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
         "src/pipeline/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
       },
     },

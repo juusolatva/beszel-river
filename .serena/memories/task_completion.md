@@ -5,9 +5,10 @@
    - `npm run coverage`
    - `npm run build`
 2. **Test & Coverage Requirements:**
-   - Add or update unit tests in `bridge/test/` for any change to `bridge/src/config.ts`, `bridge/src/pipeline/**`, or `bridge/src/server.ts`.
-   - Add or update unit tests in `frontend/test/` for any change to `frontend/src/config.ts`, `frontend/src/util/**`, or `parseFrame` (`frontend/src/source/stream.ts`).
-   - `vitest.config.ts` in both workspaces enforces **90% statements/functions/lines and 80% branches** on those pure modules. Never lower thresholds; add tests instead.
+   - Add or update unit tests in `bridge/test/` for any change to `bridge/src/` except `main.ts` (`src/beszel/` uses a fake PocketBase).
+   - Add or update unit tests in `frontend/test/` for any change to `frontend/src/` except `main.ts` and `debug/` (renderer: `test/fake-gl.ts`; `StreamSource`: stubbed `EventSource`/`document` via `vi.stubGlobal`).
+   - New frame fields: extend `bridge/test/privacy.test.ts`.
+   - `vitest.config.ts` in both workspaces enforces **90% statements/functions/lines and 80% branches** on those modules. Never lower thresholds; add tests instead.
 3. **CI Workflow Changes (`.github/`):**
    - Run `actionlint` (with `shellcheck` on `PATH`) and `zizmor --persona=auditor .github`; both must report nothing above informational.
 4. **Deployment File Changes (`deploy/`):**

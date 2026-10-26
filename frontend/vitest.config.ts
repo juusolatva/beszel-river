@@ -8,11 +8,13 @@ export default defineConfig({
       // Terminal table, the same table as a file for the CI job summary, a browsable report, and
       // lcov.info for SonarQube Cloud.
       reporter: ["text", ["text", { file: "coverage.txt" }], "html", "lcov"],
-      // Only the pure modules are gated. The simulation, renderer, sources and debug panel need a
-      // browser and WebGL2 and are checked there (see AGENTS.md); they still appear in the report.
+      // Everything but main.ts and the debug panel is gated. The renderer is tested against a fake
+      // WebGL2 context (test/fake-gl.ts) and StreamSource against stubbed EventSource and document;
+      // how the page looks and performs is still checked in a browser (see AGENTS.md). main.ts and
+      // src/debug/ only build the page and still appear in the report.
       thresholds: {
         "src/config.ts": { statements: 90, branches: 80, functions: 90, lines: 90 },
-        "src/util/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
+        "src/{render,sim,source,util}/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
       },
     },
   },
