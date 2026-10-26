@@ -102,6 +102,27 @@ describe("ParticleSystem", () => {
     expect(b.particles).toBe(particles.count);
   });
 
+  it("drains the river when every stream leaves, and fades a later stream in", () => {
+    const { set, particles, run } = setup(500, stream("a"), stream("b"));
+    run(LOOK.turnoverSeconds * 3);
+
+    set.apply({ v: 1, t: 0, streams: [] });
+    run(LOOK.lifeRange[1] + 30);
+    expect(particles.count).toBe(0);
+    expect(set.slots.some((s) => s.used)).toBe(false);
+
+    // A stream joining the empty river eases in, slower than one present from the first frame.
+    const fromStart = setup(500, stream("c"));
+    fromStart.run(1);
+    set.apply({ v: 1, t: 0, streams: [stream("c")] });
+    run(1);
+    expect(particles.count).toBeGreaterThan(0);
+    expect(particles.count).toBeLessThan(0.75 * fromStart.particles.count);
+    run(LOOK.turnoverSeconds * 3);
+    fromStart.run(LOOK.turnoverSeconds * 3);
+    expect(particles.count).toBeGreaterThan(0.9 * fromStart.particles.count);
+  });
+
   it("scales intensity with intensityScale", () => {
     const one = setup(200, stream("a"));
     const two = setup(200, stream("a"));
