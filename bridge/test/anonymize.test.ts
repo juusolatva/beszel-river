@@ -22,6 +22,10 @@ describe("bandOrder", () => {
     expect(bandOrder(salt, [...ids].reverse(), new Date("2026-10-22T23:00:00Z"))).toEqual(morning);
   });
 
+  it("keeps duplicate IDs", () => {
+    expect(bandOrder(salt, ["system0", "system0", "system1"], new Date("2026-10-22T12:00:00Z")).sort()).toEqual(["system0", "system0", "system1"]);
+  });
+
   it("changes across days", () => {
     const days = ["2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"].map((d) => bandOrder(salt, ids, new Date(`${d}T12:00:00Z`)).join());
     expect(new Set(days).size).toBeGreaterThan(1);

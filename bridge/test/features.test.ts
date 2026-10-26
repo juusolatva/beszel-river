@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Baseline, computeFeatures, coreProfile, FILAMENTS, logRatio, percentile, sampleFromInfo, sampleFromStats } from "../src/pipeline/features.js";
+import { Baseline, clamp01, computeFeatures, coreProfile, FILAMENTS, logRatio, percentile, sampleFromInfo, sampleFromStats } from "../src/pipeline/features.js";
 
 const MB = 1024 * 1024;
 
@@ -138,5 +138,11 @@ describe("computeFeatures", () => {
     expect(computeFeatures(sampleFromStats({ cpu: 45 }), baseline, 1, sampleFromStats({ cpu: 20 })).burst).toBe(0.5);
     expect(computeFeatures(sampleFromStats({ cpu: 20 }), baseline, 1, sampleFromStats({ cpu: 45 })).burst).toBe(0);
     expect(computeFeatures(sampleFromStats({ b: [32 * 1024, 0] }), baseline, 1, sampleFromStats({ b: [0, 0] })).burst).toBe(0.5);
+  });
+});
+
+describe("clamp01", () => {
+  it("clamps to 0..1 and treats NaN as 0", () => {
+    expect([-0.5, 0.25, 1.5, Number.NaN, Infinity, -Infinity].map(clamp01)).toEqual([0, 0.25, 1, 0, 1, 0]);
   });
 });

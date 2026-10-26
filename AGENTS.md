@@ -21,7 +21,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `.github/` | Workflows (`ci.yml`, `osv-scanner.yml`) and `dependabot.yml` (updates for the pinned actions). |
 | `.serena/` | Serena's `project.yml` and `memories/`; `cache/` and `project.local.yml` are git-ignored, and `.dockerignore` keeps the directory out of the image. |
-| `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. |
+| `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. Coverage leaves out both `main.ts` files and `frontend/src/debug/`, the code outside the test scope. |
 | `docs/PLAN.md` | Plan. |
 | `docs/images/` | README screenshots: JPEG, 1280 px wide, metadata stripped. |
 

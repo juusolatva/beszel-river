@@ -60,7 +60,7 @@ export class SystemsSource {
     heldSystems = null;
     for (const event of systemEvents) onSystem(event);
     for (const record of history) this.handlers.history(record);
-    const live = heldStats.sort((a, b) => a.created.localeCompare(b.created));
+    const live = heldStats.toSorted((a, b) => a.created.localeCompare(b.created));
     heldStats = null;
     for (const record of live) this.handlers.stats(record);
 

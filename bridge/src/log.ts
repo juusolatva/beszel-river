@@ -12,7 +12,8 @@ function describe(error: unknown): string {
 }
 
 export function log(level: Level, message: string, error?: unknown): void {
-  const line = `${new Date().toISOString()} ${level.toUpperCase()} ${message}${error === undefined ? "" : `: ${describe(error)}`}`;
+  const cause = error === undefined ? "" : `: ${describe(error)}`;
+  const line = `${new Date().toISOString()} ${level.toUpperCase()} ${message}${cause}`;
   if (level === "info") process.stdout.write(line + "\n");
   else process.stderr.write(line + "\n");
 }
