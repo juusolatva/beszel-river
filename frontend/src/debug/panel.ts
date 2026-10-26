@@ -70,7 +70,8 @@ export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
       const box = document.createElement("div");
       box.className = "stream";
       const filaments = stream.filaments ? `\n${"filaments".padEnd(11)}${stream.filaments.map((f) => f.toFixed(2)).join(" ")}` : "";
-      box.textContent = `${stream.id} ${stream.alive ? "alive" : "down"}\n${CHANNELS.map((c) => `${c.padEnd(11)}${stream[c].toFixed(3)}`).join("\n")}${filaments}`;
+      const channels = CHANNELS.map((c) => c.padEnd(11) + stream[c].toFixed(3)).join("\n");
+      box.textContent = `${stream.id} ${stream.alive ? "alive" : "down"}\n${channels}${filaments}`;
       box.style.whiteSpace = "pre";
       return box;
     });

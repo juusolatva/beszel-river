@@ -39,7 +39,7 @@ export function lerp(a: number, b: number, t: number): number {
 }
 
 export function clamp(value: number, min: number, max: number): number {
-  return value < min ? min : value > max ? max : value;
+  return Math.min(max, Math.max(min, value));
 }
 
 export function fract(value: number): number {

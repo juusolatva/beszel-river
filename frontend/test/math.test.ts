@@ -51,6 +51,7 @@ describe("ease, lerp, clamp, fract", () => {
     expect(clamp(-5, 0, 10)).toBe(0);
     expect(clamp(5, 0, 10)).toBe(5);
     expect(clamp(15, 0, 10)).toBe(10);
+    expect(clamp(-Infinity, 0, 10)).toBe(0);
     expect(fract(2.25)).toBe(0.25);
     expect(fract(-2.25)).toBe(0.75);
   });

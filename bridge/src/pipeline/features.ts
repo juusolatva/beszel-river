@@ -115,7 +115,9 @@ export function percentile(values: readonly number[], p: number): number {
 }
 
 export function clamp01(value: number): number {
-  return value < 0 ? 0 : value > 1 ? 1 : Number.isFinite(value) ? value : 0;
+  // NaN counts as 0; ±Infinity clamps like any other number.
+  if (Number.isNaN(value)) return 0;
+  return Math.min(1, Math.max(0, value));
 }
 
 /**

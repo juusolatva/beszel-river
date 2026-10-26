@@ -13,7 +13,7 @@ export function streamId(salt: string, systemId: string): string {
 export function bandOrder(salt: string, systemIds: readonly string[], now: Date): string[] {
   const day = now.toISOString().slice(0, 10);
   const keyed = systemIds.map((id) => ({ id, key: hmac(salt, `${day}:${id}`) }));
-  return keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).map((k) => k.id);
+  return keyed.toSorted(byKey).map((k) => k.id);
 }
 
 /**
@@ -23,7 +23,7 @@ export function bandOrder(salt: string, systemIds: readonly string[], now: Date)
 export function filamentOrder(salt: string, systemId: string, count: number, now: Date): number[] {
   const day = now.toISOString().slice(0, 10);
   const keyed = Array.from({ length: count }, (_, index) => ({ index, key: hmac(salt, `${day}:${systemId}:filament:${index}`) }));
-  return keyed.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).map((k) => k.index);
+  return keyed.toSorted(byKey).map((k) => k.index);
 }
 
 /** Number of steps between the narrowest and widest band. */
@@ -37,4 +37,10 @@ const WIDTH_STEPS = 4;
 export function bandWidths(salt: string, systemIds: readonly string[], now: Date): Map<string, number> {
   const day = now.toISOString().slice(0, 10);
   return new Map(systemIds.map((id) => [id, (Number.parseInt(hmac(salt, `${day}:${id}:width`).slice(0, 8), 16) % (WIDTH_STEPS + 1)) / WIDTH_STEPS]));
+}
+
+/** Orders by `key` in code-unit order, so the daily order does not depend on the locale. */
+function byKey(a: { key: string }, b: { key: string }): number {
+  if (a.key === b.key) return 0;
+  return a.key < b.key ? -1 : 1;
 }
