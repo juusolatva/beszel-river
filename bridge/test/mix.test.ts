@@ -23,9 +23,12 @@ describe("parseMixConfig", () => {
   });
 
   it("rejects unknown features, missing channels and bad numbers", () => {
+    expect(() => parseMixConfig([valid])).toThrow(/expected an object/);
     expect(() => parseMixConfig({ ...valid, flow: { inputs: { hostname: 1 } } })).toThrow(/not a feature/);
     expect(() => parseMixConfig({ ...valid, heat: undefined })).toThrow(/"heat" is missing/);
+    expect(() => parseMixConfig({ ...valid, density: { inputs: [] } })).toThrow(/density.inputs must be an object/);
     expect(() => parseMixConfig({ ...valid, flow: { inputs: {}, tau: "slow" } })).toThrow(/flow.tau/);
+    expect(() => parseMixConfig({ ...valid, flow: { inputs: {}, tau: -1 } })).toThrow(/flow.tau must be >= 0/);
     expect(() => parseMixConfig({ ...valid, pulseDecay: 0 })).toThrow(/pulseDecay/);
     expect(() => parseMixConfig({ ...valid, filaments: 1 })).toThrow(/filaments must be an object/);
     expect(() => parseMixConfig({ ...valid, filaments: { ...filamentRecipe, weight: "x" } })).toThrow(/filaments.weight/);
