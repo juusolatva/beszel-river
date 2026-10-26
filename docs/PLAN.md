@@ -280,7 +280,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - Additive blending makes overlapping streams glow.
 - **Streams:**
   - Bands overlap with soft edges and braid over time.
-  - A new stream eases in; a stream with `alive = false` thins out and desaturates; a removed stream drains out.
+  - A new stream eases in; a stream with `alive = false` thins out and desaturates; a removed stream drains out. Spawn rates are shared out so the pool turns over at the same pace however many streams there are, but never as if less than one full stream were present, so the river empties when the last stream goes.
 - **Performance and accessibility:**
   - devicePixelRatio is capped at 1.5.
   - The `EventSource` closes while the tab is hidden.

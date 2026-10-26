@@ -6,6 +6,8 @@ import { ease, fract, hashString, lerp } from "../util/math";
 export const MAX_STREAMS = 32;
 /** Filament count in the message format. */
 export const FILAMENTS = 6;
+/** Share of a fully present stream of width 0; bands and spawn shares grow from it with width. */
+export const MIN_SHARE = 0.6;
 
 /** Centre of filament lane `j`, in band half-widths from the centre line. */
 export function laneCenter(j: number): number {
@@ -143,7 +145,7 @@ export class StreamSet {
       const v = slot.vitality;
       slot.speed = LOOK.baseSpeed * lerp(LOOK.speedRange[0], LOOK.speedRange[1], slot.flow) * lerp(0.5, 1, v) * this.motion;
       slot.turbulenceAmp = lerp(LOOK.turbulenceRange[0], LOOK.turbulenceRange[1], slot.turbulence) * this.motion;
-      slot.shareWeight = (0.6 + 0.8 * slot.width) * slot.presence;
+      slot.shareWeight = (MIN_SHARE + 0.8 * slot.width) * slot.presence;
       const pulse = slot.pulse * this.motion * this.motion;
       slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v);
       slot.brightness = (1 + 1.2 * pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
@@ -213,5 +215,5 @@ export class StreamSet {
 
 /** A band's share of the width, before normalizing. */
 function bandWeight(slot: StreamSlot): number {
-  return 0.6 + 0.8 * (slot.latest?.width ?? 0);
+  return MIN_SHARE + 0.8 * (slot.latest?.width ?? 0);
 }

@@ -1,7 +1,7 @@
 import { LOOK } from "../config";
 import { clamp, fract, gaussian, lerp, type Random } from "../util/math";
 import type { FlowField } from "./noise";
-import { laneCenter, type StreamSet } from "./streams";
+import { MIN_SHARE, laneCenter, type StreamSet } from "./streams";
 
 /**
  * Per-instance floats written by `step`, in attribute order:
@@ -66,7 +66,9 @@ export class ParticleSystem {
     if (share <= 0) return;
 
     const { random } = this;
-    const baseRate = this.limit / LOOK.turnoverSeconds / share;
+    // Never below one full stream's share: otherwise the last streams fading out would keep the
+    // whole pool between them, and the river would never drain.
+    const baseRate = this.limit / LOOK.turnoverSeconds / Math.max(share, MIN_SHARE);
     for (let slotIndex = 0; slotIndex < streams.slots.length; slotIndex++) {
       const s = streams.slots[slotIndex];
       if (!s.used) continue;
