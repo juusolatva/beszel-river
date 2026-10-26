@@ -105,51 +105,47 @@ interface Glide {
 }
 
 export function parseMixConfig(json: unknown): MixConfig {
-  const fail = (message: string): never => {
-    throw new Error(`Invalid mix config: ${message}`);
-  };
-  const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-  const number = (v: unknown, path: string, fallback?: number): number => {
-    if (v === undefined && fallback !== undefined) return fallback;
-    return typeof v === "number" && Number.isFinite(v) ? v : fail(`${path} must be a number`);
-  };
-  /** An optional entry of numbers; it and each of its fields default to `defaults`. */
-  const section = <T extends object>(raw: unknown, name: string, defaults: T): T => {
-    if (raw === undefined) return defaults;
-    if (!isObject(raw)) return fail(`${name} must be an object`);
-    return Object.fromEntries(Object.entries(defaults).map(([field, fallback]) => [field, number(raw[field], `${name}.${field}`, fallback as number)])) as T;
-  };
-
   if (!isObject(json)) return fail("expected an object");
   const channels = {} as Record<Mixed, Recipe>;
-  for (const channel of MIXED) {
-    const raw = json[channel];
-    if (!isObject(raw)) return fail(`"${channel}" is missing`);
-    if (!isObject(raw.inputs)) return fail(`${channel}.inputs must be an object`);
-    const inputs: Partial<Record<Feature, number>> = {};
-    for (const [feature, weight] of Object.entries(raw.inputs)) {
-      if (!(FEATURES as readonly string[]).includes(feature)) fail(`${channel}.inputs.${feature} is not a feature (${FEATURES.join(", ")})`);
-      inputs[feature as Feature] = number(weight, `${channel}.inputs.${feature}`);
-    }
-    const tau = number(raw.tau, `${channel}.tau`, 0);
-    if (tau < 0) fail(`${channel}.tau must be >= 0`);
-    channels[channel] = { bias: number(raw.bias, `${channel}.bias`, 0), center: number(raw.center, `${channel}.center`, 0), tau, inputs };
-  }
+  for (const channel of MIXED) channels[channel] = parseRecipe(json[channel], channel);
   const pulseDecay = number(json.pulseDecay, "pulseDecay");
   if (pulseDecay <= 0) fail("pulseDecay must be > 0");
-  let filaments: FilamentRecipe | null = null;
-  if (json.filaments !== undefined && json.filaments !== null) {
-    if (!isObject(json.filaments)) return fail("filaments must be an object");
-    // No compatibility defaults: a known single-metric mapping would disclose CPU percentages.
-    filaments = {
-      bias: number(json.filaments.bias, "filaments.bias"),
-      center: number(json.filaments.center, "filaments.center"),
-      weight: number(json.filaments.weight, "filaments.weight"),
-      tau: number(json.filaments.tau, "filaments.tau"),
-    };
-    if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  const filaments = parseFilamentRecipe(json.filaments);
+  const pulseScatter = parsePulseScatter(json.pulseScatter, pulseDecay);
+  const glide = number(json.glide, "glide", DEFAULT_GLIDE);
+  if (glide < 0) fail("glide must be >= 0");
+  return { channels, filaments, pulseScatter, pulseDecay, glide };
+}
+
+function parseRecipe(raw: unknown, channel: Mixed): Recipe {
+  if (!isObject(raw)) return fail(`"${channel}" is missing`);
+  if (!isObject(raw.inputs)) return fail(`${channel}.inputs must be an object`);
+  const inputs: Partial<Record<Feature, number>> = {};
+  for (const [feature, weight] of Object.entries(raw.inputs)) {
+    if (!(FEATURES as readonly string[]).includes(feature)) fail(`${channel}.inputs.${feature} is not a feature (${FEATURES.join(", ")})`);
+    inputs[feature as Feature] = number(weight, `${channel}.inputs.${feature}`);
   }
-  const pulseScatter = section(json.pulseScatter, "pulseScatter", DEFAULT_PULSE_SCATTER);
+  const tau = number(raw.tau, `${channel}.tau`, 0);
+  if (tau < 0) fail(`${channel}.tau must be >= 0`);
+  return { bias: number(raw.bias, `${channel}.bias`, 0), center: number(raw.center, `${channel}.center`, 0), tau, inputs };
+}
+
+function parseFilamentRecipe(raw: unknown): FilamentRecipe | null {
+  if (raw === undefined || raw === null) return null;
+  if (!isObject(raw)) return fail("filaments must be an object");
+  // No compatibility defaults: a known single-metric mapping would disclose CPU percentages.
+  const filaments = {
+    bias: number(raw.bias, "filaments.bias"),
+    center: number(raw.center, "filaments.center"),
+    weight: number(raw.weight, "filaments.weight"),
+    tau: number(raw.tau, "filaments.tau"),
+  };
+  if (filaments.tau < 0) fail("filaments.tau must be >= 0");
+  return filaments;
+}
+
+function parsePulseScatter(raw: unknown, pulseDecay: number): PulseScatter {
+  const pulseScatter = section(raw, "pulseScatter", DEFAULT_PULSE_SCATTER);
   const { jitter, rate, max, window } = pulseScatter;
   if (jitter < 0) fail("pulseScatter.jitter must be >= 0");
   if (rate < 0) fail("pulseScatter.rate must be >= 0");
@@ -157,9 +153,27 @@ export function parseMixConfig(json: unknown): MixConfig {
   const room = max * (pulseDecay + TICK_S);
   if (window < room) fail(`pulseScatter.window must be >= max × (pulseDecay + ${TICK_S}) = ${room}, the room the later pulses need`);
   if (jitter + window > SCATTER_SPAN_S) fail(`pulseScatter.jitter + pulseScatter.window must be <= ${SCATTER_SPAN_S}, so every pulse fires before the next record`);
-  const glide = number(json.glide, "glide", DEFAULT_GLIDE);
-  if (glide < 0) fail("glide must be >= 0");
-  return { channels, filaments, pulseScatter, pulseDecay, glide };
+  return pulseScatter;
+}
+
+function fail(message: string): never {
+  throw new Error(`Invalid mix config: ${message}`);
+}
+
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function number(v: unknown, path: string, fallback?: number): number {
+  if (v === undefined && fallback !== undefined) return fallback;
+  return typeof v === "number" && Number.isFinite(v) ? v : fail(`${path} must be a number`);
+}
+
+/** An optional entry of numbers; it and each of its fields default to `defaults`. */
+function section<T extends object>(raw: unknown, name: string, defaults: T): T {
+  if (raw === undefined) return defaults;
+  if (!isObject(raw)) return fail(`${name} must be an object`);
+  return Object.fromEntries(Object.entries(defaults).map(([field, fallback]) => [field, number(raw[field], `${name}.${field}`, fallback as number)])) as T;
 }
 
 export function loadMixConfig(path: string): MixConfig {
