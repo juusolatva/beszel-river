@@ -24,6 +24,7 @@ Static Vite + raw WebGL2 application that renders `Frame` streams as an upward r
 - **Zero per-frame allocations:** `src/sim/` and `src/render/` are on the hot path and must never allocate objects, closures, or arrays per particle or per frame; mutate preallocated typed arrays and use scalar locals.
 - **Relative paths:** Keep `base: "./"` in `vite.config.ts` and `"stream"` (no leading slash) in `src/main.ts` so the same build works at `/` and `/river/`.
 - **CSP compliance:** Production nginx sends `default-src 'self'` with only inline styles allowed. Never load cross-origin resources or use inline scripts. In nginx configs, keep every `add_header` at `server` level (adding one inside a `location` block drops server-level headers in that location).
+- **Unit tests run in Node:** `sim/`, `source/` and `render/` are imported directly; `render/` against `test/fake-gl.ts` (constants read as their names, calls recorded, failure switches). They check rules and GL calls, not visuals or speed.
 - **Browser verification:**
   - Use `?debug` and `?seed=N` for repeatable visual checks.
   - Headless Chromium can run WebGL2 in software (~11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`. Because SwiftShader pins all CPU cores, never run it on a host whose live Beszel agent is being measured; replay recorded SSE frames instead.

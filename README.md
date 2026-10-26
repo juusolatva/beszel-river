@@ -24,7 +24,7 @@ Four moments of the live page. Each vertical band is one server; the bands overl
 |---|---|
 | `shared/` | Message types shared by bridge and frontend (type-only). |
 | `bridge/` | Node service: reads the Beszel hub, mixes metrics into abstract channels, serves them over SSE at `/stream`. |
-| `frontend/` | Static WebGL2 page built with Vite; unit tests for its pure modules. |
+| `frontend/` | Static WebGL2 page built with Vite; unit tests for everything but the page setup and debug panel. |
 | `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `docs/images/` | Screenshots used in this README. |
