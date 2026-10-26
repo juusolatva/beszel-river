@@ -107,53 +107,68 @@ export class StreamSet {
 
   update(dt: number, aspect: number): void {
     this.layout(aspect);
-    const { tau } = LOOK;
     for (const slot of this.slots) {
       if (!slot.used || !slot.latest) continue;
-      const s = slot.latest;
-
-      slot.width = ease(slot.width, s.width, tau.width, dt);
-      slot.flow = ease(slot.flow, s.flow, tau.flow, dt);
-      slot.density = ease(slot.density, s.density, tau.density, dt);
-      slot.turbulence = ease(slot.turbulence, s.turbulence, tau.turbulence, dt);
-      slot.heat = ease(slot.heat, s.heat, tau.heat, dt);
-      // Reduced motion (motion < 1) softens and weakens pulse flashes and slows the braid.
-      slot.pulse = ease(slot.pulse, s.pulse, s.pulse > slot.pulse ? tau.pulseRise / this.motion : tau.pulseFall, dt);
-      slot.vitality = ease(slot.vitality, s.alive && !this.offline ? 1 : 0, tau.vitality, dt);
-      slot.braidAngle = (slot.braidAngle + dt * LOOK.braidSpeed * this.motion) % (2 * Math.PI);
-      slot.presence = ease(slot.presence, slot.inFrame ? 1 : 0, tau.presence, dt);
-      const filaments = s.filaments;
-      slot.filamentMix = ease(slot.filamentMix, filaments ? 1 : 0, tau.filamentMix, dt);
-      // Lanes near the edges get less, so the spawn profile keeps the band's soft shape.
-      let laneTotal = 0;
-      for (let j = 0; j < FILAMENTS; j++) {
-        if (filaments) slot.filaments[j] = ease(slot.filaments[j], filaments[j], tau.filaments, dt);
-        const c = laneCenter(j) / LOOK.spawnSpread;
-        laneTotal += Math.exp(-0.5 * c * c) * (LOOK.filamentFloor + slot.filaments[j]);
-        slot.laneWeights[j] = laneTotal;
-      }
-      if (slot.snapLayout) {
-        slot.center = slot.centerTarget;
-        slot.half = slot.halfTarget;
-        slot.snapLayout = false;
-      } else {
-        slot.center = ease(slot.center, slot.centerTarget, tau.layout, dt);
-        slot.half = ease(slot.half, slot.halfTarget, tau.layout, dt);
-      }
-      slot.hueOffset = fract(slot.hueOffset + (slot.heat - 0.5) * 2 * LOOK.hueDriftMax * dt);
-
-      const v = slot.vitality;
-      slot.speed = LOOK.baseSpeed * lerp(LOOK.speedRange[0], LOOK.speedRange[1], slot.flow) * lerp(0.5, 1, v) * this.motion;
-      slot.turbulenceAmp = lerp(LOOK.turbulenceRange[0], LOOK.turbulenceRange[1], slot.turbulence) * this.motion;
-      slot.shareWeight = (MIN_SHARE + 0.8 * slot.width) * slot.presence;
-      const pulse = slot.pulse * this.motion * this.motion;
-      slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v);
-      slot.brightness = (1 + 1.2 * pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
-      slot.chroma = LOOK.chroma * lerp(0.1, 1, v);
-      slot.streakSeconds = lerp(LOOK.streakRange[0], LOOK.streakRange[1], slot.flow);
-
+      this.easeChannels(slot, slot.latest, dt);
+      this.easeLanes(slot, slot.latest.filaments, dt);
+      this.easeLayout(slot, dt);
+      this.derive(slot);
       if (!slot.inFrame && slot.presence < 0.01 && slot.particles === 0) this.release(slot);
     }
+  }
+
+  private easeChannels(slot: StreamSlot, s: Stream, dt: number): void {
+    const { tau } = LOOK;
+    slot.width = ease(slot.width, s.width, tau.width, dt);
+    slot.flow = ease(slot.flow, s.flow, tau.flow, dt);
+    slot.density = ease(slot.density, s.density, tau.density, dt);
+    slot.turbulence = ease(slot.turbulence, s.turbulence, tau.turbulence, dt);
+    slot.heat = ease(slot.heat, s.heat, tau.heat, dt);
+    // Reduced motion (motion < 1) softens and weakens pulse flashes and slows the braid.
+    slot.pulse = ease(slot.pulse, s.pulse, s.pulse > slot.pulse ? tau.pulseRise / this.motion : tau.pulseFall, dt);
+    slot.vitality = ease(slot.vitality, s.alive && !this.offline ? 1 : 0, tau.vitality, dt);
+    slot.braidAngle = (slot.braidAngle + dt * LOOK.braidSpeed * this.motion) % (2 * Math.PI);
+    slot.presence = ease(slot.presence, slot.inFrame ? 1 : 0, tau.presence, dt);
+    slot.hueOffset = fract(slot.hueOffset + (slot.heat - 0.5) * 2 * LOOK.hueDriftMax * dt);
+  }
+
+  /** Eases lane activity towards `filaments` (or holds it without them) and rebuilds the lane weights. */
+  private easeLanes(slot: StreamSlot, filaments: readonly number[] | undefined, dt: number): void {
+    const { tau } = LOOK;
+    slot.filamentMix = ease(slot.filamentMix, filaments ? 1 : 0, tau.filamentMix, dt);
+    // Lanes near the edges get less, so the spawn profile keeps the band's soft shape.
+    let laneTotal = 0;
+    for (let j = 0; j < FILAMENTS; j++) {
+      if (filaments) slot.filaments[j] = ease(slot.filaments[j], filaments[j], tau.filaments, dt);
+      const c = laneCenter(j) / LOOK.spawnSpread;
+      laneTotal += Math.exp(-0.5 * c * c) * (LOOK.filamentFloor + slot.filaments[j]);
+      slot.laneWeights[j] = laneTotal;
+    }
+  }
+
+  /** Moves the band towards its `layout` target; a newly claimed stream starts there. */
+  private easeLayout(slot: StreamSlot, dt: number): void {
+    if (slot.snapLayout) {
+      slot.center = slot.centerTarget;
+      slot.half = slot.halfTarget;
+      slot.snapLayout = false;
+    } else {
+      slot.center = ease(slot.center, slot.centerTarget, LOOK.tau.layout, dt);
+      slot.half = ease(slot.half, slot.halfTarget, LOOK.tau.layout, dt);
+    }
+  }
+
+  /** Motion parameters from the eased channels. */
+  private derive(slot: StreamSlot): void {
+    const v = slot.vitality;
+    slot.speed = LOOK.baseSpeed * lerp(LOOK.speedRange[0], LOOK.speedRange[1], slot.flow) * lerp(0.5, 1, v) * this.motion;
+    slot.turbulenceAmp = lerp(LOOK.turbulenceRange[0], LOOK.turbulenceRange[1], slot.turbulence) * this.motion;
+    slot.shareWeight = (MIN_SHARE + 0.8 * slot.width) * slot.presence;
+    const pulse = slot.pulse * this.motion * this.motion;
+    slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v);
+    slot.brightness = (1 + 1.2 * pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
+    slot.chroma = LOOK.chroma * lerp(0.1, 1, v);
+    slot.streakSeconds = lerp(LOOK.streakRange[0], LOOK.streakRange[1], slot.flow);
   }
 
   private claim(slot: StreamSlot, stream: Stream): void {
