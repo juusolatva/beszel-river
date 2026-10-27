@@ -189,6 +189,7 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Band width = one of 0, 0.25, 0.5, 0.75, 1, seeded by `STREAM_SALT`, the system ID and the UTC date (not from thread counts, which leaked core-count ratios and stayed fixed across days).
+   - Band count: one stream per host that is not paused. The river is drawn from per-host bands, so their number shows on the page whatever the frame holds, and that is accepted. Paused hosts are left out, and IDs, widths and order do not say which host is which.
    - Filament order = shuffle of the profile seeded by `STREAM_SALT`, the system ID and the UTC date, so the busiest core is not always in the same place and hosts differ.
 5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, live minute records scattered, see below) and decays with time constant `pulseDecay` (8 s). A 2 s tick lets pulses decay, fires scattered pulses that are due and moves gliding channels on, and broadcasts when that changed anything visibly (a pulse by 0.005, a gliding value by 0.0005). Channels are rounded to three decimals.
 
