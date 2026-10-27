@@ -9,7 +9,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Area | Choice | Reason |
 |---|---|---|
 | Language | TypeScript everywhere | Bridge and frontend share the message types. |
-| Runtime | Node.js 24 LTS in production (`.nvmrc`), ≥ 22.12.0 supported | `vite` 8 and `eventsource` 5 require ≥ 22.12.0. |
+| Runtime | Node.js 24 LTS in production (`.nvmrc`), ≥ 24.22.1 supported | Production already ran 24, so 22 was tested only in CI. 24.22.1 was the current security release when 22 was dropped; `vite` 8 and `eventsource` 5 alone need 22.12.0. |
 | Repository | npm workspaces: `shared`, `bridge`, `frontend` | One lockfile, no extra tooling. `.npmrc` sets `save-exact=true`. |
 | Compiler | `typescript` 7.0.2 | Type-checking everywhere; emits the bridge build. |
 | Bridge dev runner | `tsx` 4.23.15 | Watch mode without a build step. |
@@ -19,7 +19,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge and frontend, same versions) | Normalization and mixing are pure functions; coverage thresholds gate every module but the entry points and the debug panel, with fakes for PocketBase, WebGL2 and `EventSource`. How the river looks and performs is checked in a browser. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci --ignore-scripts` (also in the bridge Dockerfile, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 22.12.0 and 24; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
+| CI | GitHub Actions: `npm ci --ignore-scripts` (also in the bridge Dockerfile, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 24.22.1, 24 and 26; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
 | Deployment | Bridge in Docker (`node:24-alpine`) next to the hub, or systemd; host nginx serves the static build and proxies `/stream` | See "Deployment". |
 
 ## Architecture
