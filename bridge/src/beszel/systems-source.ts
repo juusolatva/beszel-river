@@ -2,7 +2,8 @@ import type PocketBase from "pocketbase";
 import { log } from "../log.js";
 import type { SystemRecord, SystemStatsRecord } from "./types.js";
 
-const SYSTEM_FIELDS = "id,name,status,info";
+// No `name`: hostnames have no use here, so they are not fetched at all.
+const SYSTEM_FIELDS = "id,status,info";
 const STATS_FIELDS = "id,system,type,created,stats";
 
 export interface SystemsHandlers {

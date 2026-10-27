@@ -10,7 +10,8 @@ const salt = "0123456789abcdef-test";
 const mix = loadMixConfig(fileURLToPath(new URL("../mix.example.json", import.meta.url)));
 const now = new Date("2026-10-22T12:00:00Z");
 
-const system = (id: string, status: SystemRecord["status"] = "up", info: SystemRecord["info"] = { t: 4, cpu: 10, mp: 20 }): SystemRecord => ({ id, name: `host-${id}`, status, info });
+// `name` as from a hub that ignored the fields filter: it must not reach a frame either.
+const system = (id: string, status: SystemRecord["status"] = "up", info: SystemRecord["info"] = { t: 4, cpu: 10, mp: 20 }): SystemRecord => ({ id, status, info, name: `host-${id}` }) as SystemRecord;
 const stats = (systemId: string, created: string, cpu: number): SystemStatsRecord => ({ id: `${systemId}-${created}`, system: systemId, type: "1m", created, stats: { cpu, mp: 50, b: [1000, 1000] } });
 
 describe("HostTable", () => {
