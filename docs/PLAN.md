@@ -316,8 +316,8 @@ Commands and steps are in README, "Deployment".
     - `limit_conn` 8 per client address (each HTTP/2 request counts), answered with 429.
   - `/healthz` is not proxied.
   - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
-  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`.
-  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block.
+  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (one year, this host only).
+  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there.
 
 ## Milestones
 
