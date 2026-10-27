@@ -19,8 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.12.0: minimum in package.json "engines". 24: production version, keep equal to .nvmrc.
-        node: ["22.12.0", "24"]
+        # 24.22.1: minimum in package.json "engines". 24: production version, keep equal to .nvmrc.
+        # 26: the current release line, the next production version.
+        node: ["24.22.1", "24", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

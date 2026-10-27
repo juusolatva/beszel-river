@@ -3,6 +3,7 @@
 [![CI](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/juusolatva/beszel-river/actions/workflows/ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=coverage)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
+[![Node](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjuusolatva%2Fbeszel-river%2Fmain%2Fpackage.json&query=%24.engines.node&label=node&logo=nodedotjs)](package.json)
 [![License: MIT](https://img.shields.io/github/license/juusolatva/beszel-river)](LICENSE)
 
 A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
@@ -35,7 +36,7 @@ Four moments of the live page. Each vertical band is one server; the bands overl
 
 ## Requirements
 
-- Node.js ≥ 22.12.0 (production target: Node 24 LTS, see `.nvmrc`); CI checks both versions
+- Node.js ≥ 24.22.1 (production target: Node 24 LTS, see `.nvmrc`); CI checks 24.22.1, the latest 24 and 26
 - npm
 
 ## Development

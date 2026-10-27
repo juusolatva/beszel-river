@@ -1,8 +1,8 @@
 # Tech Stack & Dependencies
 
 - **Language:** TypeScript `7.0.2` across all workspaces (`"type": "module"`, target `ES2023`, strict mode).
-- **Runtime:** Node.js 24 LTS in production (`.nvmrc`, `node:24-alpine` in Docker); `engines.node` supports `>=22.12.0` (minimum for `vite` 8 and `eventsource` 5).
-  - Do not use Node.js APIs introduced after `22.12.0`.
+- **Runtime:** Node.js 24 LTS in production (`.nvmrc`, `node:24-alpine` in Docker); `engines.node` supports `>=24.22.1` (security floor; `vite` 8 and `eventsource` 5 need only 22.12.0). CI matrix: 24.22.1, 24, 26.
+  - Do not use Node.js APIs introduced after `24.22.1`.
   - Any Node version change must update `package.json`, `.nvmrc`, `.github/workflows/ci.yml`, `README.md`, and the decisions table in `docs/PLAN.md` together.
 - **Package Manager & Workspaces:** npm workspaces (`shared`, `bridge`, `frontend`) with a single root `package-lock.json`.
   - `.npmrc` sets `save-exact=true`; pin exact dependency versions only.
