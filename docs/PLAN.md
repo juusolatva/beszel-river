@@ -349,7 +349,7 @@ Commands and steps are in README, "Deployment".
 - [x] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
   - Done when: with `SOURCE=realtime`, a connected viewer gets an update about every second with `filaments`, one busy core shows in them in the first update after it starts, and the hub stops polling agents 30 s after the last viewer leaves.
   - Verified against a local Beszel v0.21.0 hub and agent (4 threads):
-    - 8 s of `/stream`: 13 events; `filaments` on the up host, none on the down one. A `mix.json` without a `filaments` entry used the defaults.
+    - 8 s of `/stream`: 13 events; `filaments` on the up host, none on the down one. A `mix.json` without a `filaments` entry used the defaults then; it now disables filaments (see "Bridge configuration").
     - Agent CPU time over 20 s: 0 ticks with no viewer ("Realtime metrics off" logged 30 s after the last one left), 5 ticks with one viewer.
     - A busy loop on one core: the busiest filament went 0.017 → 0.31 in the first update after it started and 0.99 within 15 s, while `flow` (30 s smoothing) went 0.006 → 0.09 over the 20 s.
     - Hub restart: realtime samples paused for the 12 s the hub was down and resumed 4 s after it came back.
