@@ -111,7 +111,7 @@ deploy/
 
 ## Data source: Beszel hub
 
-From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
+From the Beszel source on `main` (latest release v0.21.1, 22 Oct 2026):
 
 - **API:** PocketBase REST and realtime at `BESZEL_URL`.
 - **Login:** `POST /api/collections/users/auth-with-password`; renew with `POST /api/collections/users/auth-refresh`.
@@ -122,9 +122,10 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
   - Rates: `cpu`, `mp`, `b` ([sent, recv] bytes/s), `dio` ([read, write] bytes/s).
   - Peaks: `cpum`, `bm`. Only the aggregated tiers (`10m` and up) have them: the hub computes them when averaging (`internal/records/records.go`), and the agent does not send them, so `1m` records leave them out.
   - Also: `la`, `t` (temperatures), `cpub` (CPU breakdown).
+  - Memory: the bridge reads only `mp` (percent). v0.21.1 deprecates the GB fields (`m`, `mu`, `mb`, `mz`, `s`, `su`) in favour of byte arrays under the JSON keys `mem` and `swap`; `mp` is not deprecated. Changelog and diff of v0.21.0 → v0.21.1 checked: no other field the bridge reads changed.
   - A new `1m` record is written per host on each update.
 - **Unreachable hosts:** Beszel zero-fills `info` for systems it cannot reach (`t: 0`, `dt: 0`, …). The bridge treats a thread count of 0 as unknown and temperatures ≤ 0 as missing.
-- **`rt_metrics` realtime topic** (`internal/hub/systems/system_realtime.go`, unchanged between v0.21.0 and `main` on 21 Oct 2026):
+- **`rt_metrics` realtime topic** (`internal/hub/systems/system_realtime.go`, unchanged between v0.21.0 and v0.21.1):
   - Beszel's web UI subscribes with `pb.realtime.subscribe("rt_metrics", callback, { query: { system: id } })` (`internal/site/src/components/routes/system/use-system-data.ts`). The SDK keys each subscription by topic plus options, so one connection can hold one per system.
   - The hub accepts a subscription only for a system it manages and the user may see (`HasUser`, or `SHARE_ALL_SYSTEMS=true`); otherwise the whole subscription request fails with 404.
   - While any `rt_metrics` subscription exists, a hub worker fetches every subscribed system's agent once a second (`CacheTimeMs: 1000`) and pushes `{ stats, info, container, Details, Monitors }`. It stops when the last subscription is removed or its client disconnects. Fetch errors (an agent that is down) send nothing.
