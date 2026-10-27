@@ -77,6 +77,7 @@ bridge/
     pipeline/anonymize.ts     stream IDs, band order, band widths
     pipeline/hosts.ts         per-host state → frames
     server.ts                 GET /stream, GET /healthz
+    upstream.ts               hub connection loss, after a 30 s grace period
   test/                       vitest unit tests
 frontend/
   index.html
@@ -200,7 +201,7 @@ Mapping in the template `bridge/mix.example.json`, checked against a live hub in
 | `turbulence` | Change in network + disk IO | Sideways wiggle |
 | `pulse` | CPU and network rises (and peaks where present) | Spawn waves, brightness flashes |
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
-| `alive` | `status` | Current flows or dries up |
+| `alive` | `status`, and the hub connection | Current flows or dries up |
 
 #### Minute records
 
@@ -221,6 +222,7 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
   - All snapshot, update and heartbeat writes share a 256 KiB per-response queued-byte budget (UTF-8 bytes, including already queued response output). An event that would exceed it closes the response before writing. If `write()` signals backpressure, no further chunks are enqueued for that client until `drain`; heartbeats are skipped and only whether an update was missed is retained. The latest broadcast is shared across clients and sent after drain when needed. A response blocked for 10 s is destroyed and removed from the viewer count exactly once, allowing normal realtime linger cleanup; shutdown also destroys queued responses instead of waiting for a flush. Healthy clients keep receiving updates. Limits are internal `StreamServerOptions` (`maxBufferedBytes`, `drainTimeoutMs`), not environment variables.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
+- **Lost hub connection:** the SDK reconnects by itself, but until it does, or for good once a token has expired, host statuses are stale and the river would keep flowing on its last values. When the login is invalid or the realtime connection is down for 30 s (`UPSTREAM_GRACE_MS`, longer than the 12 s hub restart in M6), every stream is sent with `alive: false` and its pending pulses are dropped, so the river dries up, and the bridge logs a warning. `/healthz` turns 503 at once. When the connection is back, streams take their last known statuses again until the hub's next update, within a minute.
 - Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405; any other target, including `//`, `/x/../stream` and absolute-form ones, gets 404.
 
 ## Message format
@@ -240,7 +242,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Opaque 8-hex-character ID, stable per host. |
-| `alive` | boolean | Host is reporting. |
+| `alive` | boolean | Host is reporting, and the bridge is connected to the hub. |
 | `width` | number 0..1 | Relative band width, quantized. |
 | `flow` | number 0..1 | Upward speed. |
 | `density` | number 0..1 | Spawn rate. |
@@ -372,6 +374,7 @@ Commands and steps are in README, "Deployment".
 |---|---|
 | Beszel changes field names in a minor release. | Field mapping isolated in `bridge/src/beszel/`; note the tested hub version in README; check after hub upgrades. |
 | `rt_metrics` is internal and undocumented. | Optional (M6); `systems` remains the default and keeps running underneath. Its own SDK connection, one subscription change at a time, refused topics dropped; hosts fall back to `1m` records 10 s after their last realtime sample. |
+| Hub unreachable or bridge login expired while running. | After 30 s every stream is sent not alive, so the river dries up instead of flowing on stale values; `/healthz` returns 503 at once. |
 | 1 s polling load on agents. | Subscribe only while viewers are connected. |
 | Public `/stream` abuse. | `limit_conn` per IP; payload is tiny; one upstream subscription regardless of viewers. |
 | Recipe leaks via frontend code. | Mixing happens in the bridge; the frontend only knows channel → visual. |

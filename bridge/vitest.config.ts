@@ -12,7 +12,7 @@ export default defineConfig({
       // wires the modules together and is checked end to end against a live hub (see AGENTS.md); it
       // still appears in the report.
       thresholds: {
-        "src/{config,log,server}.ts": { statements: 90, branches: 80, functions: 90, lines: 90 },
+        "src/{config,log,server,upstream}.ts": { statements: 90, branches: 80, functions: 90, lines: 90 },
         "src/beszel/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
         "src/pipeline/**": { statements: 90, branches: 80, functions: 90, lines: 90 },
       },

@@ -95,6 +95,40 @@ describe("HostTable", () => {
     expect(table.frame(now).streams[0]).toMatchObject({ alive: false, pulse: 0 });
   });
 
+  it("marks every stream not alive while the hub connection is lost, and restores statuses after", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("up"));
+    table.upsertSystem(system("down", "down"));
+    table.upsertSystem(system("paused", "paused"));
+    const alive = () => Object.fromEntries(table.frame(now).streams.map((s) => [s.id, s.alive]));
+    const before = alive();
+
+    expect(table.setUpstream(false)).toBe(true);
+    expect(alive()).toEqual({ [streamId(salt, "up")]: false, [streamId(salt, "down")]: false });
+    expect(table.setUpstream(false)).toBe(false);
+    expect(table.setUpstream(true)).toBe(true);
+    expect(alive()).toEqual(before);
+    expect(table.setUpstream(true)).toBe(false);
+  });
+
+  it("reports no frame change for a lost hub connection when no stream was alive", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("down", "down"));
+    expect(table.setUpstream(false)).toBe(false);
+    expect(table.setUpstream(true)).toBe(false);
+  });
+
+  it("drops pending pulses when the hub connection is lost", () => {
+    const t0 = Date.parse("2026-10-22T12:00:00Z");
+    const table = new HostTable(salt, { ...mix, glide: 0 }, () => 0.5);
+    table.upsertSystem(system("a", "up", null));
+    table.addStats(stats("a", "2026-10-22 11:58:00.000Z", 0), t0);
+    table.addStats(stats("a", "2026-10-22 11:59:00.000Z", 80), t0);
+    expect(table.setUpstream(false)).toBe(true);
+    for (let t = 2000; t <= 60_000; t += 2000) expect(table.tick(2, t0 + t)).toBe(false);
+    expect(table.frame(now).streams[0]).toMatchObject({ alive: false, pulse: 0 });
+  });
+
   it("uses the info summary until the first stats record", () => {
     const table = new HostTable(salt, mix);
     table.upsertSystem(system("a", "up", { t: 4, cpu: 100, mp: 0 }));
