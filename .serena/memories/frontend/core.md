@@ -11,7 +11,7 @@ Static Vite + raw WebGL2 application that renders `Frame` streams as an upward r
 - `source/demo.ts` — `DemoSource` procedural channel and filament generator.
 - `sim/streams.ts` — Per-stream exponential channel easing, soft-edged braiding band layout, and stream lifecycle (ease-in, offline grey/thinning, removal drain).
 - `sim/particles.ts` — Fixed-size CPU particle pool stored in `Float32Array`s; handles bottom-edge band/filament lane spawning, curl-noise turbulence, and ±18° heading clamp.
-- `sim/budget.ts` — Adaptive particle budget (scales down live limit to as low as 25% and boosts brightness up to 2× when frame times exceed 1.5× display period and <45 fps; disabled when `?particles=N` is set).
+- `sim/budget.ts` — Adaptive particle budget (scales down live limit to as low as 25% and boosts brightness up to 2× when frame times exceed 1.5× display period and <45 fps; disabled when `?particles=N` is set). `update(interval, live)` ignores slow frames while the live count is above the limit, so particles left over from before a drop do not trigger another.
 - `sim/noise.ts` — Seeded 2D simplex noise and allocation-free curl flow field.
 - `render/renderer.ts` — Alternating ping-pong trail framebuffers (dimmed decay pass + additive streak pass) and final tone-mapping pass; caps `devicePixelRatio` at 1.5.
 - `render/gl.ts` — WebGL2 shader compilation, program linking, and framebuffer target helpers.

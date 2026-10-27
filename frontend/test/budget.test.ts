@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ParticleBudget } from "../src/sim/budget";
 
-/** Feeds `seconds` worth of frames of `interval` s; returns whether any of them changed the limit. */
-function run(budget: ParticleBudget, interval: number, seconds: number): boolean {
+/** Feeds `seconds` worth of frames of `interval` s with `live` particles; returns whether any of them changed the limit. */
+function run(budget: ParticleBudget, interval: number, seconds: number, live = 0): boolean {
   let changed = false;
-  for (let t = 0; t < seconds; t += interval) changed = budget.update(interval) || changed;
+  for (let t = 0; t < seconds; t += interval) changed = budget.update(interval, live) || changed;
   return changed;
 }
 
@@ -76,10 +76,25 @@ describe("ParticleBudget", () => {
     expect(budget.limit).toBe(1000);
   });
 
+  it("waits for the particles above a lowered limit to die before counting slow frames again", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000);
+    run(budget, 1 / 20, 2.1, 1000);
+    expect(budget.limit).toBe(800);
+
+    // Still 1000 alive and still slow: that is the old load, not a reason for another drop.
+    expect(run(budget, 1 / 20, 10, 1000)).toBe(false);
+    expect(run(budget, 1 / 20, 10, 801)).toBe(false);
+    expect(budget.limit).toBe(800);
+    // Down to the limit and still slow: now it drops again.
+    expect(run(budget, 1 / 20, 2.1, 800)).toBe(true);
+    expect(budget.limit).toBe(640);
+  });
+
   it("ignores pauses, non-positive intervals and a fixed count", () => {
     const budget = new ParticleBudget(1000, false);
-    expect(budget.update(0)).toBe(false);
-    expect(budget.update(-1)).toBe(false);
+    expect(budget.update(0, 0)).toBe(false);
+    expect(budget.update(-1, 0)).toBe(false);
     expect(run(budget, 0.3, 30)).toBe(false);
     expect(budget.limit).toBe(1000);
 
