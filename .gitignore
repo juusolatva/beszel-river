@@ -9,3 +9,4 @@ coverage/
 bridge/mix.json
 
 .DS_Store
+.aider*
