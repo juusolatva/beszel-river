@@ -12,7 +12,9 @@ const PAUSE = 0.25;
 /**
  * Live particle limit for devices that cannot draw the whole pool. After 2 s of frames well behind the
  * display it drops by a fifth, down to a quarter of the pool; after 10 s of keeping up it rises by a
- * tenth again, and each drop doubles that wait (up to 2 min).
+ * tenth again, and each drop doubles that wait (up to 2 min). A drop only stops spawning, and the
+ * particles above the new limit live on for up to `LOOK.lifeRange` s, so slow frames count only once
+ * they are gone; otherwise one overload would cut the limit several times over.
  *
  * The display period is the fastest frame interval seen, at most 1/30 s, so a 30 Hz display or a
  * throttled browser is not taken for overload. A page starts with an empty pool, so its first frames
@@ -36,13 +38,13 @@ export class ParticleBudget {
     this.limit = capacity;
   }
 
-  /** Feeds one frame interval, s; returns whether the limit changed. */
-  update(interval: number): boolean {
+  /** Feeds one frame interval, s, and the live particle count; returns whether the limit changed. */
+  update(interval: number, live: number): boolean {
     if (this.fixed || interval <= 0 || interval > PAUSE) return false;
     this.period = Math.min(this.period, interval);
 
     if (interval > Math.max(SLOW * this.period, SLOW_FLOOR)) {
-      this.slowTime += interval;
+      if (live <= this.limit) this.slowTime += interval;
       this.fastTime = 0;
     } else {
       this.slowTime = Math.max(0, this.slowTime - interval);

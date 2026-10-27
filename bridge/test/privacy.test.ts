@@ -12,11 +12,12 @@ const salt = "0123456789abcdef-test";
 const mix = loadMixConfig(fileURLToPath(new URL("../mix.example.json", import.meta.url)));
 const t0 = Date.parse("2026-10-26T12:00:00Z");
 
-/** Every Beszel field name the bridge reads (see src/beszel/types.ts); none may reach a frame. */
+/** Every Beszel field name the bridge reads (see src/beszel/types.ts), and `name`; none may reach a frame. */
 const BESZEL_FIELDS = ["cpum", "mp", "bb", "bm", "la", "dt", "ns", "nr", "dio", "dr", "dw", "cpus", "info", "stats", "status", "system", "name", "created"];
 const STREAM_KEYS = ["id", "alive", "width", "flow", "density", "turbulence", "pulse", "heat", "filaments"];
 
-const hosts: { record: SystemRecord; stats: SystemStats }[] = [
+// The records carry hostnames, as from a hub that ignored the fields filter.
+const hosts: { record: SystemRecord & { name: string }; stats: SystemStats }[] = [
   { record: { id: "sysidsingle0001", name: "nas-single-core", status: "up", info: { cpu: 3, mp: 40, t: 1 } }, stats: { cpu: 3.14159, mp: 41.5, cpus: [3.14159] } },
   { record: { id: "sysiddual000002", name: "pi-dual.lan", status: "up", info: { cpu: 50, t: 2 } }, stats: { cpu: 50, b: [123456, 654321], cpus: [12.3456, 87.6543] } },
   { record: { id: "sysidmany000003", name: "build-server-64", status: "up", info: { cpu: 80, t: 128, la: [9, 8, 7] } }, stats: { cpu: 80.0001, dio: [1e7, 2e7], t: { cpu_temp: 71.25 }, cpus: Array.from({ length: 64 }, (_, i) => (i * 37.7) % 100) } },

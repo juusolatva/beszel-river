@@ -77,6 +77,7 @@ bridge/
     pipeline/anonymize.ts     stream IDs, band order, band widths
     pipeline/hosts.ts         per-host state → frames
     server.ts                 GET /stream, GET /healthz
+    upstream.ts               hub connection loss, after a 30 s grace period
   test/                       vitest unit tests
 frontend/
   index.html
@@ -116,7 +117,7 @@ From the Beszel source on `main` (latest release v0.21.0, 2 Oct 2026):
 - **Login:** `POST /api/collections/users/auth-with-password`; renew with `POST /api/collections/users/auth-refresh`.
   - A hub with password auth disabled (`DISABLE_PASSWORD_AUTH=true`, OIDC only) answers that login with 403. A superuser can instead mint an impersonation token for the bridge user (`POST /api/collections/users/impersonate/{id}` with a `duration`, or **Impersonate** in the PocketBase dashboard). Such tokens have `refreshable: false`: `auth-refresh` accepts them but returns the same token, so they end at their `exp`. Setting the user's password or **Reset issued tokens** revokes them. Checked against v0.21.0.
 - **Access:** Beszel sets the API rules in `internal/hub/collections.go`. A user can list `systems` and `system_stats` when they are in the system's `users` list, or for every system when the hub runs with `SHARE_ALL_SYSTEMS=true`. Give the bridge user the `readonly` role: it can read but not change systems.
-- **`systems` collection:** one record per host with `id`, `name`, `status` and `info`. Relevant `info` keys: `cpu`, `mp` (memory %), `dp` (disk %), `bb` (bandwidth bytes/s), `la` (load averages), `t` (threads), `dt` (dashboard temperature). The hub refreshes these every 60 s (`interval int = 60_000` in `internal/hub/systems/system_manager.go`).
+- **`systems` collection:** one record per host with `id`, `name`, `status` and `info`. The bridge requests all but `name`: it has no use for hostnames. Relevant `info` keys: `cpu`, `mp` (memory %), `dp` (disk %), `bb` (bandwidth bytes/s), `la` (load averages), `t` (threads), `dt` (dashboard temperature). The hub refreshes these every 60 s (`interval int = 60_000` in `internal/hub/systems/system_manager.go`).
 - **`system_stats` collection:** history records with a `type` tier (`1m`, `10m`, `20m`, `120m`, `480m`) and a `stats` object.
   - Rates: `cpu`, `mp`, `b` ([sent, recv] bytes/s), `dio` ([read, write] bytes/s).
   - Peaks: `cpum`, `bm`. Only the aggregated tiers (`10m` and up) have them: the hub computes them when averaging (`internal/records/records.go`), and the agent does not send them, so `1m` records leave them out.
@@ -188,6 +189,7 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Band width = one of 0, 0.25, 0.5, 0.75, 1, seeded by `STREAM_SALT`, the system ID and the UTC date (not from thread counts, which leaked core-count ratios and stayed fixed across days).
+   - Band count: one stream per host that is not paused. The river is drawn from per-host bands, so their number shows on the page whatever the frame holds, and that is accepted. Paused hosts are left out, and IDs, widths and order do not say which host is which.
    - Filament order = shuffle of the profile seeded by `STREAM_SALT`, the system ID and the UTC date, so the busiest core is not always in the same place and hosts differ.
 5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, live minute records scattered, see below) and decays with time constant `pulseDecay` (8 s). A 2 s tick lets pulses decay, fires scattered pulses that are due and moves gliding channels on, and broadcasts when that changed anything visibly (a pulse by 0.005, a gliding value by 0.0005). Channels are rounded to three decimals.
 
@@ -200,7 +202,7 @@ Mapping in the template `bridge/mix.example.json`, checked against a live hub in
 | `turbulence` | Change in network + disk IO | Sideways wiggle |
 | `pulse` | CPU and network rises (and peaks where present) | Spawn waves, brightness flashes |
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
-| `alive` | `status` | Current flows or dries up |
+| `alive` | `status`, and the hub connection | Current flows or dries up |
 
 #### Minute records
 
@@ -221,6 +223,7 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
   - All snapshot, update and heartbeat writes share a 256 KiB per-response queued-byte budget (UTF-8 bytes, including already queued response output). An event that would exceed it closes the response before writing. If `write()` signals backpressure, no further chunks are enqueued for that client until `drain`; heartbeats are skipped and only whether an update was missed is retained. The latest broadcast is shared across clients and sent after drain when needed. A response blocked for 10 s is destroyed and removed from the viewer count exactly once, allowing normal realtime linger cleanup; shutdown also destroys queued responses instead of waiting for a flush. Healthy clients keep receiving updates. Limits are internal `StreamServerOptions` (`maxBufferedBytes`, `drainTimeoutMs`), not environment variables.
 - **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise. Not exposed through nginx.
+- **Lost hub connection:** the SDK reconnects by itself, but until it does, or for good once a token has expired, host statuses are stale and the river would keep flowing on its last values. When the login is invalid or the realtime connection is down for 30 s (`UPSTREAM_GRACE_MS`, longer than the 12 s hub restart in M6), every stream is sent with `alive: false` and its pending pulses are dropped, so the river dries up, and the bridge logs a warning. `/healthz` turns 503 at once. When the connection is back, streams take their last known statuses again until the hub's next update, within a minute.
 - Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405; any other target, including `//`, `/x/../stream` and absolute-form ones, gets 404.
 
 ## Message format
@@ -240,7 +243,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 | Field | Type | Meaning |
 |---|---|---|
 | `id` | string | Opaque 8-hex-character ID, stable per host. |
-| `alive` | boolean | Host is reporting. |
+| `alive` | boolean | Host is reporting, and the bridge is connected to the hub. |
 | `width` | number 0..1 | Relative band width, quantized. |
 | `flow` | number 0..1 | Upward speed. |
 | `density` | number 0..1 | Spawn rate. |
@@ -285,7 +288,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - devicePixelRatio is capped at 1.5.
   - The `EventSource` closes while the tab is hidden.
   - `prefers-reduced-motion`: half the particles, half the speed and sideways noise, half-speed braiding, and pulse flashes and spawn waves at a quarter of their strength, rising over 0.6 s instead of 0.3 s.
-  - Adaptive budget (`sim/budget.ts`): after 2 s of frames slower than 1.5× the display period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool, and particles get brighter (up to 2×) so the river keeps its weight. After 10 s of keeping up it rises by a tenth; each drop doubles that wait, up to 2 min, so it settles. The display period is the fastest frame interval seen, at most 1/30 s, learned while the pool fills on load, so a 30 Hz display or throttled browser is left alone. `?particles=N` fixes the count.
+  - Adaptive budget (`sim/budget.ts`): after 2 s of frames slower than 1.5× the display period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool, and particles get brighter (up to 2×) so the river keeps its weight. After 10 s of keeping up it rises by a tenth; each drop doubles that wait, up to 2 min, so it settles. A drop only stops spawning, so slow frames count again only once the particles above the new limit have died: frames slowed by those would otherwise cause a second drop. The display period is the fastest frame interval seen, at most 1/30 s, learned while the pool fills on load, so a 30 Hz display or throttled browser is left alone. `?particles=N` fixes the count.
   - The simulation and renderer allocate nothing per frame: the band layout sorts into a preallocated list, and the noise function uses plain locals (its output is unchanged).
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
@@ -314,8 +317,8 @@ Commands and steps are in README, "Deployment".
     - `limit_conn` 8 per client address (each HTTP/2 request counts), answered with 429.
   - `/healthz` is not proxied.
   - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
-  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`.
-  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block.
+  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (one year, this host only).
+  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there.
 
 ## Milestones
 
@@ -346,7 +349,7 @@ Commands and steps are in README, "Deployment".
 - [x] **M6 – Realtime adapter.** `rt_metrics` at 1 s, `filaments`, subscription only while viewers are connected.
   - Done when: with `SOURCE=realtime`, a connected viewer gets an update about every second with `filaments`, one busy core shows in them in the first update after it starts, and the hub stops polling agents 30 s after the last viewer leaves.
   - Verified against a local Beszel v0.21.0 hub and agent (4 threads):
-    - 8 s of `/stream`: 13 events; `filaments` on the up host, none on the down one. A `mix.json` without a `filaments` entry used the defaults.
+    - 8 s of `/stream`: 13 events; `filaments` on the up host, none on the down one. A `mix.json` without a `filaments` entry used the defaults then; it now disables filaments (see "Bridge configuration").
     - Agent CPU time over 20 s: 0 ticks with no viewer ("Realtime metrics off" logged 30 s after the last one left), 5 ticks with one viewer.
     - A busy loop on one core: the busiest filament went 0.017 → 0.31 in the first update after it started and 0.99 within 15 s, while `flow` (30 s smoothing) went 0.006 → 0.09 over the 20 s.
     - Hub restart: realtime samples paused for the 12 s the hub was down and resumed 4 s after it came back.
@@ -357,7 +360,7 @@ Commands and steps are in README, "Deployment".
 - [x] **M7 – Polish.** Reduced motion, mobile budget, offline-host visuals, reconnect behaviour.
   - Done when: reduced motion, a slow device, a phone, a lost connection, a browser coming back online and a browser without WebGL2 each get the behaviour under "Frontend", checked in headless Chromium.
   - Verified in headless Chromium against recorded realtime frames (agent stopped), served by the production build through nginx with `river-path.conf` where the connection mattered:
-    - Software WebGL (10–15 fps): the limit fell 20 000 → 5 000 in about 12 s; with `?particles=20000` it stayed. A simulation of the budget against frame-time models: no change at 60 Hz, 144 Hz at 90 fps, 30 Hz throttling or tab switches; overloaded devices settled near 50 fps without swinging over 15 min.
+    - Software WebGL (10–15 fps): the limit fell 20 000 → 5 000 in about 12 s (before slow frames waited for particles above a lowered limit to die; in a simulation that adds a few seconds per step, not re-measured in a browser); with `?particles=20000` it stayed. A simulation of the budget against frame-time models: no change at 60 Hz, 144 Hz at 90 fps, 30 Hz throttling or tab switches; overloaded devices settled near 50 fps without swinging over 15 min.
     - Reduced motion: pool 10 000; phone viewport (390 × 844, touch): pool 8 000. Both then thinned by the budget under software WebGL.
     - Replay server killed: unchanged at 8 s, a grey trickle at 30 s (mean brightness 4.6 → 0.5, colourfulness 4.9 → 0.1); reconnected 3.9 s after the server returned and regained its colour.
     - Server down for 40 s (backoff at 40 s), browser offline, server back, browser online: the stream reopened at once instead of about 33 s later.
@@ -372,6 +375,7 @@ Commands and steps are in README, "Deployment".
 |---|---|
 | Beszel changes field names in a minor release. | Field mapping isolated in `bridge/src/beszel/`; note the tested hub version in README; check after hub upgrades. |
 | `rt_metrics` is internal and undocumented. | Optional (M6); `systems` remains the default and keeps running underneath. Its own SDK connection, one subscription change at a time, refused topics dropped; hosts fall back to `1m` records 10 s after their last realtime sample. |
+| Hub unreachable or bridge login expired while running. | After 30 s every stream is sent not alive, so the river dries up instead of flowing on stale values; `/healthz` returns 503 at once. |
 | 1 s polling load on agents. | Subscribe only while viewers are connected. |
 | Public `/stream` abuse. | `limit_conn` per IP; payload is tiny; one upstream subscription regardless of viewers. |
 | Recipe leaks via frontend code. | Mixing happens in the bridge; the frontend only knows channel → visual. |

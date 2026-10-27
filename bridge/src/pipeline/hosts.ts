@@ -33,6 +33,8 @@ const FIRST_REALTIME_DT = 1;
 /** Every known host's pipeline state; turns it into frames. */
 export class HostTable {
   private readonly hosts = new Map<string, Host>();
+  /** False while the hub connection is lost: statuses are stale, so no stream counts as alive. */
+  private upstream = true;
 
   constructor(
     private readonly salt: string,
@@ -72,6 +74,20 @@ export class HostTable {
 
   removeSystem(systemId: string): boolean {
     return this.hosts.delete(systemId);
+  }
+
+  /** Marks the hub connection lost or back (see `UpstreamWatch`); returns whether the frame changed. */
+  setUpstream(live: boolean): boolean {
+    if (live === this.upstream) return false;
+    this.upstream = live;
+    let changed = false;
+    for (const host of this.hosts.values()) {
+      if (host.status !== "up") continue;
+      // Like a host going down: a stream that is drying up should not flash.
+      if (!live) host.mixer.dropPulses();
+      changed = true;
+    }
+    return changed;
   }
 
   /** Hosts worth an `rt_metrics` subscription: the hub would poll the others' agents in vain. */
@@ -161,7 +177,7 @@ export class HostTable {
     const order = bandOrder(this.salt, systemIds, now);
     const streams = order.map((systemId): Stream => {
       const host = byId.get(systemId) as Host;
-      const stream: Stream = { id: host.streamId, alive: host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+      const stream: Stream = { id: host.streamId, alive: this.upstream && host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
       // Three decimals is plenty for the visuals and keeps raw precision out of the payload.
       for (const channel of MIXED) stream[channel] = round3(host.mixer.values[channel]);
       const filaments = host.mixer.filaments;

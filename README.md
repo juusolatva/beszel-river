@@ -163,13 +163,13 @@ sudo nginx -t && sudo systemctl reload nginx
 
 nginx older than 1.25.1 (Debian 12, Ubuntu 24.04) does not know `http2 on;`: delete that line and use `listen 443 ssl http2;`.
 
-Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `limit_conn_zone $binary_remote_addr zone=river_stream:10m;` to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`.
+Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `limit_conn_zone $binary_remote_addr zone=river_stream:10m;` to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
 
 Check: `https://river.example.com/?debug` shows `alive` streams with live channel values.
 
 ### 5. Maintenance
 
-The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts.
+The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts. If it loses the hub for more than 30 s, or its login stops being valid, it sends every stream as not alive, so the river dries up rather than flowing on old values, and logs `Beszel connection lost`. The river flows again once the connection is back.
 
 - **Configuration changes:** after editing `bridge/.env` (e.g. `SOURCE=realtime`), run the same 2a `up -d` command: it recreates the container with the new environment, which `docker compose restart` would not. After editing only `bridge/mix.json`, `up -d` sees no change; use `restart bridge` instead (with the same `-f` options), since the bridge reads the file at startup. Under systemd, `sudo systemctl restart beszel-river-bridge` covers both.
 - **Filament recipe migration:** older recipes without `filaments` now run without per-core profiles. An existing section must explicitly contain `bias`, `center`, `weight` and `tau`; copies of the earlier template need `center: 0` added (as JSON: `"center": 0`), or the section removed/set to `null`. Filaments publish a transformed CPU profile; smoothing and shuffling do not guarantee confidentiality. Leave them disabled when CPU levels must stay private, and change the public template weights before enabling them.
@@ -184,7 +184,7 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
   - `journalctl -u <unit>`: that unit's log.
   - `grep 'valid until'`: keeps the line with the date.
 
-  After that date the hub rejects the token, and the bridge does not start with it (`BESZEL_TOKEN expired on …`). Put a new token (see "Bridge setup") in `bridge/.env`, then run the same `up -d` command, which recreates the container with the new value (`docker compose restart` would keep the old one), or `sudo systemctl restart beszel-river-bridge`.
+  After that date the hub rejects the token: a running bridge logs `Beszel connection lost` and the river dries up, and a restarted one does not start with it (`BESZEL_TOKEN expired on …`). Put a new token (see "Bridge setup") in `bridge/.env`, then run the same `up -d` command, which recreates the container with the new value (`docker compose restart` would keep the old one), or `sudo systemctl restart beszel-river-bridge`.
 - **Beszel upgrades:** Beszel renames fields between minor releases, and the bridge is tested with v0.21.0. After a hub upgrade, check that `?debug` still shows changing channel values. A hub image that updates itself (`:latest` with Watchtower or similar) can stop the river without notice; pin a version to upgrade on purpose.
 - **Certificate:** `sudo certbot renew --dry-run` checks that automatic renewal works. `renew` renews certificates close to expiry; `--dry-run` uses Let's Encrypt's test server and saves nothing. Certificates obtained with `--nginx` make certbot reload nginx after each renewal.
 

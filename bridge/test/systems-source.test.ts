@@ -37,7 +37,7 @@ function createPb() {
   return { pb, lists, emit, subscribe, getFullList, filter };
 }
 
-const system = (id: string, status: SystemRecord["status"] = "up"): SystemRecord => ({ id, name: `host-${id}`, status, info: null });
+const system = (id: string, status: SystemRecord["status"] = "up"): SystemRecord => ({ id, status, info: null });
 const record = (id: string, created: string): SystemStatsRecord => ({ id, system: "a", type: "1m", created, stats: {} });
 
 function recorder(): { calls: string[]; handlers: SystemsHandlers } {
@@ -106,11 +106,11 @@ describe("SystemsSource", () => {
     lists.system_stats.resolve([]);
     await new SystemsSource(pb, recorder().handlers).start(2);
 
-    expect(subscribe).toHaveBeenCalledWith("*", expect.any(Function), { fields: "id,name,status,info" });
+    expect(subscribe).toHaveBeenCalledWith("*", expect.any(Function), { fields: "id,status,info" });
     expect(subscribe).toHaveBeenCalledWith("*", expect.any(Function), { filter: 'type = "1m"', fields: "id,system,type,created,stats" });
     expect(filter).toHaveBeenCalledWith("type = '1m' && created >= {:since}", { since: new Date("2026-10-26T10:00:00Z") });
     expect(getFullList).toHaveBeenCalledWith("system_stats", expect.objectContaining({ sort: "created", batch: 1000 }));
-    expect(getFullList).toHaveBeenCalledWith("systems", { fields: "id,name,status,info" });
+    expect(getFullList).toHaveBeenCalledWith("systems", { fields: "id,status,info" });
   });
 
   it("fails when loading fails, so the caller can retry", async () => {

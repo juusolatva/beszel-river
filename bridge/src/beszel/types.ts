@@ -7,7 +7,6 @@ export type SystemStatus = "up" | "down" | "paused" | "pending";
 /** `systems` record. */
 export interface SystemRecord {
   id: string;
-  name: string;
   status: SystemStatus;
   info: SystemInfo | null;
 }

@@ -97,7 +97,7 @@ function frame(now: number): void {
   const interval = (now - last) / 1000;
   const dt = Math.min(interval, LOOK.maxDt);
   last = now;
-  if (budget.update(interval)) {
+  if (budget.update(interval, particles.count)) {
     particles.limit = budget.limit;
     particles.intensityScale = budget.intensityScale;
     stats.limit = budget.limit;

@@ -8,6 +8,7 @@ import { log } from "./log.js";
 import { HostTable } from "./pipeline/hosts.js";
 import { loadMixConfig, TICK_S } from "./pipeline/mix.js";
 import { StreamServer } from "./server.js";
+import { UpstreamWatch } from "./upstream.js";
 
 const BROADCAST_DEBOUNCE_MS = 250;
 /** Realtime subscriptions outlast the last viewer by this long, so a reload does not restart them. */
@@ -25,6 +26,7 @@ try {
 const hosts = new HostTable(config.salt, loadMixConfig(config.mixFile));
 const client = new BeszelClient(config.beszelUrl, config.auth);
 let live = false;
+const upstream = new UpstreamWatch(() => client.connected);
 
 const server = new StreamServer({
   host: config.bindHost,
@@ -100,7 +102,15 @@ async function connect(): Promise<void> {
 
 const port = await server.listen();
 log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz), source ${config.source}`);
-setInterval(() => changed(hosts.tick(TICK_S)), TICK_S * 1000);
+setInterval(() => {
+  // The SDK reconnects on its own; until it does, or forever with an expired token, statuses are stale.
+  if (live && upstream.update()) {
+    if (upstream.live) log("info", "Beszel connection is back");
+    else log("warn", "Beszel connection lost; showing every stream as not alive until it is back");
+    changed(hosts.setUpstream(upstream.live));
+  }
+  changed(hosts.tick(TICK_S));
+}, TICK_S * 1000);
 void connect();
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
