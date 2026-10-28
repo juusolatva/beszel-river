@@ -9,3 +9,7 @@ coverage/
 bridge/mix.json
 
 .DS_Store
+
+# Local audit notes, not for the repository.
+audit.md
+report.md
