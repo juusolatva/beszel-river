@@ -10,6 +10,7 @@ bridge/mix.json
 
 .DS_Store
 
-# Local audit notes, not for the repository.
+# local notes
 audit.md
 report.md
+plan.md
