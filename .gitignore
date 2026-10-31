@@ -12,8 +12,3 @@ bridge/mix*.json*
 !bridge/mix.example.json
 
 .DS_Store
-
-# local notes
-audit.md
-report.md
-plan.md
