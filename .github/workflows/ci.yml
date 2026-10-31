@@ -119,3 +119,8 @@ jobs:
             -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" nginx:stable-alpine nginx -t
       - name: Check nginx address grouping and connection limits
         run: python3 deploy/test/nginx.py
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Check systemd sandbox
+        run: python3 deploy/test/systemd.py

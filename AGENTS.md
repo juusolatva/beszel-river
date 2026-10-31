@@ -37,7 +37,7 @@ npm run dev:frontend   # Vite on http://localhost:5173, proxies /stream to 127.0
 npm run dev:bridge     # tsx watch; needs bridge/.env and bridge/mix.json (copy their example files)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm ci --ignore-scripts`, `typecheck`, `coverage` and `build` on Node 24.22.1, 24 and 26, and writes both workspaces' coverage tables to the job summary. On the Node 24 job it also runs a SonarQube Cloud scan (`SONAR_TOKEN` secret; skipped for forks and Dependabot, whose PRs get no secrets). Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). Run `typecheck`, `coverage` and `build` before committing.
+CI (`.github/workflows/ci.yml`) runs `npm ci --ignore-scripts`, `typecheck`, `coverage` and `build` on Node 24.22.1, 24 and 26, and writes both workspaces' coverage tables to the job summary. On the Node 24 job it also runs a SonarQube Cloud scan (`SONAR_TOKEN` secret; skipped for forks and Dependabot, whose PRs get no secrets). Its `deploy` job builds `deploy/bridge.Dockerfile`, starts the image without a hub and expects `/stream` to answer with a snapshot, and checks `deploy/compose.yml`, alone and with `deploy/compose.host-network.yml` (`docker compose config`), and both nginx configs (`nginx -t`). It also runs `python3 deploy/test/nginx.py` (binary address grouping and concurrent requests) and `python3 deploy/test/systemd.py` (Node JIT/HTTP under the service sandbox; needs passwordless sudo). Run `typecheck`, `coverage` and `build` before committing.
 
 ## Conventions
 
