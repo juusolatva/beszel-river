@@ -44,8 +44,8 @@ afterEach(async () => {
 });
 
 /** The snapshot event as a viewer receives it. */
-async function snapshotText(table: HostTable): Promise<string> {
-  server = new StreamServer({ host: "127.0.0.1", port: 0, snapshot: () => table.frame(new Date(t0 + 6000)), healthy: () => true });
+async function snapshotText(table: HostTable, now = new Date(t0 + 6000)): Promise<string> {
+  server = new StreamServer({ host: "127.0.0.1", port: 0, snapshot: () => table.frame(now), healthy: () => true });
   const response = await fetch(`http://127.0.0.1:${await server.listen()}/stream`);
   const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
   let text = "";
@@ -59,6 +59,17 @@ async function snapshotText(table: HostTable): Promise<string> {
 }
 
 describe("what leaves the bridge", () => {
+  it("publishes no persistent stream IDs across UTC days", async () => {
+    const table = buildTable();
+    const first = await snapshotText(table, new Date("2026-10-26T23:59:59.999Z"));
+    await server!.close();
+    const second = await snapshotText(table, new Date("2026-10-27T00:00:00Z"));
+    const ids = (text: string): string[] => [...text.matchAll(/"id":"([0-9a-f]{8})"/g)].map((match) => match[1]);
+    expect(ids(first)).toHaveLength(hosts.length - 1);
+    expect(ids(second)).toHaveLength(hosts.length - 1);
+    for (const id of ids(first)) expect(ids(second)).not.toContain(id);
+  });
+
   it("carries no system IDs, hostnames or Beszel field names", async () => {
     const text = await snapshotText(buildTable());
     expect(text).toContain("event: snapshot");

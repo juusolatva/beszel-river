@@ -15,6 +15,22 @@ const system = (id: string, status: SystemRecord["status"] = "up", info: SystemR
 const stats = (systemId: string, created: string, cpu: number): SystemStatsRecord => ({ id: `${systemId}-${created}`, system: systemId, type: "1m", created, stats: { cpu, mp: 50, b: [1000, 1000] } });
 
 describe("HostTable", () => {
+  it("rotates idle streams at UTC midnight even if a new viewer already took a snapshot", () => {
+    const table = new HostTable(salt, mix);
+    table.upsertSystem(system("a", "down", null));
+    const before = new Date("2026-10-22T23:59:59.999Z");
+    const after = new Date("2026-10-23T00:00:00.000Z");
+    const oldId = table.frame(before).streams[0].id;
+    expect(table.tick(2, before.getTime())).toBe(false);
+    const newId = table.frame(after).streams[0].id;
+    expect(newId).not.toBe(oldId);
+    expect(table.tick(2, after.getTime())).toBe(true);
+    expect(table.tick(2, after.getTime() + 2000)).toBe(false);
+    const restarted = new HostTable(salt, mix);
+    restarted.upsertSystem(system("a", "down", null));
+    expect(restarted.frame(after).streams[0].id).toBe(newId);
+  });
+
   it("emits anonymized streams without names or system IDs", () => {
     const table = new HostTable(salt, mix);
     table.upsertSystem(system("sysA"));
@@ -22,7 +38,7 @@ describe("HostTable", () => {
     expect(frame.v).toBe(1);
     expect(frame.t).toBe(now.getTime());
     expect(frame.streams).toHaveLength(1);
-    expect(frame.streams[0]?.id).toBe(streamId(salt, "sysA"));
+    expect(frame.streams[0]?.id).toBe(streamId(salt, "sysA", now));
     expect(JSON.stringify(frame)).not.toMatch(/sysA|host-/);
   });
 
@@ -33,7 +49,7 @@ describe("HostTable", () => {
     table.upsertSystem(system("pending", "pending"));
     table.upsertSystem(system("paused", "paused"));
     const alive = Object.fromEntries(table.frame(now).streams.map((s) => [s.id, s.alive]));
-    expect(alive).toEqual({ [streamId(salt, "up")]: true, [streamId(salt, "down")]: false, [streamId(salt, "pending")]: false });
+    expect(alive).toEqual({ [streamId(salt, "up", now)]: true, [streamId(salt, "down", now)]: false, [streamId(salt, "pending", now)]: false });
   });
 
   it("reports status changes and removal", () => {
@@ -105,7 +121,7 @@ describe("HostTable", () => {
     const before = alive();
 
     expect(table.setUpstream(false)).toBe(true);
-    expect(alive()).toEqual({ [streamId(salt, "up")]: false, [streamId(salt, "down")]: false });
+    expect(alive()).toEqual({ [streamId(salt, "up", now)]: false, [streamId(salt, "down", now)]: false });
     expect(table.setUpstream(false)).toBe(false);
     expect(table.setUpstream(true)).toBe(true);
     expect(alive()).toEqual(before);
@@ -143,7 +159,7 @@ describe("HostTable", () => {
     // As sent by Beszel 0.21.0 for a system it cannot reach.
     table.upsertSystem(system("unreachable", "down", { dt: 0, bb: 0, la: [0, 0, 0], t: 0, cpu: 0, mp: 0 }));
     const streams = new Map(table.frame(now).streams.map((s) => [s.id, s]));
-    expect(streams.get(streamId(salt, "unreachable"))).toMatchObject({ alive: false, heat: 0.5 });
+    expect(streams.get(streamId(salt, "unreachable", now))).toMatchObject({ alive: false, heat: 0.5 });
   });
 
   it("takes band widths from the day's seed, not from thread counts", () => {
@@ -153,7 +169,7 @@ describe("HostTable", () => {
     table.upsertSystem(system("unknown", "up", null));
     const widths = bandWidths(salt, ["big", "small", "unknown"], now);
     const streams = new Map(table.frame(now).streams.map((s) => [s.id, s.width]));
-    for (const id of ["big", "small", "unknown"]) expect(streams.get(streamId(salt, id))).toBe(widths.get(id));
+    for (const id of ["big", "small", "unknown"]) expect(streams.get(streamId(salt, id, now))).toBe(widths.get(id));
   });
 
   it("scatters a minute record's pulse over the following minute", () => {
@@ -293,11 +309,11 @@ describe("HostTable realtime", () => {
     table.addRealtime("a", { cpu: 50, cpus: [10, 90, 35, 70] }, t0);
     table.addRealtime("b", { cpu: 50 }, t0);
     const streams = new Map(table.frame(now).streams.map((s) => [s.id, s]));
-    const filaments = streams.get(streamId(salt, "a"))?.filaments ?? [];
+    const filaments = streams.get(streamId(salt, "a", now))?.filaments ?? [];
     expect(filaments).toHaveLength(6);
     const { bias, center, weight } = mix.filaments!;
     const expected = (coreProfile([10, 90, 35, 70]) as number[]).map((v) => Math.round(Math.min(1, Math.max(0, bias + weight * (v - center))) * 1000) / 1000);
     expect([...filaments].sort()).toEqual([...expected].sort());
-    expect(streams.get(streamId(salt, "b"))).not.toHaveProperty("filaments");
+    expect(streams.get(streamId(salt, "b", now))).not.toHaveProperty("filaments");
   });
 });

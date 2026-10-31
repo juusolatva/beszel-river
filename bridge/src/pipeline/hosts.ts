@@ -6,7 +6,6 @@ import { MIXED, Mixer, type MixConfig, type SampleKind } from "./mix.js";
 
 interface Host {
   systemId: string;
-  streamId: string;
   status: SystemStatus;
   /** Null until known; Beszel zero-fills `info` for hosts it cannot reach. */
   threads: number | null;
@@ -35,6 +34,8 @@ export class HostTable {
   private readonly hosts = new Map<string, Host>();
   /** False while the hub connection is lost: statuses are stale, so no stream counts as alive. */
   private upstream = true;
+  /** Last tick's UTC date; snapshots must not hide a rollover from existing viewers. */
+  private day: string | null = null;
 
   constructor(
     private readonly salt: string,
@@ -50,7 +51,6 @@ export class HostTable {
     if (!host) {
       this.hosts.set(record.id, {
         systemId: record.id,
-        streamId: streamId(this.salt, record.id),
         status: record.status,
         threads,
         info: record.info,
@@ -146,7 +146,9 @@ export class HostTable {
 
   /** Advances every host's mixer to `now` (ms), see `Mixer.tick`; returns whether any visible stream changed. */
   tick(dt: number, now = Date.now()): boolean {
-    let changed = false;
+    const day = new Date(now).toISOString().slice(0, 10);
+    let changed = this.day !== null && this.day !== day;
+    this.day = day;
     for (const host of this.hosts.values()) {
       if (host.mixer.tick(dt, now) && host.status !== "paused") changed = true;
     }
@@ -155,6 +157,7 @@ export class HostTable {
 
   /** Paused hosts are left out; the rest are anonymized and ordered for the day. */
   frame(now: Date): Frame {
+    this.day ??= now.toISOString().slice(0, 10);
     const systemIds: string[] = [];
     const byId = new Map<string, Host>();
     const timeMs = now.getTime();
@@ -177,7 +180,7 @@ export class HostTable {
     const order = bandOrder(this.salt, systemIds, now);
     const streams = order.map((systemId): Stream => {
       const host = byId.get(systemId) as Host;
-      const stream: Stream = { id: host.streamId, alive: this.upstream && host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+      const stream: Stream = { id: streamId(this.salt, systemId, now), alive: this.upstream && host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
       // Three decimals is plenty for the visuals and keeps raw precision out of the payload.
       for (const channel of MIXED) stream[channel] = round3(host.mixer.values[channel]);
       const filaments = host.mixer.filaments;

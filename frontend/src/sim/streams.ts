@@ -84,18 +84,24 @@ export class StreamSet {
   private readonly ordered: StreamSlot[] = [...this.slots];
   private readonly byId = new Map<string, StreamSlot>();
   private started = false;
+  /** Latest frame awaiting slots while removed streams drain (including daily ID rotation). */
+  private pending: Frame | null = null;
   /** No live connection for a while: every stream thins out and greys as if its host were down. */
   offline = false;
 
   constructor(private readonly motion: number) {}
 
   apply(frame: Frame): void {
+    this.pending = null;
     for (const slot of this.slots) slot.inFrame = false;
     frame.streams.forEach((stream, order) => {
       let slot = this.byId.get(stream.id);
       if (!slot) {
         slot = this.slots.find((s) => !s.used);
-        if (!slot) return;
+        if (!slot) {
+          this.pending = frame;
+          return;
+        }
         this.claim(slot, stream);
       }
       slot.inFrame = true;
@@ -107,14 +113,20 @@ export class StreamSet {
 
   update(dt: number, aspect: number): void {
     this.layout(aspect);
+    let released = false;
     for (const slot of this.slots) {
       if (!slot.used || !slot.latest) continue;
       this.easeChannels(slot, slot.latest, dt);
       this.easeLanes(slot, slot.latest.filaments, dt);
       this.easeLayout(slot, dt);
       this.derive(slot);
-      if (!slot.inFrame && slot.presence < 0.01 && slot.particles === 0) this.release(slot);
+      if (!slot.inFrame && slot.presence < 0.01 && slot.particles === 0) {
+        this.release(slot);
+        released = true;
+      }
     }
+    // Retry only when capacity changes; an idle bridge need not send another frame.
+    if (released && this.pending) this.apply(this.pending);
   }
 
   private easeChannels(slot: StreamSlot, s: Stream, dt: number): void {

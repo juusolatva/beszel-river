@@ -18,7 +18,7 @@ export interface Frame {
 
 /** One host, anonymized. Every channel is a number in 0..1. */
 export interface Stream {
-  /** Opaque 8-hex-character ID, stable per host. */
+  /** Opaque 8-hex-character ID, stable per host within one UTC day. */
   id: string;
   /** Host is reporting. */
   alive: boolean;

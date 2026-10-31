@@ -85,6 +85,24 @@ describe("StreamSet", () => {
     expect(set.slots.some((s) => s.id === `s${MAX_STREAMS}`)).toBe(false);
   });
 
+  it("fades in all replacement IDs after a full set drains without another frame", () => {
+    const set = new StreamSet(1);
+    set.apply(frame(...Array.from({ length: MAX_STREAMS }, (_, i) => stream(`old${i}`))));
+    set.apply(frame(...Array.from({ length: MAX_STREAMS }, (_, i) => stream(`new${i}`))));
+    run(set, 30);
+    expect(set.slots.every((s) => s.used && s.inFrame && s.id.startsWith("new"))).toBe(true);
+    expect(set.slots.every((s) => s.presence > 0.99)).toBe(true);
+  });
+
+  it("retries only the latest pending frame", () => {
+    const set = new StreamSet(1);
+    set.apply(frame(...Array.from({ length: MAX_STREAMS }, (_, i) => stream(`old${i}`))));
+    set.apply(frame(stream("superseded")));
+    set.apply(frame(stream("latest")));
+    run(set, 30);
+    expect(set.slots.filter((s) => s.used).map((s) => s.id)).toEqual(["latest"]);
+  });
+
   it("drains a removed stream, releases its slot once faded and empty, and reuses it", () => {
     const set = new StreamSet(1);
     set.apply(frame(stream("a"), stream("b")));

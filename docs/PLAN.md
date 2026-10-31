@@ -186,7 +186,7 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Weights come from `mix.json`.
    - `filaments`: only with an explicit complete recipe, each profile value through that recipe with ±0.025 uniform jitter (`FILAMENT_JITTER`, so hosts with fewer than 6 cores do not leave exact linear interpolation spacings in the public array), smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
 4. **Anonymize:**
-   - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
+   - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, `${UTC date}:${system ID}:stream`). IDs rotate at UTC midnight, including when channels are idle; the 2 s tick triggers a broadcast. This removes the permanent cross-day identifier, but continuous channel observations can still correlate hosts. New bands fade in while the old IDs drain; if all 32 frontend slots are occupied, the latest frame waits for draining slots and is retried without needing another SSE event.
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Band width = one of 0, 0.25, 0.5, 0.75, 1, seeded by `STREAM_SALT`, the system ID and the UTC date (not from thread counts, which leaked core-count ratios and stayed fixed across days).
    - Band count: one stream per host that is not paused. The river is drawn from per-host bands, so their number shows on the page whatever the frame holds, and that is accepted. Paused hosts are left out, and IDs, widths and order do not say which host is which.
@@ -242,7 +242,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | string | Opaque 8-hex-character ID, stable per host. |
+| `id` | string | Opaque 8-hex-character ID, stable per host within one UTC day. |
 | `alive` | boolean | Host is reporting, and the bridge is connected to the hub. |
 | `width` | number 0..1 | Relative band width, quantized. |
 | `flow` | number 0..1 | Upward speed. |
