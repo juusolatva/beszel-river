@@ -173,6 +173,8 @@ Check: `https://river.example.com/?debug` shows `alive` streams with live channe
 
 ### 5. Maintenance
 
+Git and Docker ignore `.env`, `.env.*` and `bridge/mix*.json*`, including environment-specific copies and backups. Only `.env.example` and `bridge/mix.example.json` are public templates; keep private copies under the ignored names.
+
 The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts. If it loses the hub for more than 30 s, or its login stops being valid, it sends every stream as not alive, so the river dries up rather than flowing on old values, and logs `Beszel connection lost`. The river flows again once the connection is back.
 
 - **Configuration changes:** after editing `bridge/.env` (e.g. `SOURCE=realtime`), run the same 2a `up -d` command: it recreates the container with the new environment, which `docker compose restart` would not. After editing only `bridge/mix.json`, `up -d` sees no change; use `restart bridge` instead (with the same `-f` options), since the bridge reads the file at startup. Under systemd, `sudo systemctl restart beszel-river-bridge` covers both.

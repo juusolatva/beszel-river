@@ -3,7 +3,10 @@
 **/dist
 **/coverage
 **/.env
-bridge/mix.json
+**/.env.*
+!**/.env.example
+bridge/mix*.json*
+!bridge/mix.example.json
 .git
 .github
 frontend/src

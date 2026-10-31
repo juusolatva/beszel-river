@@ -6,7 +6,10 @@ coverage/
 
 # Secrets and private tuning
 .env
-bridge/mix.json
+.env.*
+!.env.example
+bridge/mix*.json*
+!bridge/mix.example.json
 
 .DS_Store
 
