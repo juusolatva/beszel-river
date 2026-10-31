@@ -155,6 +155,7 @@ Own domain or subdomain, with `deploy/nginx/river.conf`:
 
 ```sh
 sudo certbot certonly --nginx -d river.example.com
+sudo install -D -m 644 deploy/nginx/river-limits.conf /etc/nginx/snippets/river-limits.conf
 sudo cp deploy/nginx/river.conf /etc/nginx/conf.d/river.conf   # then replace river.example.com in it
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -164,7 +165,9 @@ sudo nginx -t && sudo systemctl reload nginx
 
 nginx older than 1.25.1 (Debian 12, Ubuntu 24.04) does not know `http2 on;`: delete that line and use `listen 443 ssl http2;`.
 
-Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `limit_conn_zone $binary_remote_addr zone=river_stream:10m;` to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
+Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and copy `river-limits.conf` to the same snippets directory and add `include /etc/nginx/snippets/river-limits.conf;` once to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
+
+Both modes allow 8 concurrent stream requests per IPv4 address or IPv6 `/64`, returning 429 above that limit. IPv6 privacy-address rotation within one `/64` shares the same allowance. This does not prevent exhaustion by clients controlling many prefixes. When upgrading an existing configuration, replace the old `limit_conn_zone $binary_remote_addr` line with the limits include and restart nginx once (`sudo systemctl restart nginx`): an existing shared zone cannot change its key during a reload.
 
 Check: `https://river.example.com/?debug` shows `alive` streams with live channel values.
 

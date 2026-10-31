@@ -111,9 +111,11 @@ jobs:
           # nginx -t opens the listen sockets, and containers on Docker's default network have no IPv6.
           sed '/listen \[::\]/d' deploy/nginx/river.conf > "$RUNNER_TEMP/river.conf"
           docker run --rm -v "$RUNNER_TEMP/river.conf:/etc/nginx/conf.d/default.conf:ro" \
+            -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" \
             -v "$RUNNER_TEMP/le:/etc/letsencrypt:ro" nginx:stable-alpine nginx -t
-          # shellcheck disable=SC2016 # $binary_remote_addr is an nginx variable, not a shell one.
-          printf '%s\n' 'limit_conn_zone $binary_remote_addr zone=river_stream:10m;' \
+          printf '%s\n' 'include /etc/nginx/snippets/river-limits.conf;' \
             'server { listen 8080; include /etc/nginx/snippets/river-path.conf; }' > "$RUNNER_TEMP/existing.conf"
           docker run --rm -v "$RUNNER_TEMP/existing.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" nginx:stable-alpine nginx -t
+      - name: Check nginx address grouping and connection limits
+        run: python3 deploy/test/nginx.py
