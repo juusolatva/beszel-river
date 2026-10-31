@@ -6,7 +6,6 @@
 bridge/mix.json
 .git
 .github
-.serena
 frontend/src
 frontend/index.html
 docs

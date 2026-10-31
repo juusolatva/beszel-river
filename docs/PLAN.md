@@ -54,7 +54,6 @@ sonar-project.properties      SonarQube Cloud project settings
 .dockerignore                 keeps secrets and build output out of the image build context
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
-.serena/                      Serena project config and agent memories
 docs/PLAN.md                  this plan
 docs/images/                  README screenshots
 shared/src/index.ts           message types

@@ -32,19 +32,18 @@ Four moments of the live page. Each vertical band is one server; the bands overl
 | `.github/` | CI workflows (`ci.yml`, `osv-scanner.yml`) and Dependabot config for their actions. |
 | `sonar-project.properties` | SonarQube Cloud project settings; the CI scan needs the `SONAR_TOKEN` secret. |
 | `AGENTS.md` | Conventions and invariants for coding agents (`CLAUDE.md` imports it). |
-| `.serena/` | [Serena](https://github.com/oraios/serena) project config and memories for coding agents. |
 
 ## Requirements
 
 - Node.js ≥ 24.22.1 (production target: Node 24 LTS, see `.nvmrc`); CI checks 24.22.1, the latest 24 and 26
-- npm
+- npm (use npm 11 on Node 24 for dependency changes so the lockfile stays consistent)
 
 ## Development
 
 ```sh
 npm ci                 # install all workspaces exactly as package-lock.json lists them
 npm run dev:frontend   # Vite dev server on http://localhost:5173, proxies /stream to the bridge
-npm run dev:bridge     # bridge in watch mode; needs bridge/.env (copy bridge/.env.example)
+npm run dev:bridge     # bridge in watch mode; needs bridge/.env and bridge/mix.json (see Bridge setup)
 npm test               # bridge and frontend unit tests (vitest)
 npm run coverage       # the same with coverage; HTML and lcov reports in bridge/coverage/ and frontend/coverage/
 npm run typecheck      # type-check all workspaces
@@ -54,11 +53,12 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
-2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT`.
+2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge.
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "5. Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
 3. `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored and required. A missing, unreadable or invalid recipe stops the bridge before it listens or authenticates to the hub. Omit `filaments` or set it to `null` to disable per-core profiles. Enabling them requires all four fields (`bias`, `center`, `weight`, `tau`); incomplete sections fail startup. `pulseScatter` and `glide` still use defaults (see `docs/PLAN.md`, "Bridge configuration"). For local development only, explicitly set `MIX_FILE=mix.example.json` to use the public example without copying it.
+   - An enabled filament recipe publishes a transformed per-core CPU profile; mixing, jitter and daily shuffling can still reveal sustained CPU levels. Leave `filaments` omitted or `null` if those levels must remain private. Change the example's public weights before production use.
 4. Optionally set `SOURCE=realtime` for 1 s updates instead of 60 s ones. The bridge then asks the hub for each up host's live metrics while at least one page is open, and for 30 s after the last one closes; meanwhile the hub fetches from those agents every second, as it does while someone watches a system's 1-minute chart in Beszel.
 5. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
 
