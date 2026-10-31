@@ -22,6 +22,12 @@ Restart=on-failure
 RestartSec=5
 
 NoNewPrivileges=true
+CapabilityBoundingSet=
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+UMask=0077
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true

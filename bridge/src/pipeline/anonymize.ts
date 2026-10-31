@@ -4,9 +4,10 @@ function hmac(salt: string, text: string): string {
   return createHmac("sha256", salt).update(text).digest("hex");
 }
 
-/** Opaque, stable 8-hex-character ID for a Beszel system ID. */
-export function streamId(salt: string, systemId: string): string {
-  return hmac(salt, systemId).slice(0, 8);
+/** Opaque 8-hex-character ID, stable for one UTC day. */
+export function streamId(salt: string, systemId: string, now: Date): string {
+  const day = now.toISOString().slice(0, 10);
+  return hmac(salt, `${day}:${systemId}:stream`).slice(0, 8);
 }
 
 /** Band order that changes once per UTC day, so a position does not identify a host for long. */

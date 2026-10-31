@@ -151,7 +151,7 @@ Environment variables (template: `bridge/.env.example`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `BESZEL_URL` | `http://127.0.0.1:8090` | Hub address as reached from the bridge. |
+| `BESZEL_URL` | `http://127.0.0.1:8090` | Hub address as reached from the bridge; only HTTP(S), without embedded credentials. |
 | `BESZEL_EMAIL` | (required without `BESZEL_TOKEN`) | Bridge user's email. |
 | `BESZEL_PASSWORD` | (required without `BESZEL_TOKEN`) | Bridge user's password. |
 | `BESZEL_TOKEN` | (none) | Impersonation token for the bridge user, instead of email and password, for hubs without password auth. Rejected together with them, when it is not a JWT with `exp`, or when expired. The bridge checks it with `auth-refresh` at startup and every 6 h, and warns from 14 days before `exp`. |
@@ -186,7 +186,7 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Weights come from `mix.json`.
    - `filaments`: only with an explicit complete recipe, each profile value through that recipe with ±0.025 uniform jitter (`FILAMENT_JITTER`, so hosts with fewer than 6 cores do not leave exact linear interpolation spacings in the public array), smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
 4. **Anonymize:**
-   - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, system ID).
+   - Stream ID = first 8 hex characters of HMAC-SHA256(`STREAM_SALT`, `${UTC date}:${system ID}:stream`). IDs rotate at UTC midnight, including when channels are idle; the 2 s tick triggers a broadcast. This removes the permanent cross-day identifier, but continuous channel observations can still correlate hosts. New bands fade in while the old IDs drain; if all 32 frontend slots are occupied, the latest frame waits for draining slots and is retried without needing another SSE event.
    - Band order = shuffle seeded by `STREAM_SALT` + the current UTC date, so it changes daily.
    - Band width = one of 0, 0.25, 0.5, 0.75, 1, seeded by `STREAM_SALT`, the system ID and the UTC date (not from thread counts, which leaked core-count ratios and stayed fixed across days).
    - Band count: one stream per host that is not paused. The river is drawn from per-host bands, so their number shows on the page whatever the frame holds, and that is accepted. Paused hosts are left out, and IDs, widths and order do not say which host is which.
@@ -242,7 +242,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 
 | Field | Type | Meaning |
 |---|---|---|
-| `id` | string | Opaque 8-hex-character ID, stable per host. |
+| `id` | string | Opaque 8-hex-character ID, stable per host within one UTC day. |
 | `alive` | boolean | Host is reporting, and the bridge is connected to the hub. |
 | `width` | number 0..1 | Relative band width, quantized. |
 | `flow` | number 0..1 | Upward speed. |
@@ -293,19 +293,21 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
 
+The bridge rejects hub URLs with unsupported schemes or embedded credentials without logging the rejected value. Log records escape CR/LF, HTTP error URLs omit userinfo, and error cause chains stop after five entries (including cycles).
+
 ## Deployment
 
 Commands and steps are in README, "Deployment".
 
 - **Bridge in Docker** (`deploy/bridge.Dockerfile`, `deploy/compose.yml`):
-  - Multi-stage image on `node:24-alpine`: build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
-  - `.dockerignore` keeps `.env`, `mix.json`, `node_modules` and build output out of the context, so the image holds no secrets.
+  - Multi-stage image on `node:24-alpine` pinned to one multi-platform SHA256 digest in all stages (monthly Dependabot Docker updates with a seven-day cooldown): build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
+  - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `bridge/mix*.json*` (including environment-specific files and backups), keeping only `.env.example` and `bridge/mix.example.json` as public templates. The Docker context also excludes `node_modules` and build output.
   - The compose service joins the hub's network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
   - Environment from `bridge/.env`; compose overrides `BIND_HOST=0.0.0.0` and `BIND_PORT=8787` inside the container and publishes `127.0.0.1:8787:8787`.
   - A hub with `network_mode: host` is on no Docker network. `deploy/compose.host-network.yml` then puts the bridge on the host network too (`!reset` removes the network and port mapping), with `BIND_HOST=127.0.0.1` and `BESZEL_URL=http://127.0.0.1:8090`.
   - `bridge/mix.json` is bind-mounted read-only and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it.
   - Read-only root filesystem, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
-- **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options.
+- **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options plus an empty capability bounding set, `RestrictSUIDSGID`, `RestrictRealtime`, `RestrictNamespaces`, `SystemCallArchitectures=native` and `UMask=0077`. Executable memory remains available for Node's JIT. `deploy/test/systemd.py` verifies the unit and smoke-tests Node JIT/HTTP, empty capabilities and file permissions in a transient system service; CI runs it with passwordless sudo.
 - **Frontend:** `npm run build -w @beszel-river/frontend`, then copy `frontend/dist/` to the web root. The build uses relative asset URLs (`base: "./"`) and connects to the relative `stream`, so the same files work at a site root or under a path.
 - **nginx** (`deploy/nginx/river.conf`, own server block):
   - HTTP → HTTPS redirect; HTTP/2, because HTTP/1.1 browsers open at most 6 connections per host and every open tab holds one stream.
@@ -314,11 +316,11 @@ Commands and steps are in README, "Deployment".
     - `proxy_buffering off`: send events immediately.
     - `proxy_http_version 1.1` and `proxy_set_header Connection ""`: keep the upstream connection open.
     - `proxy_read_timeout 1h`: do not cut quiet streams.
-    - `limit_conn` 8 per client address (each HTTP/2 request counts), answered with 429.
+    - `river-limits.conf` defines the shared connection key: the full IPv4 address or the first eight binary IPv6 bytes (`/64`), including NUL/newline bytes. `limit_conn` allows 8 per key (each HTTP/2 request counts), answered with 429. It prevents one IPv6 `/64` from taking the bridge's 500 slots by rotating addresses; many prefixes can still exhaust the global cap. The include belongs once in the http block for either deployment mode. Changing an existing zone key requires an nginx restart.
   - `/healthz` is not proxied.
   - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
   - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (one year, this host only).
-  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there.
+  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there. `deploy/test/nginx.py` runs nginx in Docker to check actual binary keys and held-request limits for both paths; CI runs it after the syntax checks.
 
 ## Milestones
 

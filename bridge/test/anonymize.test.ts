@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { bandOrder, bandWidths, filamentOrder, streamId } from "../src/pipeline/anonymize.js";
 
+const now = new Date("2026-10-22T00:00:00Z");
 const salt = "0123456789abcdef-test";
 
 describe("streamId", () => {
   it("is 8 hex characters, stable, and depends on the salt", () => {
-    const id = streamId(salt, "abc123");
+    const id = streamId(salt, "abc123", now);
     expect(id).toMatch(/^[0-9a-f]{8}$/);
-    expect(streamId(salt, "abc123")).toBe(id);
-    expect(streamId(`${salt}x`, "abc123")).not.toBe(id);
+    expect(streamId(salt, "abc123", now)).toBe(id);
+    expect(streamId(`${salt}x`, "abc123", now)).not.toBe(id);
     expect(id).not.toContain("abc123");
+    expect(streamId(salt, "other", now)).not.toBe(id);
+    expect(streamId(salt, "abc123", new Date("2026-10-22T23:59:59.999Z"))).toBe(id);
+    expect(streamId(salt, "abc123", new Date("2026-10-23T02:00:00+02:00"))).not.toBe(id);
   });
 });
 

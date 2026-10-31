@@ -12,7 +12,7 @@ Status: all milestones (M0–M7) done; deployed with live data, with an optional
 
 ## Screenshots
 
-Four moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band order and widths change daily from a secret salt, so the picture does not tell which server is which.
+Four moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band IDs, order and widths change daily from a secret salt. At UTC midnight the old bands drain and new ones fade in; IDs no longer provide a permanent cross-day link, though continuous observations can still correlate streams.
 
 | | |
 |---|---|
@@ -53,7 +53,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
-2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge.
+2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge. It must use `http:` or `https:` without embedded credentials; use the authentication variables instead.
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "5. Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
@@ -138,6 +138,8 @@ sudo systemctl daemon-reload && sudo systemctl enable --now beszel-river-bridge
 
 The unit expects `/usr/bin/node`; edit `ExecStart` if `command -v node` prints another path.
 
+The service drops all capabilities, blocks namespace creation, setuid/setgid changes and realtime scheduling, limits syscalls to the native architecture, and creates files with mode 0600 (directories 0700). It leaves executable memory available for Node's JIT. After updating the unit, copy it again, run `sudo systemctl daemon-reload`, then `sudo systemctl restart beszel-river-bridge`.
+
 ### 3. Frontend
 
 ```sh
@@ -155,6 +157,7 @@ Own domain or subdomain, with `deploy/nginx/river.conf`:
 
 ```sh
 sudo certbot certonly --nginx -d river.example.com
+sudo install -D -m 644 deploy/nginx/river-limits.conf /etc/nginx/snippets/river-limits.conf
 sudo cp deploy/nginx/river.conf /etc/nginx/conf.d/river.conf   # then replace river.example.com in it
 sudo nginx -t && sudo systemctl reload nginx
 ```
@@ -164,17 +167,22 @@ sudo nginx -t && sudo systemctl reload nginx
 
 nginx older than 1.25.1 (Debian 12, Ubuntu 24.04) does not know `http2 on;`: delete that line and use `listen 443 ssl http2;`.
 
-Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `limit_conn_zone $binary_remote_addr zone=river_stream:10m;` to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
+Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and copy `river-limits.conf` to the same snippets directory and add `include /etc/nginx/snippets/river-limits.conf;` once to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
+
+Both modes allow 8 concurrent stream requests per IPv4 address or IPv6 `/64`, returning 429 above that limit. IPv6 privacy-address rotation within one `/64` shares the same allowance. This does not prevent exhaustion by clients controlling many prefixes. When upgrading an existing configuration, replace the old `limit_conn_zone $binary_remote_addr` line with the limits include and restart nginx once (`sudo systemctl restart nginx`): an existing shared zone cannot change its key during a reload.
 
 Check: `https://river.example.com/?debug` shows `alive` streams with live channel values.
 
 ### 5. Maintenance
+
+Git and Docker ignore `.env`, `.env.*` and `bridge/mix*.json*`, including environment-specific copies and backups. Only `.env.example` and `bridge/mix.example.json` are public templates; keep private copies under the ignored names.
 
 The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on-failure` in the unit) and reconnects after hub restarts. If it loses the hub for more than 30 s, or its login stops being valid, it sends every stream as not alive, so the river dries up rather than flowing on old values, and logs `Beszel connection lost`. The river flows again once the connection is back.
 
 - **Configuration changes:** after editing `bridge/.env` (e.g. `SOURCE=realtime`), run the same 2a `up -d` command: it recreates the container with the new environment, which `docker compose restart` would not. After editing only `bridge/mix.json`, `up -d` sees no change; use `restart bridge` instead (with the same `-f` options), since the bridge reads the file at startup. Under systemd, `sudo systemctl restart beszel-river-bridge` covers both.
 - **Filament recipe migration:** older recipes without `filaments` now run without per-core profiles. An existing section must explicitly contain `bias`, `center`, `weight` and `tau`; copies of the earlier template need `center: 0` added (as JSON: `"center": 0`), or the section removed/set to `null`. Filaments publish a transformed CPU profile; smoothing and shuffling do not guarantee confidentiality. Leave them disabled when CPU levels must stay private, and change the public template weights before enabling them.
 - **Slow stream readers:** the bridge bounds queued output to 256 KiB per response and disconnects clients that remain blocked for 10 s. While blocked it skips heartbeats and intermediate updates; after draining it sends the latest update. A single event exceeding the byte budget also closes that stream. Browsers reconnect normally.
+- **Base image updates:** the Dockerfile pins the multi-platform `node:24-alpine` digest in every stage. Dependabot proposes monthly Docker updates after a seven-day cooldown; review and merge those PRs to take base-image patches. Rebuilding the same checkout keeps the pinned base.
 - **Updates:** `git pull`, then rebuild the bridge (the 2a `up -d --build` command, or 2b's build and `sudo systemctl restart beszel-river-bridge`) and the frontend (3).
 - **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.
   ```sh

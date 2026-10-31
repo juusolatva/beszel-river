@@ -26,7 +26,11 @@ export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
   };
 
   const beszelUrl = value("BESZEL_URL", "http://127.0.0.1:8090");
-  if (!URL.canParse(beszelUrl)) errors.push(`BESZEL_URL is not a URL: ${beszelUrl}`);
+  const url = URL.parse(beszelUrl);
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
+    // Never echo a malformed address: it may contain credentials.
+    errors.push("BESZEL_URL must be an http: or https: URL without embedded credentials");
+  }
 
   const source = value("SOURCE", "systems");
   if (source !== "systems" && source !== "realtime") errors.push(`SOURCE must be "systems" or "realtime", got "${source}"`);

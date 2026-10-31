@@ -33,6 +33,34 @@ describe("log", () => {
     expect(stderr[0]).toBe("2026-10-26T12:00:00.000Z ERROR Login failed: Something went wrong. ← fetch failed ← connect ECONNREFUSED\n");
   });
 
+  it.each(["info", "warn", "error"] as const)("escapes line breaks in %s messages and upstream errors", (level) => {
+    log(level, "Login\r\nforged", new Error("upstream\nforged", { cause: "cause\rforged" }));
+    const output = level === "info" ? stdout : stderr;
+    expect(output[0]).toBe(`2026-10-26T12:00:00.000Z ${level.toUpperCase()} Login\\r\\nforged: upstream\\nforged ← cause\\rforged\n`);
+  });
+
+  it("bounds deep and cyclic error causes", () => {
+    const cyclic = new Error("cycle");
+    cyclic.cause = cyclic;
+    log("error", "cyclic", cyclic);
+    let deep = new Error("hidden");
+    for (let i = 0; i < 10; i++) deep = new Error("outer", { cause: deep });
+    log("error", "deep", deep);
+    for (const line of stderr) {
+      expect(line).toContain("[cause chain truncated]");
+      expect(line.split(" ← ")).toHaveLength(6);
+      expect(line).not.toContain("hidden");
+    }
+  });
+
+  it("redacts credentials in HTTP causes and suppresses malformed URLs", () => {
+    log("error", "request", { status: 403, url: "https://user:secret@hub/api/x" }); // betterleaks:allow -- synthetic URL credentials
+    log("error", "request", { status: 403, url: "https://user:secret@[" }); // betterleaks:allow -- synthetic URL credentials
+    expect(stderr[0]).toContain("HTTP 403 https://hub/api/x");
+    expect(stderr[1]).toContain("HTTP 403 [invalid URL]");
+    expect(stderr.join("")).not.toMatch(/user|secret/);
+  });
+
   it("describes the SDK's HTTP causes and values that are not errors", () => {
     log("error", "a", new Error("Forbidden.", { cause: { url: "http://hub/api/x", status: 403, data: {} } }));
     log("error", "b", "plain text");

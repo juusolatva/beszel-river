@@ -1,5 +1,5 @@
 # Keeps the SHA-pinned actions in .github/workflows/ current. npm dependencies are updated by hand
-# (exact versions, see AGENTS.md); base images use floating tags and pick up patches on rebuild.
+# (exact versions, see AGENTS.md); Docker base image digests are pinned and updated here too.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -12,3 +12,9 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
