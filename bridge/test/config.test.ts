@@ -35,8 +35,16 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...valid, SOURCE: "carrier-pigeon" })).toThrow(/SOURCE must be/);
   });
 
-  it("rejects an invalid URL", () => {
-    expect(() => loadConfig({ ...valid, BESZEL_URL: "not a url" })).toThrow(/BESZEL_URL is not a URL/);
+  // The userinfo below is deliberately fake.
+  it.each(["not a url", "file:///tmp/hub", "data:text/plain,hub", "ws://hub", "https://user:secret@hub", "http://user@hub", "http://:secret@hub", "http://us%65r:s%65cret@hub", "https://user:secret@["])("rejects unsafe URLs without echoing them: %s", (beszelUrl) => { // betterleaks:allow -- synthetic URL credentials
+    expect(() => loadConfig({ ...valid, BESZEL_URL: beszelUrl })).toThrow("BESZEL_URL must be an http: or https: URL without embedded credentials");
+    try { loadConfig({ ...valid, BESZEL_URL: beszelUrl }); } catch (error) {
+      expect((error as Error).message).not.toContain(beszelUrl);
+    }
+  });
+
+  it.each(["http://hub:8090", "https://hub.example/beszel/", "http://[::1]:8090"])("accepts a hub URL: %s", (beszelUrl) => {
+    expect(loadConfig({ ...valid, BESZEL_URL: beszelUrl }).beszelUrl).toBe(beszelUrl);
   });
 
   it("uses BESZEL_TOKEN instead of email and password", () => {

@@ -151,7 +151,7 @@ Environment variables (template: `bridge/.env.example`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `BESZEL_URL` | `http://127.0.0.1:8090` | Hub address as reached from the bridge. |
+| `BESZEL_URL` | `http://127.0.0.1:8090` | Hub address as reached from the bridge; only HTTP(S), without embedded credentials. |
 | `BESZEL_EMAIL` | (required without `BESZEL_TOKEN`) | Bridge user's email. |
 | `BESZEL_PASSWORD` | (required without `BESZEL_TOKEN`) | Bridge user's password. |
 | `BESZEL_TOKEN` | (none) | Impersonation token for the bridge user, instead of email and password, for hubs without password auth. Rejected together with them, when it is not a JWT with `exp`, or when expired. The bridge checks it with `auth-refresh` at startup and every 6 h, and warns from 14 days before `exp`. |
@@ -292,6 +292,8 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - The simulation and renderer allocate nothing per frame: the band layout sorts into a preallocated list, and the noise function uses plain locals (its output is unchanged).
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
+
+The bridge rejects hub URLs with unsupported schemes or embedded credentials without logging the rejected value. Log records escape CR/LF, HTTP error URLs omit userinfo, and error cause chains stop after five entries (including cycles).
 
 ## Deployment
 

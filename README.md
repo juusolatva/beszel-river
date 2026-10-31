@@ -53,7 +53,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
-2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge.
+2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge. It must use `http:` or `https:` without embedded credentials; use the authentication variables instead.
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "5. Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
