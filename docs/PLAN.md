@@ -300,7 +300,7 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 Commands and steps are in README, "Deployment".
 
 - **Bridge in Docker** (`deploy/bridge.Dockerfile`, `deploy/compose.yml`):
-  - Multi-stage image on `node:24-alpine`: build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
+  - Multi-stage image on `node:24-alpine` pinned to one multi-platform SHA256 digest in all stages (monthly Dependabot Docker updates with a seven-day cooldown): build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
   - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `bridge/mix*.json*` (including environment-specific files and backups), keeping only `.env.example` and `bridge/mix.example.json` as public templates. The Docker context also excludes `node_modules` and build output.
   - The compose service joins the hub's network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
   - Environment from `bridge/.env`; compose overrides `BIND_HOST=0.0.0.0` and `BIND_PORT=8787` inside the container and publishes `127.0.0.1:8787:8787`.
