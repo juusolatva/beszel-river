@@ -3,7 +3,7 @@
 # Configuration comes from the environment at run time (bridge/.env via compose); .dockerignore keeps
 # .env and mix.json out of the build context, so the image holds no secrets.
 
-FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS build
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS build
 WORKDIR /app
 # npm ci needs every workspace manifest the lockfile names, even for one workspace.
 COPY package.json package-lock.json .npmrc ./
@@ -16,7 +16,7 @@ COPY shared/ shared/
 COPY bridge/ bridge/
 RUN npm run build -w @beszel-river/bridge
 
-FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85 AS deps
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY shared/package.json shared/
@@ -24,7 +24,7 @@ COPY bridge/package.json bridge/
 COPY frontend/package.json frontend/
 RUN npm ci -w @beszel-river/bridge --omit=dev --ignore-scripts
 
-FROM node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deps /app/node_modules node_modules/
