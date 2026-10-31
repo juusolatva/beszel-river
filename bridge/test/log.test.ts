@@ -33,9 +33,10 @@ describe("log", () => {
     expect(stderr[0]).toBe("2026-10-26T12:00:00.000Z ERROR Login failed: Something went wrong. ← fetch failed ← connect ECONNREFUSED\n");
   });
 
-  it("escapes line breaks in messages and upstream errors", () => {
-    log("error", "Login\r\nforged", new Error("upstream\nforged", { cause: "cause\rforged" }));
-    expect(stderr[0]).toBe("2026-10-26T12:00:00.000Z ERROR Login\\r\\nforged: upstream\\nforged ← cause\\rforged\n");
+  it.each(["info", "warn", "error"] as const)("escapes line breaks in %s messages and upstream errors", (level) => {
+    log(level, "Login\r\nforged", new Error("upstream\nforged", { cause: "cause\rforged" }));
+    const output = level === "info" ? stdout : stderr;
+    expect(output[0]).toBe(`2026-10-26T12:00:00.000Z ${level.toUpperCase()} Login\\r\\nforged: upstream\\nforged ← cause\\rforged\n`);
   });
 
   it("bounds deep and cyclic error causes", () => {

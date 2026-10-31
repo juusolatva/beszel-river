@@ -17,7 +17,7 @@ function describe(error: unknown, depth = 0): string {
 
 export function log(level: Level, message: string, error?: unknown): void {
   const cause = error === undefined ? "" : `: ${describe(error)}`;
-  const line = `${new Date().toISOString()} ${level.toUpperCase()} ${message}${cause}`.replaceAll("\r", "\\r").replaceAll("\n", "\\n");
+  const line = `${new Date().toISOString()} ${level.toUpperCase()} ${message}${cause}`.replaceAll("\r", String.raw`\r`).replaceAll("\n", String.raw`\n`);
   if (level === "info") process.stdout.write(line + "\n");
   else process.stderr.write(line + "\n");
 }
