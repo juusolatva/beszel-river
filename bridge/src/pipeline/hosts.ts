@@ -29,6 +29,12 @@ export const REALTIME_STALE_MS = 10_000;
 /** Assumed gap before the first realtime sample of a run, seconds. */
 const FIRST_REALTIME_DT = 1;
 
+interface DayLayout {
+  day: string;
+  order: string[];
+  streams: Map<string, { id: string; width: number; filamentOrder: number[] }>;
+}
+
 /** Every known host's pipeline state; turns it into frames. */
 export class HostTable {
   private readonly hosts = new Map<string, Host>();
@@ -36,6 +42,8 @@ export class HostTable {
   private upstream = true;
   /** Last tick's UTC date; snapshots must not hide a rollover from existing viewers. */
   private day: string | null = null;
+  /** Cached daily IDs, widths and orders for the current UTC day and non-paused host set. */
+  private layout: DayLayout | null = null;
 
   constructor(
     private readonly salt: string,
@@ -61,9 +69,11 @@ export class HostTable {
         realtimeAt: null,
         fromRealtime: false,
       });
+      this.layout = null;
       return true;
     }
     const changed = host.status !== record.status || host.threads !== threads;
+    if (host.status !== record.status) this.layout = null;
     // A stream that is drying up should not flash with pulses scattered from its last record.
     if (record.status !== "up") host.mixer.dropPulses();
     host.status = record.status;
@@ -73,7 +83,9 @@ export class HostTable {
   }
 
   removeSystem(systemId: string): boolean {
-    return this.hosts.delete(systemId);
+    const removed = this.hosts.delete(systemId);
+    if (removed) this.layout = null;
+    return removed;
   }
 
   /** Marks the hub connection lost or back (see `UpstreamWatch`); returns whether the frame changed. */
@@ -157,7 +169,8 @@ export class HostTable {
 
   /** Paused hosts are left out; the rest are anonymized and ordered for the day. */
   frame(now: Date): Frame {
-    this.day ??= now.toISOString().slice(0, 10);
+    const day = now.toISOString().slice(0, 10);
+    this.day ??= day;
     const systemIds: string[] = [];
     const byId = new Map<string, Host>();
     const timeMs = now.getTime();
@@ -176,18 +189,36 @@ export class HostTable {
       byId.set(host.systemId, host);
     }
 
-    const widths = bandWidths(this.salt, systemIds, now);
-    const order = bandOrder(this.salt, systemIds, now);
-    const streams = order.map((systemId): Stream => {
+    const layout = this.dayLayout(day, systemIds, now);
+    const streams = layout.order.map((systemId): Stream => {
       const host = byId.get(systemId) as Host;
-      const stream: Stream = { id: streamId(this.salt, systemId, now), alive: this.upstream && host.status === "up", width: widths.get(systemId) as number, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+      const meta = layout.streams.get(systemId)!;
+      const stream: Stream = { id: meta.id, alive: this.upstream && host.status === "up", width: meta.width, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
       // Three decimals is plenty for the visuals and keeps raw precision out of the payload.
       for (const channel of MIXED) stream[channel] = round3(host.mixer.values[channel]);
       const filaments = host.mixer.filaments;
-      if (filaments) stream.filaments = filamentOrder(this.salt, systemId, FILAMENTS, now).map((i) => round3(filaments[i]));
+      if (filaments) stream.filaments = meta.filamentOrder.map((i) => round3(filaments[i]));
       return stream;
     });
     return { v: 1, t: timeMs, streams };
+  }
+
+  private dayLayout(day: string, systemIds: readonly string[], now: Date): DayLayout {
+    if (this.layout?.day === day) return this.layout;
+    const widths = bandWidths(this.salt, systemIds, now);
+    const order = bandOrder(this.salt, systemIds, now);
+    const streams = new Map(
+      systemIds.map((systemId) => [
+        systemId,
+        {
+          id: streamId(this.salt, systemId, now),
+          width: widths.get(systemId) as number,
+          filamentOrder: filamentOrder(this.salt, systemId, FILAMENTS, now),
+        },
+      ]),
+    );
+    this.layout = { day, order, streams };
+    return this.layout;
   }
 
   private realtimeLive(host: Host, now: number): boolean {
