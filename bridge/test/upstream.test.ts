@@ -26,8 +26,10 @@ describe("UpstreamWatch", () => {
     watch.update(0);
     connected = true;
     expect(watch.update(500)).toBe(false);
+    expect(watch.reconnected).toBe(true);
     connected = false;
     expect(watch.update(600)).toBe(false);
+    expect(watch.reconnected).toBe(false);
     expect(watch.update(1500)).toBe(false);
     expect(watch.live).toBe(true);
     expect(watch.update(1600)).toBe(true);
@@ -41,6 +43,18 @@ describe("UpstreamWatch", () => {
     connected = true;
     expect(watch.update(1001)).toBe(true);
     expect(watch.live).toBe(true);
+    expect(watch.reconnected).toBe(true);
     expect(watch.update(1002)).toBe(false);
+    expect(watch.reconnected).toBe(false);
+  });
+
+  it("reports reconnected on the next update when a disconnect is marked between ticks", () => {
+    const watch = new UpstreamWatch(() => true, 1000);
+    watch.markDisconnected(100);
+    expect(watch.reconnected).toBe(false);
+    expect(watch.update(200)).toBe(false);
+    expect(watch.reconnected).toBe(true);
+    expect(watch.update(300)).toBe(false);
+    expect(watch.reconnected).toBe(false);
   });
 });

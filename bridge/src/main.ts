@@ -28,6 +28,9 @@ const hosts = new HostTable(config.salt, loadMixConfig(config.mixFile));
 const client = new BeszelClient(config.beszelUrl, config.auth);
 let live = false;
 const upstream = new UpstreamWatch(() => client.connected);
+client.pb.realtime.onDisconnect = (subscriptions) => {
+  if (live && subscriptions.length > 0) upstream.markDisconnected();
+};
 
 const server = new StreamServer({
   host: config.bindHost,
@@ -105,12 +108,15 @@ const port = await server.listen();
 log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz), source ${config.source}`);
 setInterval(() => {
   // The SDK reconnects on its own; until it does, or forever with an expired token, statuses are stale.
-  if (live && upstream.update()) {
-    if (upstream.live) {
-      log("info", "Beszel connection is back");
-      void source.refreshSystems().catch((error: unknown) => log("warn", "Refreshing systems failed", error));
-    } else log("warn", "Beszel connection lost; showing every stream as not alive until it is back");
-    changed(hosts.setUpstream(upstream.live));
+  if (live) {
+    if (upstream.update()) {
+      if (upstream.live) log("info", "Beszel connection is back");
+      else log("warn", "Beszel connection lost; showing every stream as not alive until it is back");
+      changed(hosts.setUpstream(upstream.live));
+    }
+    if (upstream.reconnected) {
+      void source.refreshSystems().catch((error: unknown) => log("warn", "Refreshing systems failed, retrying", error));
+    }
   }
   changed(hosts.tick(TICK_S));
 }, TICK_S * 1000);

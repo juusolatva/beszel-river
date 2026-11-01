@@ -56,7 +56,7 @@ describe("BeszelClient", () => {
     await client.close();
   });
 
-  it("logs in again when token refresh fails, and clears the auth store when re-login also fails", async () => {
+  it("logs in again when token refresh fails, clears the auth store on failure, and retries login with bounded backoff", async () => {
     const validJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: (Date.now() + 30 * DAY_MS) / 1000 })).toString("base64url")}.sig`;
     const client = new BeszelClient(URL, { kind: "password", email: "bridge@example.com", password: "pw" });
     const authRefresh = vi.fn().mockRejectedValue(new Error("authRefresh failed"));
@@ -66,7 +66,12 @@ describe("BeszelClient", () => {
         client.pb.authStore.save(validJwt, null);
         return {};
       })
-      .mockRejectedValueOnce(new Error("login failed"));
+      .mockRejectedValueOnce(new Error("login failed"))
+      .mockRejectedValueOnce(new Error("still down"))
+      .mockImplementationOnce(async () => {
+        client.pb.authStore.save(validJwt, null);
+        return {};
+      });
     client.pb.collection = vi.fn().mockReturnValue({ authRefresh, authWithPassword });
 
     client.keepAlive();
@@ -81,6 +86,14 @@ describe("BeszelClient", () => {
     expect(client.pb.authStore.token).toBe("");
     expect(client.rt.authStore.token).toBe("");
     expect(client.pb.authStore.isValid).toBe(false);
+
+    // First retry after 5 s also fails; second retry 10 s later succeeds without waiting 6 h.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(authWithPassword).toHaveBeenCalledTimes(3);
+    expect(client.pb.authStore.isValid).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(authWithPassword).toHaveBeenCalledTimes(4);
+    expect(client.pb.authStore.isValid).toBe(true);
     await client.close();
   });
 

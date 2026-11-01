@@ -147,24 +147,35 @@ describe("SystemsSource", () => {
     expect(calls).toEqual(["removed b", "system a paused", "system c up", "system c down"]);
   });
 
-  it("flushes held events and rethrows when refreshSystems fails", async () => {
+  it("flushes held events, rethrows, and retries after a delay when refreshSystems fails", async () => {
     const { pb, lists, emit } = createPb();
     const { calls, handlers } = recorder();
     const source = new SystemsSource(pb, handlers);
-    lists.systems.resolve([system("a")]);
+    lists.systems.resolve([system("a"), system("b")]);
     lists.system_stats.resolve([]);
     await source.start();
     calls.length = 0;
 
+    vi.useFakeTimers();
     let rejectList!: (error: Error) => void;
-    pb.collection = (() => ({
-      getFullList: () => new Promise<SystemRecord[]>((_, reject) => (rejectList = reject)),
-    })) as unknown as PocketBase["collection"];
+    const getFullList = vi
+      .fn<() => Promise<SystemRecord[]>>()
+      .mockImplementationOnce(() => new Promise<SystemRecord[]>((_, reject) => (rejectList = reject)))
+      .mockRejectedValueOnce(new Error("still down"))
+      .mockResolvedValueOnce([system("a", "paused")]);
+    pb.collection = (() => ({ getFullList })) as unknown as PocketBase["collection"];
 
     const refreshing = source.refreshSystems();
     emit("systems", { action: "update", record: system("a", "down") });
     rejectList(new Error("network down"));
     await expect(refreshing).rejects.toThrow("network down");
     expect(calls).toEqual(["system a down"]);
+
+    // First retry after 5 s fails and schedules another retry; second retry 5 s later reconciles the list.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(getFullList).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(getFullList).toHaveBeenCalledTimes(3);
+    expect(calls).toEqual(["system a down", "removed b", "system a paused"]);
   });
 });

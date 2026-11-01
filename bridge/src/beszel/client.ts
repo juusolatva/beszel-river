@@ -20,6 +20,7 @@ export class BeszelClient {
    */
   readonly rt: PocketBase;
   private refreshTimer: NodeJS.Timeout | undefined;
+  private retryTimer: NodeJS.Timeout | undefined;
 
   constructor(
     url: string,
@@ -38,6 +39,8 @@ export class BeszelClient {
   }
 
   async login(): Promise<void> {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     try {
       if (this.auth.kind === "password") {
         await this.pb.collection("users").authWithPassword(this.auth.email, this.auth.password);
@@ -64,6 +67,8 @@ export class BeszelClient {
 
   async close(): Promise<void> {
     clearInterval(this.refreshTimer);
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     await Promise.all([this.pb.realtime.unsubscribe().catch(() => undefined), this.rt.realtime.unsubscribe().catch(() => undefined)]);
   }
 
@@ -77,13 +82,28 @@ export class BeszelClient {
     this.warnIfExpiring();
     try {
       await this.pb.collection("users").authRefresh();
+      clearTimeout(this.retryTimer);
+      this.retryTimer = undefined;
     } catch (error) {
       log("warn", "Token refresh failed, logging in again", error);
       try {
         await this.login();
       } catch (loginError) {
         log("error", "Login failed", loginError);
+        this.scheduleRetry(0);
       }
     }
+  }
+
+  private scheduleRetry(attempt: number): void {
+    clearTimeout(this.retryTimer);
+    const delay = Math.min(60, 5 * 2 ** attempt) * 1000;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      void this.login().catch((error: unknown) => {
+        log("error", "Login failed", error);
+        this.scheduleRetry(attempt + 1);
+      });
+    }, delay);
   }
 }

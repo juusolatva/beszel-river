@@ -5,6 +5,7 @@ import type { SystemRecord, SystemStatsRecord } from "./types.js";
 // No `name`: hostnames have no use here, so they are not fetched at all.
 const SYSTEM_FIELDS = "id,status,info";
 const STATS_FIELDS = "id,system,type,created,stats";
+const REFRESH_RETRY_MS = 5_000;
 
 export interface SystemsHandlers {
   system(record: SystemRecord): void;
@@ -22,6 +23,7 @@ export interface SystemsHandlers {
 export class SystemsSource {
   private readonly knownSystems = new Set<string>();
   private heldSystems: { action: string; record: SystemRecord }[] | null = null;
+  private retryTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly pb: PocketBase,
@@ -66,8 +68,10 @@ export class SystemsSource {
     log("info", `Loaded ${systems.length} systems and ${history.length} history records`);
   }
 
-  /** Re-reads the `systems` list so hosts paused or deleted during an outage do not linger. */
+  /** Re-reads the `systems` list so hosts paused or deleted during an outage do not linger; retries on failure. */
   async refreshSystems(): Promise<void> {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     if (this.heldSystems) return;
     this.heldSystems = [];
     let systems: SystemRecord[];
@@ -75,6 +79,10 @@ export class SystemsSource {
       systems = await this.pb.collection("systems").getFullList<SystemRecord>({ fields: SYSTEM_FIELDS });
     } catch (error) {
       this.flushHeldSystems();
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = undefined;
+        void this.refreshSystems().catch((retryError: unknown) => log("warn", "Refreshing systems failed, retrying", retryError));
+      }, REFRESH_RETRY_MS);
       throw error;
     }
     this.applySystems(systems);
