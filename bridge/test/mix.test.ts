@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Features } from "../src/pipeline/features.js";
@@ -20,6 +23,17 @@ describe("parseMixConfig", () => {
 
   it("accepts mix.example.json", () => {
     expect(() => loadMixConfig(fileURLToPath(new URL("../mix.example.json", import.meta.url)))).not.toThrow();
+  });
+
+  it("rejects malformed JSON without echoing the file contents", () => {
+    const dir = mkdtempSync(join(tmpdir(), "river-mix-"));
+    try {
+      const path = join(dir, "bad.json");
+      writeFileSync(path, '{"flow": secret_weight_snippet}');
+      expect(() => loadMixConfig(path)).toThrow("Invalid mix config: malformed JSON");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("rejects unknown features, missing channels and bad numbers", () => {

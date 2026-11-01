@@ -74,7 +74,9 @@ export function tokenExpiry(token: string): Date | null {
   try {
     const payload: unknown = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     const exp = (payload as { exp?: unknown } | null)?.exp;
-    return typeof exp === "number" && Number.isFinite(exp) ? new Date(exp * 1000) : null;
+    if (typeof exp !== "number") return null;
+    const date = new Date(exp * 1000);
+    return Number.isFinite(date.getTime()) ? date : null;
   } catch {
     return null;
   }

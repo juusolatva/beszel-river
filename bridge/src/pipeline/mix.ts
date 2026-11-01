@@ -177,7 +177,14 @@ function section<T extends object>(raw: unknown, name: string, defaults: T): T {
 }
 
 export function loadMixConfig(path: string): MixConfig {
-  return parseMixConfig(JSON.parse(readFileSync(path, "utf8")));
+  const text = readFileSync(path, "utf8");
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    fail("malformed JSON");
+  }
+  return parseMixConfig(json);
 }
 
 /** Per-host channel state. */

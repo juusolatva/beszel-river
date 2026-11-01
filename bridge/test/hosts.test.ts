@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SystemRecord, SystemStatsRecord } from "../src/beszel/types.js";
+import * as anonymize from "../src/pipeline/anonymize.js";
 import { bandWidths, streamId } from "../src/pipeline/anonymize.js";
 import { coreProfile } from "../src/pipeline/features.js";
 import { HostTable, REALTIME_STALE_MS } from "../src/pipeline/hosts.js";
@@ -29,6 +30,61 @@ describe("HostTable", () => {
     const restarted = new HostTable(salt, mix);
     restarted.upsertSystem(system("a", "down", null));
     expect(restarted.frame(after).streams[0].id).toBe(newId);
+  });
+
+  it("reuses the daily layout cache and invalidates it when hosts are added, paused, resumed, removed, or the UTC day rotates", () => {
+    const day1Later = new Date("2026-10-22T18:30:00Z");
+    const day2 = new Date("2026-10-23T00:00:00Z");
+    const idA = streamId(salt, "a", now);
+    const idB = streamId(salt, "b", now);
+    const idADay2 = streamId(salt, "a", day2);
+    const idSpy = vi.spyOn(anonymize, "streamId");
+    const orderSpy = vi.spyOn(anonymize, "bandOrder");
+    const table = new HostTable(salt, mix);
+
+    table.upsertSystem(system("a", "up"));
+    expect(table.frame(now).streams.map((s) => s.id)).toEqual([idA]);
+    expect(idSpy).toHaveBeenCalledTimes(1);
+    expect(orderSpy).toHaveBeenCalledTimes(1);
+
+    // Same day and same non-paused host set (including up/down status changes and paused/unknown edits) reuse the cache.
+    expect(table.frame(day1Later).streams.map((s) => s.id)).toEqual([idA]);
+    table.upsertSystem(system("a", "down"));
+    expect(table.frame(day1Later).streams[0]).toMatchObject({ id: idA, alive: false });
+    table.upsertSystem(system("p", "paused"));
+    expect(table.removeSystem("p")).toBe(true);
+    expect(table.removeSystem("unknown")).toBe(false);
+    expect(table.frame(day1Later).streams).toHaveLength(1);
+    expect(idSpy).toHaveBeenCalledTimes(1);
+    expect(orderSpy).toHaveBeenCalledTimes(1);
+
+    // Adding a non-paused host on the same day rebuilds the layout.
+    table.upsertSystem(system("b", "up"));
+    expect(table.frame(day1Later).streams.map((s) => s.id).sort()).toEqual([idA, idB].sort());
+    expect(orderSpy).toHaveBeenCalledTimes(2);
+
+    // Pausing and resuming a host on the same day each rebuild the layout, while repeated snapshots reuse it.
+    table.upsertSystem(system("b", "paused"));
+    expect(table.frame(day1Later).streams.map((s) => s.id)).toEqual([idA]);
+    expect(table.frame(day1Later).streams.map((s) => s.id)).toEqual([idA]);
+    expect(orderSpy).toHaveBeenCalledTimes(3);
+
+    table.upsertSystem(system("b", "up"));
+    expect(table.frame(day1Later).streams).toHaveLength(2);
+    expect(orderSpy).toHaveBeenCalledTimes(4);
+
+    // Removing a non-paused host on the same day rebuilds the layout.
+    expect(table.removeSystem("b")).toBe(true);
+    expect(table.frame(day1Later).streams.map((s) => s.id)).toEqual([idA]);
+    expect(orderSpy).toHaveBeenCalledTimes(5);
+
+    // Midnight rotation rebuilds the layout for the new UTC day and reuses it afterwards.
+    expect(table.frame(day2).streams.map((s) => s.id)).toEqual([idADay2]);
+    expect(table.frame(day2).streams.map((s) => s.id)).toEqual([idADay2]);
+    expect(orderSpy).toHaveBeenCalledTimes(6);
+
+    idSpy.mockRestore();
+    orderSpy.mockRestore();
   });
 
   it("emits anonymized streams without names or system IDs", () => {

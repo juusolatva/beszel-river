@@ -56,7 +56,10 @@ describe("bridge recipe startup", () => {
     expect(login).not.toHaveBeenCalled();
   });
 
-  it.each(["omitted", "null", "enabled"])("accepts an explicit recipe with %s filaments", async (filaments) => {
+  it.each(["omitted", "null", "enabled"])("accepts an explicit recipe with %s filaments and scrubs secrets from process.env", async (filaments) => {
+    vi.stubEnv("BESZEL_PASSWORD", "test-secret");
+    vi.stubEnv("BESZEL_TOKEN", "test-token");
+    vi.stubEnv("STREAM_SALT", "startup-test-salt");
     const recipe = JSON.parse(readFileSync("mix.example.json", "utf8"));
     if (filaments === "omitted") delete recipe.filaments;
     else if (filaments === "null") recipe.filaments = null;
@@ -67,6 +70,9 @@ describe("bridge recipe startup", () => {
     await expect(import("../src/main.js")).rejects.toBe(reachedListener);
     expect(listen).toHaveBeenCalledOnce();
     expect(login).not.toHaveBeenCalled();
+    expect(process.env.BESZEL_PASSWORD).toBeUndefined();
+    expect(process.env.BESZEL_TOKEN).toBeUndefined();
+    expect(process.env.STREAM_SALT).toBeUndefined();
   });
 
   it("rejects an invalid recipe before listening or authenticating", async () => {
