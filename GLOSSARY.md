@@ -40,7 +40,7 @@ The abstract representation of one non-paused host's contribution to the river, 
 _Avoid_: Connection, band when referring to the abstract state.
 
 **Stream ID**:
-A temporary identity for a stream within a day, without naming its host.
+A temporary identity for a stream within one UTC day, without naming its host.
 _Avoid_: Host ID, permanent identity.
 
 **Frame**:
@@ -50,6 +50,10 @@ _Avoid_: Sample, rendered frame when referring to river state.
 **Alive**:
 The stream state indicating that its host is reporting and the hub connection is considered live.
 _Avoid_: Present, visible, reachable when describing this state.
+
+**Not alive**:
+The stream state indicating that its host is not reporting or the hub connection is no longer considered live. The stream remains in the river.
+_Avoid_: Paused host, removed stream.
 
 **Channel**:
 One of the abstract numeric controls for a stream's appearance: width, flow, density, turbulence, pulse or heat.
@@ -70,7 +74,7 @@ _Avoid_: Particle count.
 The channel for sideways variation in particle motion.
 
 **Pulse**:
-A temporary surge in a stream's particle spawning and brightness, shaped by host activity.
+The channel for the strength of a brief surge in a stream's particle spawning and brightness, shaped by host activity.
 _Avoid_: Heartbeat, sample arrival.
 
 **Heat**:
@@ -86,6 +90,10 @@ _Avoid_: Core readings, one strand per core.
 **River**:
 The combined upward flow of rainbow-coloured particles and their trails across all bands.
 
+**Offline river**:
+The river's state when the viewer's live-data connection is no longer considered available. Streams thin out and lose colour while their reporting states remain unchanged.
+_Avoid_: All hosts down.
+
 **Band**:
 The soft-edged region occupied by a stream in the river, overlapping and braiding with neighbouring bands.
 _Avoid_: Host, stream when referring specifically to the visible region.
@@ -95,5 +103,5 @@ One of the positions across a band around which particles gather according to it
 _Avoid_: CPU core.
 
 **Draining stream**:
-A stream fading out after its identity is absent from the latest frame, while its remaining particles finish their motion.
+A stream fading out after its identity is absent from the latest frame, while its remaining particles finish their motion. Daily identity changes can cause draining even when the host keeps reporting.
 _Avoid_: Unavailable host, not-alive stream.
