@@ -36,8 +36,8 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 
 ## Requirements
 
-- Node.js ≥ 24.22.1 (production target: Node 24 LTS, see `.nvmrc`); CI checks 24.22.1, the latest 24 and 26
-- npm (use npm 11 on Node 24 for dependency changes so the lockfile stays consistent)
+- Node.js ≥ 24.22.1 (production target: Node 24.22.1 LTS, see `.nvmrc`); CI checks 24.22.1, the latest 24 and 26
+- npm ≥ 11.10 (use npm 11 on Node 24 for dependency changes so the lockfile stays consistent); `.npmrc` requires releases to be at least 7 days old when resolving package versions
 
 ## Development
 
@@ -122,7 +122,7 @@ The bridge then listens on the host's `127.0.0.1:8787` directly; `BESZEL_NETWORK
 
 ### 2b. Bridge under systemd (hub not in Docker)
 
-Needs Node 24 and the checkout in `/opt/beszel-river`; the unit's `WorkingDirectory` is `/opt/beszel-river/bridge`. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
+Needs Node 24.22.1 or later on the 24 line and the checkout in `/opt/beszel-river`; the unit's `WorkingDirectory` is `/opt/beszel-river/bridge`. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
 
 ```sh
 sudo useradd --system --home-dir /opt/beszel-river --shell /usr/sbin/nologin beszel-river

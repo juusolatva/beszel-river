@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 24.22.1: minimum in package.json "engines". 24: production version, keep equal to .nvmrc.
+        # 24.22.1: production pin in .nvmrc and minimum in package.json "engines". 24: latest LTS patch.
         # 26: the current release line, the next production version.
         node: ["24.22.1", "24", "26"]
     steps:
@@ -51,7 +51,7 @@ jobs:
           done
       - run: npm run build
       # SONAR_TOKEN is not available to pull requests from forks or Dependabot. The scan runs once,
-      # on the Node version used in production, with the coverage from this run.
+      # on the latest patch of the production Node line, with the coverage from this run.
       - name: Prefix lcov paths with the workspace
         if: ${{ matrix.node == '24' }}
         # vitest writes workspace-relative paths into lcov.info; Sonar resolves them from the repo root.
