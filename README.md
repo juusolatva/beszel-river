@@ -6,13 +6,13 @@
 [![Node](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjuusolatva%2Fbeszel-river%2Fmain%2Fpackage.json&query=%24.engines.node&label=node&logo=nodedotjs)](package.json)
 [![License: MIT](https://img.shields.io/github/license/juusolatva/beszel-river)](LICENSE)
 
-A web page that turns live server metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
+A web page that turns live metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
 Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Screenshots
 
-Four moments of the live page. Each vertical band is one server; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band IDs, order and widths change daily from a secret salt. At UTC midnight the old bands drain and new ones fade in; IDs no longer provide a permanent cross-day link, though continuous observations can still correlate streams.
+Four moments of the live page. Each vertical band is one host; the bands overlap at soft edges and braid as they rise. Load sets how fast and how long the trails are, changes in network and disk traffic make them wiggle sideways, and the hue drifts slowly through the rainbow. Bands with per-core data split into finer strands, where a busy core draws a tight, faster line. Band IDs, order and widths change daily from a secret salt. At UTC midnight the old bands drain and new ones fade in; IDs no longer provide a permanent cross-day link, though continuous observations can still correlate streams.
 
 | | |
 |---|---|
