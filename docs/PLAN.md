@@ -182,7 +182,7 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - Direction: tx share of traffic, 0.5 below 1 KiB/s. Temperature: (max sensor − 30 °C) / 60.
    - Per-core profile: the cores' busy % sorted and resampled to 6 values by linear interpolation, from the idlest to the busiest, divided by 100. Every core count gives 6 values; only a single core gives 6 equal ones.
 3. **Mix** features into channels.
-   - Each channel is a weighted blend of at least two features, smoothed with different exponential time constants.
+   - The template blends at least two features into each activity-driven channel. `flow`, `density`, `turbulence` and `heat` use different exponential smoothing time constants; `pulse` rises and decays as described below. `width` is assigned in the anonymization step.
    - Some inputs are changes since the previous sample rather than levels.
    - Weights come from `mix.json`.
    - `filaments`: only with an explicit complete recipe, each profile value through that recipe with ±0.025 uniform jitter (`FILAMENT_JITTER`, so hosts with fewer than 6 cores do not leave exact linear interpolation spacings in the public array), smoothed with its `tau`. Disabled recipes and hosts without per-core usage emit none.
@@ -195,16 +195,18 @@ The optional `pulseScatter` entry (`jitter`, `rate`, `max`, `window`; defaults 5
    - The daily stream IDs, widths, band order and filament orders are cached for the current UTC day and non-paused host set so snapshots and broadcasts do not recompute HMACs per request or tick.
 5. **Broadcast** the full state of all streams to every connected viewer, 250 ms after the first change in a batch (Beszel updates all hosts within a second or two). `pulse` rises on each sample (realtime samples at once, live minute records scattered, see below) and decays with time constant `pulseDecay` (8 s). A 2 s tick lets pulses decay, fires scattered pulses that are due and moves gliding channels on, and broadcasts when that changed anything visibly (a pulse by 0.005, a gliding value by 0.0005). Channels are rounded to three decimals.
 
-Mapping in the template `bridge/mix.example.json`, checked against a live hub in M4:
+Visual controls and reporting state, with activity mappings from the template `bridge/mix.example.json`:
 
-| Channel | Mixed from | Visual |
+| Field | Derived from | Visual |
 |---|---|---|
+| `width` | Daily seeded choice, independent of host activity | Relative band width |
 | `flow` | CPU (fast) + load | Upward speed, tail length |
-| `density` | Memory (slow) | Spawn rate |
+| `density` | Memory (slow) + disk activity | Spawn rate |
 | `turbulence` | Change in network + disk IO | Sideways wiggle |
 | `pulse` | CPU and network rises (and peaks where present) | Spawn waves, brightness flashes |
 | `heat` | tx/rx ratio + temperature | Hue drift direction and speed |
-| `alive` | `status`, and the hub connection | Current flows or dries up |
+| `alive` (reporting state) | `status`, and the hub connection | Current flows or dries up |
+| `filaments` (optional profile) | Per-core profile through an explicit recipe | Finer strands |
 
 #### Minute records
 
