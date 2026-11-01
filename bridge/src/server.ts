@@ -105,7 +105,7 @@ export class StreamServer {
       response.writeHead(405, { Allow: "GET" }).end();
     } else if (path === "/healthz") {
       const ok = this.options.healthy();
-      response.writeHead(ok ? 200 : 503, { "Content-Type": "text/plain" }).end(ok ? "ok\n" : "unavailable\n");
+      response.writeHead(ok ? 200 : 503, { "Content-Type": "text/plain", "X-Content-Type-Options": "nosniff" }).end(ok ? "ok\n" : "unavailable\n");
     } else if (path !== "/stream") {
       response.writeHead(404).end();
     } else if (this.clients.size >= (this.options.maxClients ?? 500)) {
@@ -117,6 +117,7 @@ export class StreamServer {
         Connection: "keep-alive",
         // Tells nginx not to buffer this response, in case the proxy config forgets.
         "X-Accel-Buffering": "no",
+        "X-Content-Type-Options": "nosniff",
       });
       const client: Client = { response, blocked: undefined, pending: false };
       this.clients.add(client);

@@ -138,7 +138,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now beszel-river-bridge
 
 The unit expects `/usr/bin/node`; edit `ExecStart` if `command -v node` prints another path.
 
-The service drops all capabilities, blocks namespace creation, setuid/setgid changes and realtime scheduling, limits syscalls to the native architecture, and creates files with mode 0600 (directories 0700). It leaves executable memory available for Node's JIT. After updating the unit, copy it again, run `sudo systemctl daemon-reload`, then `sudo systemctl restart beszel-river-bridge`.
+The service drops all capabilities, blocks namespace creation, setuid/setgid changes and realtime scheduling, hides other users' `/proc` entries and kernel logs, protects clock and hostname, removes IPC objects on stop, limits syscalls to the native architecture, and creates files with mode 0600 (directories 0700). It leaves executable memory available for Node's JIT. After updating the unit, copy it again, run `sudo systemctl daemon-reload`, then `sudo systemctl restart beszel-river-bridge`.
 
 ### 3. Frontend
 

@@ -34,7 +34,13 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 LockPersonality=true
 

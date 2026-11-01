@@ -28,6 +28,7 @@ services:
       - "127.0.0.1:8787:8787"
     networks: [beszel]
     read_only: true
+    pids_limit: 100
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     logging:

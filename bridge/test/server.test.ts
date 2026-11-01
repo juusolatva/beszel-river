@@ -65,6 +65,7 @@ describe("StreamServer", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("text/event-stream; charset=utf-8");
     expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 
     const text = read(response, /event: update[\s\S]*: ping/);
     await new Promise((resolve) => setTimeout(resolve, 20));
