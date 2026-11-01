@@ -55,6 +55,7 @@ sonar-project.properties      SonarQube Cloud project settings
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
 docs/PLAN.md                  this plan
+GLOSSARY.md                   domain terms for host activity, streams and the visible river
 docs/images/                  README screenshots
 shared/src/index.ts           message types
 bridge/
