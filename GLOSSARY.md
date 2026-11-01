@@ -20,6 +20,7 @@ _Avoid_: Frame, channel.
 
 **Baseline**:
 A host's recent network and disk activity history, used as the reference for its usual traffic levels.
+_Avoid_: Static threshold, quota, fixed limit.
 
 **Feature**:
 A normalized aspect of host activity, such as load, traffic change or burstiness, used as an input to mixing.
@@ -61,6 +62,7 @@ _Avoid_: Metric, feature.
 
 **Width**:
 A stream's relative band breadth, unrelated to its host's capacity or core count.
+_Avoid_: Capacity, core count, bandwidth.
 
 **Flow**:
 The channel for upward particle speed.
@@ -72,6 +74,7 @@ _Avoid_: Particle count.
 
 **Turbulence**:
 The channel for sideways variation in particle motion.
+_Avoid_: Packet loss, error rate, noise level.
 
 **Pulse**:
 The channel for the strength of a brief surge in a stream's particle spawning and brightness, shaped by host activity.
@@ -89,6 +92,10 @@ _Avoid_: Core readings, one strand per core.
 
 **River**:
 The combined upward flow of rainbow-coloured particles and their trails across all bands.
+
+**Look tunables**:
+The client-side visual constants controlling particle motion, trail fading and colour palettes, independent of live data.
+_Avoid_: Mixing recipe.
 
 **Offline river**:
 The river's state when the viewer's live-data connection is no longer considered available. Streams thin out and lose colour while their reporting states remain unchanged.

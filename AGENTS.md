@@ -21,6 +21,7 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | `.github/` | Workflows (`ci.yml`, `osv-scanner.yml`) and `dependabot.yml` (updates for the pinned actions and Docker base image). |
 | `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. Coverage leaves out both `main.ts` files and `frontend/src/debug/`, the code outside the test scope. |
 | `docs/PLAN.md` | Plan. |
+| `GLOSSARY.md` | Domain terms for host activity, streams and the visible river. |
 | `docs/images/` | README screenshots: JPEG, 1280 px wide, metadata stripped. |
 
 ## Commands
