@@ -23,7 +23,7 @@ A sample averaged over one minute, which the hub stores for each host. Live minu
 _Avoid_: Realtime sample, frame.
 
 **Realtime sample**:
-A sample taken once a second, which arrives only while viewers are watching and the realtime source is in use.
+A sample taken once a second while the realtime source is in use. Samples arrive while viewers are watching and for 30 seconds after the last viewer disconnects.
 _Avoid_: Minute record, frame.
 
 **Baseline**:
