@@ -294,7 +294,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
 
-The bridge rejects hub URLs with unsupported schemes or embedded credentials without logging the rejected value. Log records escape CR/LF, HTTP error URLs omit userinfo, and error cause chains stop after five entries (including cycles).
+The bridge rejects hub URLs with unsupported schemes or embedded credentials without logging the rejected value, rejects malformed JSON recipes without echoing file snippets, and deletes secret variables (`BESZEL_PASSWORD`, `BESZEL_TOKEN`, `STREAM_SALT`) from `process.env` once configuration is loaded. Log records escape CR/LF, HTTP error URLs omit userinfo, and error cause chains stop after five entries (including cycles).
 
 ## Deployment
 

@@ -22,6 +22,7 @@ try {
   log("error", (error as Error).message);
   process.exit(1);
 }
+for (const secret of ["BESZEL_PASSWORD", "BESZEL_TOKEN", "STREAM_SALT"]) delete process.env[secret];
 
 const hosts = new HostTable(config.salt, loadMixConfig(config.mixFile));
 const client = new BeszelClient(config.beszelUrl, config.auth);

@@ -66,6 +66,7 @@ describe("tokenExpiry", () => {
     expect(tokenExpiry("a.b")).toBeNull();
     expect(tokenExpiry("a.%%%.c")).toBeNull();
     expect(tokenExpiry(jwt({ exp: "soon" }))).toBeNull();
+    expect(tokenExpiry(jwt({ exp: 1e20 }))).toBeNull();
     expect(tokenExpiry(`x.${Buffer.from("null").toString("base64url")}.y`)).toBeNull();
   });
 });
