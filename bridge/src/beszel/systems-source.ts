@@ -20,6 +20,9 @@ export interface SystemsHandlers {
  * writes to `system_stats` on every update (once a minute per host).
  */
 export class SystemsSource {
+  private readonly knownSystems = new Set<string>();
+  private heldSystems: { action: string; record: SystemRecord }[] | null = null;
+
   constructor(
     private readonly pb: PocketBase,
     private readonly handlers: SystemsHandlers,
@@ -27,14 +30,12 @@ export class SystemsSource {
 
   /** Loads hosts and the last `historyHours` of records, then streams live changes. */
   async start(historyHours = 24): Promise<void> {
-    const onSystem = (event: { action: string; record: SystemRecord }): void =>
-      event.action === "delete" ? this.handlers.removed(event.record.id) : this.handlers.system(event.record);
     // Changes arriving while the initial lists load are held back, so a /stream snapshot mid-load
     // cannot seed hosts from `info` before their 24 h history is applied.
-    let heldSystems: { action: string; record: SystemRecord }[] | null = [];
+    this.heldSystems = [];
     await this.pb.collection("systems").subscribe<SystemRecord>(
       "*",
-      (event) => (heldSystems ? heldSystems.push(event) : onSystem(event)),
+      (event) => (this.heldSystems ? this.heldSystems.push(event) : this.onSystem(event)),
       { fields: SYSTEM_FIELDS },
     );
     const systems = await this.pb.collection("systems").getFullList<SystemRecord>({ fields: SYSTEM_FIELDS });
@@ -56,15 +57,57 @@ export class SystemsSource {
       fields: STATS_FIELDS,
       batch: 1000,
     });
-    for (const system of systems) this.handlers.system(system);
-    const systemEvents = heldSystems;
-    heldSystems = null;
-    for (const event of systemEvents) onSystem(event);
+    this.applySystems(systems);
     for (const record of history) this.handlers.history(record);
     const live = heldStats.toSorted((a, b) => a.created.localeCompare(b.created));
     heldStats = null;
     for (const record of live) this.handlers.stats(record);
 
     log("info", `Loaded ${systems.length} systems and ${history.length} history records`);
+  }
+
+  /** Re-reads the `systems` list so hosts paused or deleted during an outage do not linger. */
+  async refreshSystems(): Promise<void> {
+    if (this.heldSystems) return;
+    this.heldSystems = [];
+    let systems: SystemRecord[];
+    try {
+      systems = await this.pb.collection("systems").getFullList<SystemRecord>({ fields: SYSTEM_FIELDS });
+    } catch (error) {
+      this.flushHeldSystems();
+      throw error;
+    }
+    this.applySystems(systems);
+  }
+
+  private applySystems(systems: readonly SystemRecord[]): void {
+    const current = new Set(systems.map((s) => s.id));
+    for (const id of this.knownSystems) {
+      if (!current.has(id)) {
+        this.knownSystems.delete(id);
+        this.handlers.removed(id);
+      }
+    }
+    for (const system of systems) {
+      this.knownSystems.add(system.id);
+      this.handlers.system(system);
+    }
+    this.flushHeldSystems();
+  }
+
+  private flushHeldSystems(): void {
+    const events = this.heldSystems ?? [];
+    this.heldSystems = null;
+    for (const event of events) this.onSystem(event);
+  }
+
+  private onSystem(event: { action: string; record: SystemRecord }): void {
+    if (event.action === "delete") {
+      this.knownSystems.delete(event.record.id);
+      this.handlers.removed(event.record.id);
+    } else {
+      this.knownSystems.add(event.record.id);
+      this.handlers.system(event.record);
+    }
   }
 }

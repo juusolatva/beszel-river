@@ -105,8 +105,10 @@ log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /h
 setInterval(() => {
   // The SDK reconnects on its own; until it does, or forever with an expired token, statuses are stale.
   if (live && upstream.update()) {
-    if (upstream.live) log("info", "Beszel connection is back");
-    else log("warn", "Beszel connection lost; showing every stream as not alive until it is back");
+    if (upstream.live) {
+      log("info", "Beszel connection is back");
+      void source.refreshSystems().catch((error: unknown) => log("warn", "Refreshing systems failed", error));
+    } else log("warn", "Beszel connection lost; showing every stream as not alive until it is back");
     changed(hosts.setUpstream(upstream.live));
   }
   changed(hosts.tick(TICK_S));

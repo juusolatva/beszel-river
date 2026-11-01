@@ -38,16 +38,22 @@ export class BeszelClient {
   }
 
   async login(): Promise<void> {
-    if (this.auth.kind === "password") {
-      await this.pb.collection("users").authWithPassword(this.auth.email, this.auth.password);
-      log("info", `Logged in to Beszel at ${this.pb.baseURL} as ${this.auth.email}`);
-      return;
+    try {
+      if (this.auth.kind === "password") {
+        await this.pb.collection("users").authWithPassword(this.auth.email, this.auth.password);
+        log("info", `Logged in to Beszel at ${this.pb.baseURL} as ${this.auth.email}`);
+        return;
+      }
+      // Impersonation tokens are not refreshable: auth-refresh only checks them and returns the same token.
+      this.pb.authStore.save(this.auth.token);
+      const { record } = await this.pb.collection("users").authRefresh();
+      log("info", `Using a token for ${record.email} at ${this.pb.baseURL}, valid until ${this.auth.expires.toISOString()}`);
+      this.warnIfExpiring();
+    } catch (error) {
+      // The SDK leaves a rejected or previous token in the store, where isValid only checks exp.
+      this.pb.authStore.clear();
+      throw error;
     }
-    // Impersonation tokens are not refreshable: auth-refresh only checks them and returns the same token.
-    this.pb.authStore.save(this.auth.token);
-    const { record } = await this.pb.collection("users").authRefresh();
-    log("info", `Using a token for ${record.email} at ${this.pb.baseURL}, valid until ${this.auth.expires.toISOString()}`);
-    this.warnIfExpiring();
   }
 
   /** Renews the token periodically, logging in again if renewal fails. Realtime reconnects use the new token. */

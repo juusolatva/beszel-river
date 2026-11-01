@@ -56,21 +56,41 @@ describe("BeszelClient", () => {
     await client.close();
   });
 
-  it("logs in again when token refresh fails, and logs when re-login also fails", async () => {
+  it("logs in again when token refresh fails, and clears the auth store when re-login also fails", async () => {
+    const validJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: (Date.now() + 30 * DAY_MS) / 1000 })).toString("base64url")}.sig`;
     const client = new BeszelClient(URL, { kind: "password", email: "bridge@example.com", password: "pw" });
     const authRefresh = vi.fn().mockRejectedValue(new Error("authRefresh failed"));
-    const authWithPassword = vi.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("login failed"));
+    const authWithPassword = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        client.pb.authStore.save(validJwt, null);
+        return {};
+      })
+      .mockRejectedValueOnce(new Error("login failed"));
     client.pb.collection = vi.fn().mockReturnValue({ authRefresh, authWithPassword });
 
     client.keepAlive();
     await vi.advanceTimersByTimeAsync(REFRESH_MS);
     expect(authRefresh).toHaveBeenCalledTimes(1);
     expect(authWithPassword).toHaveBeenCalledWith("bridge@example.com", "pw");
+    expect(client.pb.authStore.isValid).toBe(true);
 
     await vi.advanceTimersByTimeAsync(REFRESH_MS);
     expect(log).toHaveBeenCalledWith("warn", "Token refresh failed, logging in again", expect.any(Error));
     expect(log).toHaveBeenCalledWith("error", "Login failed", expect.any(Error));
+    expect(client.pb.authStore.token).toBe("");
+    expect(client.rt.authStore.token).toBe("");
+    expect(client.pb.authStore.isValid).toBe(false);
     await client.close();
+  });
+
+  it("clears a saved token when its startup or refresh check is rejected", async () => {
+    const validJwt = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: (Date.now() + 30 * DAY_MS) / 1000 })).toString("base64url")}.sig`;
+    const client = new BeszelClient(URL, { kind: "token", token: validJwt, expires: new Date(Date.now() + 30 * DAY_MS) });
+    client.pb.collection = vi.fn().mockReturnValue({ authRefresh: vi.fn().mockRejectedValue(new Error("401")) });
+    await expect(client.login()).rejects.toThrow("401");
+    expect(client.pb.authStore.token).toBe("");
+    expect(client.pb.authStore.isValid).toBe(false);
   });
 
   it("restarts the refresh timer instead of adding one, and stops it on close", async () => {

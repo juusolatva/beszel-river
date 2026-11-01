@@ -121,4 +121,50 @@ describe("SystemsSource", () => {
     })) as unknown as PocketBase["collection"];
     await expect(new SystemsSource(pb, recorder().handlers).start()).rejects.toThrow("403");
   });
+
+  it("reconciles systems on refreshSystems, holding live events while the list is in flight", async () => {
+    const { pb, lists, emit } = createPb();
+    const { calls, handlers } = recorder();
+    const source = new SystemsSource(pb, handlers);
+    lists.systems.resolve([system("a"), system("b")]);
+    lists.system_stats.resolve([]);
+    await source.start();
+    calls.length = 0;
+
+    // Next systems.getFullList will wait on a new deferred promise.
+    lists.systems = deferred<SystemRecord[]>();
+    const refreshing = source.refreshSystems();
+    // Concurrent call while a refresh is already in flight is a no-op.
+    await expect(source.refreshSystems()).resolves.toBeUndefined();
+
+    // Events arriving during the refresh are held until the list resolves.
+    emit("systems", { action: "update", record: system("c", "down") });
+    expect(calls).toEqual([]);
+
+    // "b" disappeared during the outage, "a" became paused, "c" was added and then went down via the held event.
+    lists.systems.resolve([system("a", "paused"), system("c", "up")]);
+    await refreshing;
+    expect(calls).toEqual(["removed b", "system a paused", "system c up", "system c down"]);
+  });
+
+  it("flushes held events and rethrows when refreshSystems fails", async () => {
+    const { pb, lists, emit } = createPb();
+    const { calls, handlers } = recorder();
+    const source = new SystemsSource(pb, handlers);
+    lists.systems.resolve([system("a")]);
+    lists.system_stats.resolve([]);
+    await source.start();
+    calls.length = 0;
+
+    let rejectList!: (error: Error) => void;
+    pb.collection = (() => ({
+      getFullList: () => new Promise<SystemRecord[]>((_, reject) => (rejectList = reject)),
+    })) as unknown as PocketBase["collection"];
+
+    const refreshing = source.refreshSystems();
+    emit("systems", { action: "update", record: system("a", "down") });
+    rejectList(new Error("network down"));
+    await expect(refreshing).rejects.toThrow("network down");
+    expect(calls).toEqual(["system a down"]);
+  });
 });
