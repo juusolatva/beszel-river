@@ -69,11 +69,11 @@ export class HostTable {
         realtimeAt: null,
         fromRealtime: false,
       });
-      this.layout = null;
+      if (record.status !== "paused") this.layout = null;
       return true;
     }
     const changed = host.status !== record.status || host.threads !== threads;
-    if (host.status !== record.status) this.layout = null;
+    if ((host.status === "paused") !== (record.status === "paused")) this.layout = null;
     // A stream that is drying up should not flash with pulses scattered from its last record.
     if (record.status !== "up") host.mixer.dropPulses();
     host.status = record.status;
@@ -83,9 +83,11 @@ export class HostTable {
   }
 
   removeSystem(systemId: string): boolean {
-    const removed = this.hosts.delete(systemId);
-    if (removed) this.layout = null;
-    return removed;
+    const host = this.hosts.get(systemId);
+    if (!host) return false;
+    this.hosts.delete(systemId);
+    if (host.status !== "paused") this.layout = null;
+    return true;
   }
 
   /** Marks the hub connection lost or back (see `UpstreamWatch`); returns whether the frame changed. */
