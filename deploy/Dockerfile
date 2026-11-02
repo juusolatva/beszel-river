@@ -7,7 +7,7 @@
 # stage has no RUN step, so building it for another architecture needs no emulation. Adding one there
 # means adding QEMU to multi-arch builds.
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+FROM --platform=$BUILDPLATFORM node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS build
 WORKDIR /app
 # npm ci needs every workspace manifest the lockfile names.
 COPY package.json package-lock.json .npmrc ./
@@ -21,7 +21,7 @@ COPY bridge/ bridge/
 COPY frontend/ frontend/
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS deps
+FROM --platform=$BUILDPLATFORM node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY shared/package.json shared/
@@ -33,7 +33,7 @@ RUN npm ci -w @beszel-river/bridge --omit=dev --ignore-scripts
 RUN ! find node_modules \( -name '*.node' -o -name binding.gyp \) | grep . || \
     { echo "native addon in production dependencies; see the comment above" >&2; exit 1; }
 
-FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+FROM node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797
 ARG VERSION=dev
 ARG REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/juusolatva/beszel-river" \
