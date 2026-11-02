@@ -1,6 +1,6 @@
 # For a Beszel hub in Docker: joins the hub's Compose network, so BESZEL_URL=http://<hub service>:8090
 # (http://beszel:8090 with Beszel's example compose file). Use together with compose.yml:
-#   docker compose -f compose.yml -f compose.beszel-network.yml up -d --build
+#   docker compose -f compose.yml -f compose.beszel-network.yml up -d
 # or set COMPOSE_FILE=compose.yml:compose.beszel-network.yml in .env.
 services:
   river:

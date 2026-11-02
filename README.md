@@ -28,7 +28,6 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 | `frontend/` | Static WebGL2 page built with Vite; unit tests for everything but the page setup and debug panel. |
 | `deploy/` | Container image (`Dockerfile`), compose file, its overrides and `.env.example`; nginx and Caddy configs in front of the container; systemd unit and nginx configs for running without Docker; deployment tests. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
-| `docs/container-plan.md` | Working plan for the standalone container image (milestone M8). |
 | [GLOSSARY.md](GLOSSARY.md) | Domain terms for host activity, streams and the visible river. |
 | `docs/images/` | Screenshots used in this README. |
 | `.github/` | CI workflows (`ci.yml`, `osv-scanner.yml`) and Dependabot config for their actions and the pinned Docker images. |
@@ -87,27 +86,27 @@ Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/con
 
 Two ways to run it, both listening only on the host's loopback. Background and the reasons for each setting: [docs/PLAN.md](docs/PLAN.md), "Deployment".
 
-- **Container:** one image holds the bridge and the page, started with `deploy/compose.yml` at `http://127.0.0.1:8095`.
+- **Container:** one image, `ghcr.io/juusolatva/beszel-river`, holds the bridge and the page, started with `deploy/compose.yml` at `http://127.0.0.1:8095`.
 - **Without Docker:** the bridge under systemd on `127.0.0.1:8787`, with nginx serving the page and proxying `/stream` to it.
 
 Either way, first create the Beszel user as in "Bridge setup" above.
 
 ### Container
 
-The image is built from a checkout. A deployment directory holds `compose.yml`, `.env` and `mix.json`; in a checkout that is `deploy/`, where git and Docker ignore the last two.
+The image is published on GitHub's container registry for amd64 and arm64. A deployment directory holds `compose.yml`, `.env` and `mix.json`; in a checkout that is `deploy/`, where git and Docker ignore the last two. The checkout also has the proxy configs and the overrides.
 
 ```sh
 git clone https://github.com/juusolatva/beszel-river.git && cd beszel-river/deploy
 cp .env.example .env && chmod 600 .env     # then fill it in (below)
 cp ../bridge/mix.example.json mix.json     # then change the weights: the template is public
 sudo chown 1000:1000 mix.json && sudo chmod 400 mix.json
-docker compose up -d --build
+docker compose up -d
 docker compose ps                          # "(healthy)" once logged in to the hub
 ```
 
 - `chmod 600 .env`: only you can read the secrets.
 - `chown 1000:1000 mix.json`: the container runs as the `node` user (uid 1000), which must read the bind-mounted recipe; otherwise startup stops with an "unreadable recipe" error. `chmod 400`: only that user can read it, and nobody can write it; edit it later with `sudo`, which can.
-- `up -d --build`: builds the image and starts the container in the background. `ps` lists it with its health.
+- `up -d`: pulls the image and starts the container in the background. `ps` lists it with its health.
 
 Then open `http://127.0.0.1:8095`. In `.env`, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` (or `BESZEL_TOKEN`), `STREAM_SALT`, and `BESZEL_URL` as the container reaches the hub:
 
@@ -119,10 +118,31 @@ Then open `http://127.0.0.1:8095`. In `.env`, set `BESZEL_EMAIL` and `BESZEL_PAS
 | On this host, listening only on `127.0.0.1` (such as `network_mode: host`) | `http://127.0.0.1:8090` (the hub's port) | `COMPOSE_FILE=compose.yml:compose.host-network.yml` |
 
 - `docker inspect -f '{{json .NetworkSettings.Networks}}' beszel` prints the hub container's networks; `beszel` is its container name.
-- `COMPOSE_FILE` in `.env` adds an override file to every `docker compose` command run in this directory. Running them from elsewhere, pass both files instead: `docker compose -f compose.yml -f compose.host-network.yml up -d --build`. The overrides use `!reset`, which needs Docker Compose 2.24.0 or later (`docker compose version`).
+- `COMPOSE_FILE` in `.env` adds an override file to every `docker compose` command run in this directory. Running them from elsewhere, pass both files instead: `docker compose -f compose.yml -f compose.host-network.yml up -d`. The overrides use `!reset`, which needs Docker Compose 2.24.0 or later (`docker compose version`).
 - With `compose.host-network.yml` the container shares the host's network, so its two ports are host ports: `RIVER_PORT` (default 8095) for the page and `RIVER_HEALTH_PORT` (default 8788) for the health check. Change them in `.env` if they are taken. `RIVER_PORT` also moves the page in the other cases.
 
 **Quoting:** Compose replaces `$name` and `${name}` in unquoted and double-quoted `.env` values, usually with nothing, so a password, token or salt containing `$` changes silently and the login fails. Keep every secret in single quotes, as `.env.example` does: `STREAM_SALT='CHANGE$ME'`, which Compose would otherwise read as `CHANGE`. A `bridge/.env` from the systemd setup is read without this substitution, so add the quotes when copying values from it.
+
+#### Image versions
+
+`RIVER_VERSION` in `.env` picks the image tag:
+
+| `RIVER_VERSION` | Image |
+|---|---|
+| `1` (default) | The newest 1.x.y release: fixes and features, never a breaking change. |
+| `1.0` | The newest 1.0.x release: fixes only. |
+| `1.0.0` | Exactly that release. |
+| `edge` | The newest build from `main`, rebuilt when a file that goes into the image changes. For testing. |
+
+`latest` also exists, for `docker run`, but crosses major versions. Moving to a new major version is a deliberate change of `RIVER_VERSION`, after reading the release notes.
+
+Each published image has signed build provenance and an SBOM. To check that an image was built by this repository's CI from its source:
+
+```sh
+gh attestation verify oci://ghcr.io/juusolatva/beszel-river:1 -R juusolatva/beszel-river
+```
+
+To build the image yourself instead, uncomment the `build:` block in `compose.yml` and run `docker compose up -d --build` in `deploy/` of a checkout.
 
 ### Reverse proxy
 
@@ -232,9 +252,15 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
 - **Configuration changes:** after editing `.env` (e.g. `SOURCE=realtime`), run `docker compose up -d` in the deployment directory: it recreates the container with the new environment, which `docker compose restart` would not. After editing only `mix.json`, `up -d` sees no change; use `docker compose restart river` instead, since the bridge reads the file at startup. Under systemd, `sudo systemctl restart beszel-river-bridge` covers both.
 - **Filament recipe migration:** older recipes without `filaments` now run without per-core profiles. An existing section must explicitly contain `bias`, `center`, `weight` and `tau`; copies of the earlier template need `center: 0` added (as JSON: `"center": 0`), or the section removed/set to `null`. Filaments publish a transformed CPU profile; smoothing and shuffling do not guarantee confidentiality. Leave them disabled when CPU levels must stay private, and change the public template weights before enabling them.
 - **Slow stream readers:** the bridge bounds queued output to 256 KiB per response and disconnects clients that remain blocked for 10 s. While blocked it skips heartbeats and intermediate updates; after draining it sends the latest update. A single event exceeding the byte budget also closes that stream. Browsers reconnect normally.
-- **Base image updates:** `deploy/Dockerfile` pins the multi-platform `node:24.22.1-alpine` digest in every stage. Dependabot proposes monthly Docker updates within the Node 24 line after a seven-day cooldown; review and merge those PRs to take base-image patches. A new Node major is a deliberate change (see `AGENTS.md`, "Node"), so Dependabot does not propose it. Rebuilding the same checkout keeps the pinned base.
-- **Updates:** `git pull`, then `docker compose up -d --build` in the deployment directory. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3). When a config in `deploy/nginx/` or `deploy/caddy/` changed, copy it again (with your domain and paths) and reload the proxy.
+- **Base image updates:** `deploy/Dockerfile` pins the multi-platform `node:24.22.1-alpine` digest in every stage. Dependabot proposes monthly Docker updates within the Node 24 line after a seven-day cooldown; merging one rebuilds `edge`, and the next release carries it to the version tags. A new Node major is a deliberate change (see `AGENTS.md`, "Node"), so Dependabot does not propose it. Rebuilding the same checkout keeps the pinned base.
+- **Updates:** `docker compose pull && docker compose up -d` in the deployment directory pulls the newest image for `RIVER_VERSION` and recreates the container if it changed. `git pull` first if you deploy from a checkout, to get changed compose files. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3). When a config in `deploy/nginx/` or `deploy/caddy/` changed, copy it again (with your domain and paths) and reload the proxy.
 - **nginx configs from before `river-stream.conf`:** the current `river.conf` and `river-path.conf` include `/etc/nginx/snippets/river-stream.conf` instead of listing the stream settings themselves. Install it (`sudo install -m 644 deploy/nginx/river-stream.conf /etc/nginx/snippets/`) before copying the updated config, or `nginx -t` fails. Nothing else changes.
+- **Releases** (maintainers): CI publishes the image only from commits that passed every check in the same run. `edge` comes from `main`; a `vX.Y.Z` tag on a commit on `main` publishes `X.Y.Z` and moves `X.Y`, `X` and `latest` unless a newer release already holds them. A tag such as `v1.1.0-rc.1` publishes only its own tag. To release, tag `main` and push the tag:
+  ```sh
+  git checkout main && git pull && git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+  ```
+  New GHCR packages are private: after the first publish, make the package public once in its settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
+- **From an image built from a checkout** (before the image was published): `compose.yml` now pulls the published image. Run `docker compose up -d` once; `docker image rm beszel-river-river` then removes the old local build.
 - **From the bridge-only container** (`deploy/bridge.Dockerfile`, the `bridge` service on port 8787), which this image replaces:
   - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by uid 1000.
   - The service is now `river`, and the page and stream are on port 8095. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working with `RIVER_PORT=8787` in `deploy/.env`. nginx then still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless. To let the container serve the page too, switch to `river-container.conf` or `river-container-path.conf` ("Reverse proxy" above) and drop `RIVER_PORT`.

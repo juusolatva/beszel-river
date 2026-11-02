@@ -1,14 +1,18 @@
 # The river: page and stream from one container at http://127.0.0.1:8095. Next to this file: .env
 # (from .env.example) and mix.json (from bridge/mix.example.json, then edited). README, "Deployment".
-#   docker compose up -d --build
+#   docker compose up -d
 # For a hub in Docker or one listening only on loopback, add an override (see .env.example).
 name: beszel-river
 
 services:
   river:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    # RIVER_VERSION in .env: a major version (1, the default), a minor (1.0) or an exact release (1.0.0);
+    # edge follows main. The major version brings fixes and features but never a breaking release.
+    image: ghcr.io/juusolatva/beszel-river:${RIVER_VERSION:-1}
+    # Build from a checkout instead (run from deploy/ with: docker compose up -d --build):
+    # build:
+    #   context: ..
+    #   dockerfile: deploy/Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
