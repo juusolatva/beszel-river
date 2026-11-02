@@ -1,5 +1,8 @@
 // What leaves the bridge, checked end to end through the pipeline and the server: the invariants in
 // AGENTS.md, for hosts of every shape at once, so a regression in any one module shows here.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Frame } from "@beszel-river/shared";
@@ -7,6 +10,7 @@ import type { SystemRecord, SystemStats } from "../src/beszel/types.js";
 import { HostTable } from "../src/pipeline/hosts.js";
 import { loadMixConfig } from "../src/pipeline/mix.js";
 import { StreamServer } from "../src/server.js";
+import { loadStaticFiles } from "../src/static.js";
 
 const salt = "0123456789abcdef-test";
 const mix = loadMixConfig(fileURLToPath(new URL("../mix.example.json", import.meta.url)));
@@ -106,5 +110,26 @@ describe("what leaves the bridge", () => {
     expect(withFilaments).toBe(3);
     // Short stats keys that BESZEL_FIELDS leaves out ("t" is also the frame's own timestamp).
     expect(/"(cpu|b)":/.test(text)).toBe(false);
+  });
+
+  it("serves the page and its errors without the salt or the hub URL", async () => {
+    const hubUrl = "http://beszel-hub.internal:8090";
+    const dir = mkdtempSync(join(tmpdir(), "river-privacy-"));
+    try {
+      mkdirSync(join(dir, "assets"));
+      writeFileSync(join(dir, "index.html"), "<!doctype html><title>River</title>");
+      writeFileSync(join(dir, "assets", "index-abc123.js"), "void 0;");
+      server = new StreamServer({ host: "127.0.0.1", port: 0, snapshot: () => buildTable().frame(new Date(t0 + 6000)), healthy: () => true, files: loadStaticFiles(dir) });
+      const base = `http://127.0.0.1:${await server.listen()}`;
+      for (const [path, method] of [["/", "GET"], ["/assets/index-abc123.js", "HEAD"], ["/missing", "GET"], ["/", "POST"], ["/healthz", "GET"]]) {
+        const response = await fetch(`${base}${path}`, { method });
+        const text = `${JSON.stringify([...response.headers])}${await response.text()}`;
+        expect(text).not.toContain(salt);
+        expect(text).not.toContain(hubUrl);
+        expect(text).not.toMatch(/beszel/i);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

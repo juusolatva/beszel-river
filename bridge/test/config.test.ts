@@ -21,7 +21,23 @@ describe("loadConfig", () => {
       bindPort: 8787,
       salt: "a-long-enough-salt",
       mixFile: "mix.json",
+      staticDir: undefined,
+      healthPort: undefined,
     });
+  });
+
+  it("reads STATIC_DIR and HEALTH_PORT, treating blank values as unset", () => {
+    expect(loadConfig({ ...valid, STATIC_DIR: " /app/frontend ", HEALTH_PORT: "8788" })).toMatchObject({ staticDir: "/app/frontend", healthPort: 8788 });
+    expect(loadConfig({ ...valid, STATIC_DIR: " ", HEALTH_PORT: "" })).toMatchObject({ staticDir: undefined, healthPort: undefined });
+  });
+
+  it.each(["0", "65536", "8788.5", "health", "-1"])("rejects HEALTH_PORT=%s", (value) => {
+    expect(() => loadConfig({ ...valid, HEALTH_PORT: value })).toThrow(`HEALTH_PORT must be 1-65535, got "${value}"`);
+  });
+
+  it("rejects HEALTH_PORT equal to BIND_PORT, explicit or default", () => {
+    expect(() => loadConfig({ ...valid, BIND_PORT: "8095", HEALTH_PORT: "8095" })).toThrow("HEALTH_PORT must differ from BIND_PORT");
+    expect(() => loadConfig({ ...valid, HEALTH_PORT: "8787" })).toThrow("HEALTH_PORT must differ from BIND_PORT");
   });
 
   it("lists every problem at once", () => {

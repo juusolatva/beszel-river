@@ -1,12 +1,17 @@
-import type { AddressInfo } from "node:net";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { Frame, FrameEvent } from "@beszel-river/shared";
+import { sendHealth } from "./health.js";
+import { listen, requestPath } from "./http.js";
+import { SECURITY_HEADERS, sendStatic, type StaticFiles } from "./static.js";
 
 export interface StreamServerOptions {
   host: string;
   port: number;
   snapshot: () => Frame;
-  healthy: () => boolean;
+  /** Answers `GET /healthz`; omit when a `HealthServer` does, and `/healthz` is then 404 here. */
+  healthy?: () => boolean;
+  /** The frontend build (`STATIC_DIR`). When set, every response also carries `SECURITY_HEADERS`. */
+  files?: StaticFiles;
   /** Comment line interval that keeps proxies from closing quiet streams, ms. */
   pingMs?: number;
   maxClients?: number;
@@ -29,7 +34,7 @@ function event(name: FrameEvent, frame: Frame): string {
   return `event: ${name}\ndata: ${JSON.stringify(frame)}\n\n`;
 }
 
-/** `GET /stream` (Server-Sent Events) and `GET /healthz`. */
+/** `GET /stream` (Server-Sent Events), optionally `GET /healthz` and the page's files. */
 export class StreamServer {
   private readonly clients = new Set<Client>();
   private readonly server: Server;
@@ -50,10 +55,7 @@ export class StreamServer {
     this.pingTimer = setInterval(() => {
       for (const client of this.clients) this.write(client, ": ping\n\n");
     }, this.options.pingMs ?? 15_000);
-    return new Promise((resolve, reject) => {
-      this.server.once("error", reject);
-      this.server.listen(this.options.port, this.options.host, () => resolve((this.server.address() as AddressInfo).port));
-    });
+    return listen(this.server, this.options.port, this.options.host);
   }
 
   broadcast(frame: Frame): void {
@@ -97,21 +99,24 @@ export class StreamServer {
   }
 
   private handle(request: IncomingMessage, response: ServerResponse): void {
-    // The raw path, not a URL parser's: only two exact paths exist, a parser throws on some
-    // client targets ("//") and resolves "..", "\" and "//host" in ways the proxy that routed
-    // the request need not share. Exact matching cannot throw and answers only what was asked.
-    const path = (request.url ?? "/").split("?", 1)[0];
-    if (request.method !== "GET") {
-      response.writeHead(405, { Allow: "GET" }).end();
-    } else if (path === "/healthz") {
-      const ok = this.options.healthy();
-      response.writeHead(ok ? 200 : 503, { "Content-Type": "text/plain", "X-Content-Type-Options": "nosniff" }).end(ok ? "ok\n" : "unavailable\n");
+    // Exact matches on the raw path only (see requestPath); files were fixed at startup.
+    const path = requestPath(request);
+    const headers = this.options.files ? SECURITY_HEADERS : undefined;
+    const file = this.options.files?.get(path);
+    if (file) {
+      if (request.method === "GET" || request.method === "HEAD") sendStatic(request, response, file);
+      else response.writeHead(405, { ...headers, Allow: "GET, HEAD" }).end();
+    } else if (request.method !== "GET") {
+      response.writeHead(405, { ...headers, Allow: "GET" }).end();
+    } else if (path === "/healthz" && this.options.healthy) {
+      sendHealth(response, this.options.healthy(), headers);
     } else if (path !== "/stream") {
-      response.writeHead(404).end();
+      response.writeHead(404, headers).end();
     } else if (this.clients.size >= (this.options.maxClients ?? 500)) {
-      response.writeHead(503, { "Retry-After": "30" }).end();
+      response.writeHead(503, { ...headers, "Retry-After": "30" }).end();
     } else {
       response.writeHead(200, {
+        ...headers,
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",

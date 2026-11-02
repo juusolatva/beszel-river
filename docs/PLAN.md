@@ -13,7 +13,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Repository | npm workspaces: `shared`, `bridge`, `frontend` | One lockfile, no extra tooling. `.npmrc` sets `save-exact=true` and `min-release-age=7` (npm ≥ 11.10), delaying resolution of newly published versions for seven days. |
 | Compiler | `typescript` 7.0.2 | Type-checking everywhere; emits the bridge build. |
 | Bridge dev runner | `tsx` 4.23.15 | Watch mode without a build step. |
-| Bridge HTTP | `node:http`, no framework | Only two endpoints. |
+| Bridge HTTP | `node:http`, no framework | A few fixed routes: `/stream`, `/healthz` and, with `STATIC_DIR`, the page's files loaded at startup. |
 | Beszel client | `pocketbase` 0.28.1 + `eventsource` 5.1.3 | The SDK handles login refresh and realtime reconnects; Node needs an `EventSource` polyfill for it. |
 | Browser transport | Server-Sent Events | One-way, browser `EventSource` reconnects by itself, simple through nginx. |
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
@@ -55,6 +55,7 @@ sonar-project.properties      SonarQube Cloud project settings
 AGENTS.md                     instructions for coding agents
 CLAUDE.md                     imports AGENTS.md
 docs/PLAN.md                  this plan
+docs/container-plan.md        working plan for the "Standalone container" milestone, deleted when it is done
 GLOSSARY.md                   domain terms for host activity, streams and the visible river
 docs/images/                  README screenshots
 shared/src/index.ts           message types
@@ -76,7 +77,10 @@ bridge/
     pipeline/mix.ts           features → channels, mix.json parsing
     pipeline/anonymize.ts     stream IDs, band order, band widths
     pipeline/hosts.ts         per-host state → frames
-    server.ts                 GET /stream, GET /healthz
+    server.ts                 GET /stream, GET /healthz, and the page's files with STATIC_DIR
+    static.ts                 loads the frontend build into memory at startup; security headers
+    health.ts                 /healthz response; HealthServer for HEALTH_PORT
+    http.ts                   raw request path, listen helper
     upstream.ts               hub connection loss, after a 30 s grace period
   test/                       vitest unit tests
 frontend/
@@ -161,6 +165,8 @@ Environment variables (template: `bridge/.env.example`):
 | `BIND_PORT` | `8787` | Listen port. |
 | `STREAM_SALT` | (required) | Secret for stream IDs, band order and band widths, at least 16 characters. |
 | `MIX_FILE` | `mix.json` | Required mixing weights, relative to the bridge's working directory. |
+| `STATIC_DIR` | (none) | Frontend build to serve next to `/stream` (the container image sets `/app/frontend`). Unset when nginx serves the page. See "HTTP API". |
+| `HEALTH_PORT` | (none) | Serve `/healthz` only on `127.0.0.1:HEALTH_PORT` and answer 404 for it on the main listener. Must differ from `BIND_PORT`. Unset keeps `/healthz` on the main listener. |
 
 Mixing weights are read from the configured `MIX_FILE` (`bridge/mix.json` by default). A missing, unreadable or invalid file stops startup before the bridge listens or authenticates to the hub, in every environment and deployment. Startup never substitutes the public example: losing a private recipe must not enable its known filament mapping. For local development or isolated CI smoke tests only, an operator may explicitly select `MIX_FILE=mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
 
@@ -226,9 +232,15 @@ Minute records arrive for every host within a second or two. Applied as they cam
   - Sends `X-Accel-Buffering: no`, so nginx streams it even without `proxy_buffering off`, and `X-Content-Type-Options: nosniff` (hidden by nginx where the server block already sets it).
   - At most 500 concurrent streams; beyond that, 503 with `Retry-After: 30`.
   - All snapshot, update and heartbeat writes share a 256 KiB per-response queued-byte budget (UTF-8 bytes, including already queued response output). An event that would exceed it closes the response before writing. If `write()` signals backpressure, no further chunks are enqueued for that client until `drain`; heartbeats are skipped and only whether an update was missed is retained. The latest broadcast is shared across clients and sent after drain when needed. A response blocked for 10 s is destroyed and removed from the viewer count exactly once, allowing normal realtime linger cleanup; shutdown also destroys queued responses instead of waiting for a flush. Healthy clients keep receiving updates. Limits are internal `StreamServerOptions` (`maxBufferedBytes`, `drainTimeoutMs`), not environment variables.
-- **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise (with `X-Content-Type-Options: nosniff`). Not exposed through nginx.
+- **`GET /healthz`:** 200 while the upstream subscription is live, 503 otherwise (with `X-Content-Type-Options: nosniff`). Not exposed through nginx. With `HEALTH_PORT` it moves to its own listener on `127.0.0.1:HEALTH_PORT`, which answers nothing else (404 for other paths, 405 for other methods), and the main listener answers 404 for it. A proxy that forwards every path to the main listener then cannot expose it.
+- **The page (`STATIC_DIR`):** for the standalone container, where the proxy forwards every path. Without `STATIC_DIR` none of this applies and the responses above are unchanged.
+  - At startup the bridge reads every regular file at the top level of `STATIC_DIR` and directly in `STATIC_DIR/assets/` into memory, keyed by request path, and serves `index.html` at `/` too. A missing `index.html`, a symlink, any other directory, a hidden file, a name a browser would percent-encode or an extension outside a fixed table (`.html`, `.js`, `.css`, `.svg`, `.png`, `.ico`, `.woff2`, `.txt`) stops startup, naming the entry. A new kind of build output is then a deliberate change, never a silent 404 or an accidental publish. Files are opened with `O_NOFOLLOW` and checked with `fstat`.
+  - Requests are matched against that map with the raw-path rule below; no request path is ever turned into a filesystem path, and nothing is read from disk after startup.
+  - `GET` and `HEAD`; other methods get 405 with `Allow: GET, HEAD`. `assets/` files (content-hashed names) are sent with `Cache-Control: public, max-age=31536000, immutable`, top-level ones with `no-cache`. Each has a strong `ETag` (SHA-256 of the content), and `If-None-Match` answers 304.
+  - No compression: the proxy compresses.
+  - Every response of the main listener, including `/stream`, 404, 405 and 503, carries the same headers as `deploy/nginx/river.conf`: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, plus `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin`. Not `Strict-Transport-Security`: only the proxy knows whether the site is HTTPS only.
 - **Lost hub connection:** the SDK reconnects by itself, but until it does, or for good once a token has expired or been rejected on refresh (which clears the SDK's auth store and retries login with bounded backoff), host statuses are stale and the river would keep flowing on its last values. When the login is invalid or the realtime connection is down for 30 s (`UPSTREAM_GRACE_MS`, longer than the 12 s hub restart in M6), every stream is sent with `alive: false` and its pending pulses are dropped, so the river dries up, and the bridge logs a warning. `/healthz` turns 503 at once. Whenever the connection returns after a drop (including one shorter than 30 s), the bridge re-reads the `systems` list (retrying on failure) to reconcile hosts paused or deleted during the outage, and streams take their current statuses again.
-- Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405; any other target, including `//`, `/x/../stream` and absolute-form ones, gets 404.
+- Routing compares the request-target's path (before `?`) exactly, without a URL parser: a parser throws on some targets (`//`) and resolves `..`, `\` and `//host` in its own way (`//x/stream` becomes `/stream`), which need not match how a proxy routed the request. Other methods get 405 (`HEAD /stream` included); any other target, including `//`, `/x/../stream`, `/assets/../index.html` and absolute-form ones, gets 404.
 
 ## Message format
 
@@ -374,6 +386,9 @@ Commands and steps are in README, "Deployment".
     - Vite's dev proxy keeps `/stream` open when its upstream dies, so the lost-connection behaviour shows only behind nginx (or with no proxy).
     - The noise rewrite returned identical values for 51 100 sample points.
     - Not checked: frame rates on real phones and GPUs (the open M2 check).
+- [ ] **M8 – Standalone container.** One image with the bridge and the page, run with `deploy/compose.yml`, behind nginx or Caddy; working plan in [container-plan.md](container-plan.md).
+  - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8095`, and also behind Caddy and nginx at a domain root and under `/river/`.
+  - Bridge part done: `STATIC_DIR`, `HEALTH_PORT` and the security headers (unit tests; the built bridge served `frontend/dist` with an unreachable hub: page, asset, 304, `/stream` snapshot, 404 for `/healthz` and `/assets/../index.html` on the main listener, 503 from the health listener).
 
 ## Risks
 
