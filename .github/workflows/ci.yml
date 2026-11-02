@@ -74,33 +74,45 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build bridge image
-        run: docker build -f deploy/bridge.Dockerfile -t beszel-river-bridge .
-      # Catches runtime dependencies missing from the production stage. Without a hub the bridge keeps
-      # retrying the login, but /stream still answers with an empty snapshot. Explicitly use the
-      # public recipe here: this isolated smoke test has no real hub or private metrics.
-      - name: Smoke-test bridge image
+      # Deployment directories hold .env and mix.json next to the compose files, inside the checkout.
+      - name: Check that secrets are ignored
         run: |
-          docker run -d --name bridge -p 127.0.0.1:8787:8787 -e BIND_HOST=0.0.0.0 \
-            -e BESZEL_EMAIL=ci@example.com -e BESZEL_PASSWORD=ci -e STREAM_SALT=ci-smoke-test-salt \
-            -e MIX_FILE=mix.example.json beszel-river-bridge
-          ok=
-          for _ in $(seq 30); do
-            if curl -sN --max-time 2 http://127.0.0.1:8787/stream | grep -q '^event: snapshot'; then ok=1; break; fi
-            sleep 1
+          for path in deploy/.env deploy/mix.json deploy/mix.json.bak bridge/.env bridge/mix.json; do
+            git check-ignore -q --no-index "$path" || { echo "::error::git does not ignore $path"; exit 1; }
           done
-          docker logs bridge
-          docker rm -f bridge > /dev/null
-          [ -n "$ok" ] || { echo "::error::bridge image did not serve /stream"; exit 1; }
-      - name: Check compose file
+          for path in deploy/.env.example bridge/.env.example bridge/mix.example.json; do
+            if git check-ignore -q --no-index "$path"; then echo "::error::git ignores the template $path"; exit 1; fi
+          done
+      # Builds with secret files present, then checks that none reached the image, by name or by content
+      # (a marker string that only those files contain).
+      - name: Build image with secrets in the checkout
         run: |
-          cp bridge/.env.example bridge/.env
+          marker="river-ci-secret-$(openssl rand -hex 16)"
+          echo "MARKER=$marker" >> "$GITHUB_ENV"
+          for path in deploy/.env deploy/mix.json bridge/mix.json; do printf '%s\n' "$marker" > "$path"; done
+          docker build -f deploy/Dockerfile -t beszel-river:ci .
+          rm deploy/.env deploy/mix.json bridge/mix.json
+      - name: Check image for secrets
+        run: |
+          found=$(docker run --rm --user root --entrypoint find beszel-river:ci / -xdev \
+            \( \( -name 'mix*.json*' ! -name mix.example.json \) -o \( -name '.env*' ! -name .env.example \) \) -print)
+          [ -z "$found" ] || { echo "::error::secret files in the image: $found"; exit 1; }
+          status=0
+          docker run --rm --user root --entrypoint grep beszel-river:ci -rqsF "$MARKER" /app || status=$?
+          [ "$status" -eq 1 ] || { echo "::error::secret content in the image (grep exit $status)"; exit 1; }
+      # Without a hub, then healthy against a real hub on its Docker network and on the host's loopback.
+      - name: Test container
+        run: python3 deploy/test/container.py beszel-river:ci
+      - name: Check compose files
+        run: |
+          cp deploy/.env.example deploy/.env
           docker compose -f deploy/compose.yml config --quiet
+          docker compose -f deploy/compose.yml -f deploy/compose.beszel-network.yml config --quiet
           docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml config --quiet
       - name: Check nginx configs
         run: |
@@ -108,15 +120,16 @@ jobs:
           mkdir -p "$le"
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=river.example.com \
             -keyout "$le/privkey.pem" -out "$le/fullchain.pem"
+          nginx=$(python3 deploy/test/ci_images.py nginx)
           # nginx -t opens the listen sockets, and containers on Docker's default network have no IPv6.
           sed '/listen \[::\]/d' deploy/nginx/river.conf > "$RUNNER_TEMP/river.conf"
           docker run --rm -v "$RUNNER_TEMP/river.conf:/etc/nginx/conf.d/default.conf:ro" \
             -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" \
-            -v "$RUNNER_TEMP/le:/etc/letsencrypt:ro" nginx:stable-alpine nginx -t
+            -v "$RUNNER_TEMP/le:/etc/letsencrypt:ro" "$nginx" nginx -t
           printf '%s\n' 'include /etc/nginx/snippets/river-limits.conf;' \
             'server { listen 8080; include /etc/nginx/snippets/river-path.conf; }' > "$RUNNER_TEMP/existing.conf"
           docker run --rm -v "$RUNNER_TEMP/existing.conf:/etc/nginx/conf.d/default.conf:ro" \
-            -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" nginx:stable-alpine nginx -t
+            -v "$PWD/deploy/nginx:/etc/nginx/snippets:ro" "$nginx" nginx -t
       - name: Check nginx address grouping and connection limits
         run: python3 deploy/test/nginx.py
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

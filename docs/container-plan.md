@@ -23,7 +23,7 @@ Status: approved; in progress. This is the working plan for the "Standalone cont
 | Proxy examples | nginx and Caddy, each for a whole domain and for a `/river/` path. All nginx configs live in `deploy/nginx/` and share one stream snippet. | These are the two you know best. One stream snippet keeps the old and new nginx configs from drifting. Traefik and others can come later. |
 | Old Docker files | `deploy/bridge.Dockerfile` and the bridge-only `compose.yml` are replaced. `compose.host-network.yml` is kept and adapted. The systemd unit and the current nginx configs stay. | Hubs that listen only on loopback keep working without widening their listen address. |
 | Hub over HTTPS with a private CA | Out of scope for now. | The usual setup reaches the hub over a private address or a Docker network. |
-| `SOURCE` | Defaults to `systems` and can be overridden in `.env`. | Same as now. |
+| `SOURCE` | Defaults to `systems` and can be overridden in `.env`. It reaches the container through `env_file`, so `compose.yml` does not list it. | Same as now. |
 | Versions | Semver git tags starting at `v1.0.0`, plus an `edge` tag from `main` when image files change. `compose.yml` defaults to the major tag (`1`), not `latest`. | Agreed in the thread. The major tag lets `docker compose pull` bring fixes and features but never a breaking release. |
 | Images used only by CI | The Beszel hub, Caddy and nginx images used in CI are pinned by digest in `deploy/test/compose.ci.yml`, which Dependabot updates. | Digests written inside `run:` scripts would never be updated. |
 | Multi-arch builds | `npm ci` and the builds run on the build machine's platform. Only the final stage, which has no `RUN` step, is per architecture. | The output is plain JS and the bridge has no native modules, so nothing needs emulation. |
@@ -94,7 +94,7 @@ The container does not send `Strict-Transport-Security`, because only the proxy 
   - When it is set, `/healthz` is served only on `127.0.0.1:HEALTH_PORT`, and the main listener answers 404 for it. The host is fixed: there is no setting to bind it elsewhere.
 - **Refactor:** `/healthz` is currently handled inside `StreamServer.handle`. Its response moves to a small `health.ts` that both servers use: `StreamServer` when `HEALTH_PORT` is unset, and a minimal `HealthServer` on its own listener when it is set. `HealthServer` answers `GET /healthz` and 404 or 405 for everything else. Shutdown closes both listeners.
 - The health logic itself (`live && client.connected`) is not changed.
-- The image's `HEALTHCHECK` uses the shell form, so it follows the setting at run time: `wget -q -O /dev/null "http://127.0.0.1:${HEALTH_PORT}/healthz" || exit 1`.
+- The image's `HEALTHCHECK` uses the shell form, so it follows the setting at run time: `wget -q -O /dev/null "http://127.0.0.1:${HEALTH_PORT}/healthz" || exit 1`. `--start-interval=2s` checks often during the 30 s start period, so the container turns healthy within seconds of logging in.
 
 ### Unchanged
 
@@ -168,7 +168,6 @@ services:
       STATIC_DIR: /app/frontend
       HEALTH_PORT: "8788"
       MIX_FILE: /config/mix.json
-      SOURCE: ${SOURCE:-systems}
     volumes:
       - type: bind
         source: ./mix.json
@@ -260,7 +259,8 @@ When the proxy itself runs in Docker on another network, it can't reach `127.0.0
 ### `ci.yml` `deploy` job (updated)
 
 - **Secrets check:** the `git check-ignore` and image-content checks from "Keeping secrets out of git and the build context".
-- **Smoke test without a hub:** build `deploy/Dockerfile` and run it with `MIX_FILE=mix.example.json`, dummy credentials and an unreachable `BESZEL_URL`. Then check that:
+- **Container tests** in `deploy/test/container.py`, which takes the image built by the secrets check and runs each Compose case from a temporary deployment directory (copies of the shipped Compose files plus an override swapping `build:` for that image), so it writes nothing in the checkout and runs the same locally.
+- **Smoke test without a hub:** run the image with `MIX_FILE=mix.example.json`, dummy credentials and an unreachable `BESZEL_URL`. Then check that:
   - `GET /` returns `index.html` with the CSP header
   - one file under `/assets/` is served with `immutable`
   - `GET /stream` returns a snapshot
@@ -284,10 +284,10 @@ When the proxy itself runs in Docker on another network, it can't reach `127.0.0
 
 ### CI images (`deploy/test/compose.ci.yml`)
 
-- **What it holds:** one service per third-party image the CI jobs run, each pinned by digest with the tag in a comment: the Beszel hub, `caddy` and `nginx:stable-alpine`. nginx is currently used unpinned.
+- **What it holds:** one service per third-party image the CI jobs run, each pinned by digest after its tag: the Beszel hub, `caddy` and `nginx:stable-alpine`. Only the hub is started from it (on a random loopback port); the others are in a profile that is never enabled.
 - **How CI uses it:**
   - The healthy-hub tests start the hub through this file.
-  - The config checks and the Python tests read each image reference from it with `docker compose -f deploy/test/compose.ci.yml config --format json`, so no digest is written twice.
+  - The config checks and the Python tests read each image reference from it through `deploy/test/ci_images.py` (`docker compose config --format json`), so no digest is written twice.
 - **Updates:** `.github/dependabot.yml` gains a `docker-compose` entry for `/deploy/test`, with the same monthly schedule and 7-day cooldown as the existing `docker` entry. A hub bump then also runs the healthy-hub test against the new hub release before it is merged, which is an early warning when Beszel changes its API.
 
 ### Publishing (a `publish` job in `ci.yml`)
@@ -355,13 +355,13 @@ Publishing is a job in `ci.yml`, not a separate workflow, so that images are onl
 Each PR leaves a working, tested deployment:
 
 1. **Bridge** (done, #97): moving this plan to `docs/container-plan.md`, then static serving, security headers and the health listener, with tests and the PLAN HTTP API update. The systemd setup is unaffected because both settings default to off.
-2. **Container** (next):
+2. **Container** (done, #99):
    - `deploy/Dockerfile`, the new `compose.yml` with an active `build:` block and the `image:` line commented out
    - `compose.beszel-network.yml`, the adapted `compose.host-network.yml` and `deploy/.env.example`
    - the ignore-file changes and their CI check, the CI smoke and healthy-hub tests
    - `deploy/test/compose.ci.yml` with the hub and nginx images, and its Dependabot entry
    - the README quick start, which says to build from a checkout for now
-3. **Proxies:** the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
+3. **Proxies** (next): the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
 4. **Publishing:**
    - the `publish` job and tag triggers
    - switching `compose.yml` to the GHCR `image:` line, with `build:` commented out

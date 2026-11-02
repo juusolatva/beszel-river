@@ -8,6 +8,8 @@ import tempfile
 import time
 import uuid
 
+from ci_images import image
+
 
 def docker(*args):
     return subprocess.check_output(["docker", *args], text=True).strip()
@@ -33,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="river-nginx-") as directory:
     try:
         docker("run", "-d", "--name", name, "-p", "127.0.0.1::8080",
                "-v", f"{root / 'default.conf'}:/etc/nginx/conf.d/default.conf:ro",
-               "-v", f"{configs}:/etc/nginx/snippets:ro", "nginx:stable-alpine")
+               "-v", f"{configs}:/etc/nginx/snippets:ro", image("nginx"))
         port = int(docker("port", name, "8080/tcp").rsplit(":", 1)[1])
 
         def request(path, address):
