@@ -259,7 +259,7 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
   ```sh
   git checkout main && git pull && git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
   ```
-  New GHCR packages are private: after the first publish, make the package public once in its settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
+  The package inherits the repository's public visibility. If it ever shows as private, change it in the package settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
 - **From an image built from a checkout** (before the image was published): `compose.yml` now pulls the published image. Run `docker compose up -d` once; `docker image rm beszel-river-river` then removes the old local build.
 - **From the bridge-only container** (`deploy/bridge.Dockerfile`, the `bridge` service on port 8787), which this image replaces:
   - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by uid 1000.
