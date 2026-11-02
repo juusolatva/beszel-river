@@ -1,0 +1,24 @@
+# Alternative to Caddyfile: the container's page under /river/ in an existing site. Copy this file to
+# /etc/caddy/ and import it inside that site's block:
+#   example.com {
+#   	import /etc/caddy/Caddyfile.path
+#   	...
+#   }
+# For another path, replace /river everywhere; the container needs no change. If RIVER_PORT in .env
+# moved the container's port, change 8095 below to match.
+#
+# The container sends the page's security headers (Content-Security-Policy and more); the site adds
+# HSTS. If the site sends its own Content-Security-Policy too, browsers enforce both, so a site policy
+# stricter than the container's must still allow inline styles. An encode directive for the whole site
+# would also compress /river/stream; give it a matcher that leaves that path out.
+# Caddy has no per-IP connection limit (see Caddyfile).
+
+# Relative URLs in the page need the trailing slash.
+redir /river /river/ 308
+
+# Strips /river, so the container sees the paths it serves.
+handle_path /river/* {
+	@river_compress not path /stream
+	encode @river_compress
+	reverse_proxy 127.0.0.1:8095
+}

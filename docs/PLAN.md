@@ -19,7 +19,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge and frontend, same versions) | Normalization and mixing are pure functions; coverage thresholds gate every module but the entry points and the debug panel, with fakes for PocketBase, WebGL2 and `EventSource`. How the river looks and performs is checked in a browser. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci --ignore-scripts` (also in `deploy/Dockerfile`, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 24.22.1, 24 and 26; a `deploy` job checks that secrets stay out of git and the image, runs the image without a hub and healthy against a real Beszel hub (on its Docker network and on the host's loopback), and runs `docker compose config` and `nginx -t`. The images it runs are pinned by digest in `deploy/test/compose.ci.yml`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs and images to digests; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
+| CI | GitHub Actions: `npm ci --ignore-scripts` (also in `deploy/Dockerfile`, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 24.22.1, 24 and 26; a `deploy` job checks that secrets stay out of git and the image, runs the image without a hub and healthy against a real Beszel hub (on its Docker network, behind Caddy in a proxy container, and on the host's loopback), runs `docker compose config`, `nginx -t` and `caddy validate`, and runs the nginx and Caddy configs in front of a stub container (limits, compression, unbuffered events, disconnects). The images it runs are pinned by digest in `deploy/test/compose.ci.yml`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs and images to digests; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
 | Deployment | One container (`node:24.22.1-alpine`) where the bridge also serves the page, behind a reverse proxy; or the bridge under systemd with host nginx serving the static build and proxying `/stream` | See "Deployment". |
 
 ## Architecture
@@ -109,11 +109,17 @@ deploy/
   compose.yml                 the container on 127.0.0.1:8095, with .env and mix.json next to it
   compose.beszel-network.yml  override: join the hub's Docker network
   compose.host-network.yml    override: the host's network, for a hub listening only on loopback
+  compose.proxy-network.yml   override: join a proxy container's network instead of publishing the port
   .env.example                template for the container's .env
   beszel-river-bridge.service systemd unit, for running without Docker
-  nginx/river.conf            own server block: TLS, static root, /stream proxy
-  nginx/river-path.conf       alternative: locations for /river/ in an existing server block
+  nginx/river.conf            without Docker: own server block, TLS, static root, /stream proxy
+  nginx/river-path.conf       without Docker: locations for /river/ in an existing server block
+  nginx/river-container.conf  container: own server block, TLS, everything proxied to 127.0.0.1:8095
+  nginx/river-container-path.conf container: locations for /river/ in an existing server block
   nginx/river-limits.conf     per-client connection key, included once in the http block
+  nginx/river-stream.conf     settings every /stream location includes
+  caddy/Caddyfile             container: own site, automatic HTTPS
+  caddy/Caddyfile.path        container: /river/ in an existing site (import)
   test/                       deployment tests run by CI; compose.ci.yml pins the images they run
 ```
 
@@ -330,21 +336,30 @@ Commands and steps are in README, "Deployment".
   - `mix.json` is bind-mounted read-only at `/config/mix.json` and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it. It must be readable by uid 1000.
   - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `mix*.json*` at any depth (including environment-specific files and backups), keeping only the `.env.example` files and `bridge/mix.example.json` as public templates. CI checks both: `git check-ignore` on the deployment paths, and an image built with marker-filled `deploy/.env`, `deploy/mix.json` and `bridge/mix.json` present must contain no such file names and no marker.
   - Read-only root filesystem, PID limit (`pids_limit: 100`), 256 MB memory limit, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
-  - `deploy/test/container.py` runs the image without a hub (page, asset, snapshot, 404 for `/healthz` on the public port, 503 from the health listener), then from a temporary deployment directory with each override against a real hub from `deploy/test/compose.ci.yml`, until Docker reports it healthy.
+  - `deploy/compose.proxy-network.yml` is for a reverse proxy that runs in Docker itself: it joins the proxy's external network (`PROXY_NETWORK`, default `proxy`) next to the default one and removes the port mapping, so the proxy reaches `river:8095`. It does not combine with the host-network override.
+  - `deploy/test/container.py` runs the image without a hub (page, asset, snapshot, 404 for `/healthz` on the public port, 503 from the health listener), then from a temporary deployment directory against a real hub from `deploy/test/compose.ci.yml` until Docker reports it healthy: on the hub's network with the proxy-network override, checked through the shipped `Caddyfile` in a Caddy container, and with the host-network override.
+- **Reverse proxy for the container** (`deploy/nginx/river-container.conf` and `river-container-path.conf`, `deploy/caddy/Caddyfile` and `Caddyfile.path`): each forwards every path to `127.0.0.1:8095`, at a domain root or under `/river/`.
+  - The proxy adds only `Strict-Transport-Security`; the container's own security and caching headers pass through. Under a path, a site's own CSP is enforced next to the container's, so it must allow inline styles.
+  - Path mode redirects `/river` to `/river/` (relative URLs need the slash) and strips the prefix, so the container sees its own paths.
+  - Compression for the page and assets (nginx: `gzip_types text/css text/javascript`, the container's types, plus `text/html`; Caddy: `encode` with a matcher excluding `/stream`). Caddy's default `encode` matches `text/*` and would compress `text/event-stream` too.
+  - nginx's `/stream` locations include `river-stream.conf` (below) and get the same per-client limit. Caddy has no per-IP connection limit built in, so behind it only the container's global cap of 500 streams applies; the configs point to `caddy-ratelimit`.
+  - Caddy needs no streaming options: it flushes `text/event-stream` at once and cancels the upstream request when the client leaves (a negative `flush_interval` is ignored for event streams).
+  - `deploy/test/nginx.py` and `deploy/test/caddy.py` run the shipped files, with only ports and the site address changed, in front of a stub container (`proxy_check.py`): compression, HSTS, redirects, prefix stripping, ten events arriving within 4 s, and the upstream stream closing within 5 s after the client leaves while the stream is quiet. The container's viewer count, which stops realtime polling, depends on that close; nginx with `proxy_ignore_client_abort on` fails it.
 - **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options plus an empty capability bounding set, `RestrictSUIDSGID`, `RestrictRealtime`, `RestrictNamespaces`, `ProtectClock`, `ProtectHostname`, `ProtectKernelLogs`, `ProtectProc=invisible`, `ProcSubset=pid`, `RemoveIPC`, `SystemCallArchitectures=native` and `UMask=0077`. Executable memory remains available for Node's JIT. `deploy/test/systemd.py` verifies the unit and smoke-tests Node JIT/HTTP, empty capabilities and file permissions in a transient system service; CI runs it with passwordless sudo.
 - **Frontend:** `npm run build -w @beszel-river/frontend`, then copy `frontend/dist/` to the web root. The build uses relative asset URLs (`base: "./"`) and connects to the relative `stream`, so the same files work at a site root or under a path.
 - **nginx** (`deploy/nginx/river.conf`, own server block):
   - HTTP → HTTPS redirect; HTTP/2, because HTTP/1.1 browsers open at most 6 connections per host and every open tab holds one stream.
-  - `location = /stream` proxied to `127.0.0.1:8787` with:
+  - `location = /stream` proxied to `127.0.0.1:8787`, with the settings shared by every `/stream` location in `river-stream.conf`:
     - `proxy_pass` naming the URI `/stream`: nginx forwards its normalized path, not the client's raw request-target, so the bridge always sees `/stream` from here.
     - `proxy_buffering off`: send events immediately.
     - `proxy_http_version 1.1` and `proxy_set_header Connection ""`: keep the upstream connection open.
     - `proxy_read_timeout 1h`: do not cut quiet streams.
-    - `river-limits.conf` defines the shared connection key: the full IPv4 address or the first eight binary IPv6 bytes (`/64`), including NUL/newline bytes. `limit_conn` allows 8 per key (each HTTP/2 request counts), answered with 429. It prevents one IPv6 `/64` from taking the bridge's 500 slots by rotating addresses; many prefixes can still exhaust the global cap. The include belongs once in the http block for either deployment mode. Changing an existing zone key requires an nginx restart.
+    - `gzip off`, and `proxy_cache off`.
+    - `river-limits.conf` defines the shared connection key: the full IPv4 address or the first eight binary IPv6 bytes (`/64`), including NUL/newline bytes. `limit_conn` allows 8 per key (each HTTP/2 request counts), answered with 429. It prevents one IPv6 `/64` from taking the bridge's 500 slots by rotating addresses; many prefixes can still exhaust the global cap. The include belongs once in the http block, whichever config is used. Changing an existing zone key requires an nginx restart.
   - `/healthz` is not proxied.
   - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
   - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (one year, this host only).
-  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there. `deploy/test/nginx.py` runs nginx in Docker to check actual binary keys and held-request limits for both paths; CI runs it after the syntax checks.
+  - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there. `deploy/test/nginx.py` runs nginx in Docker to check actual binary keys and held-request limits for both paths, and for the container configs' two; CI runs it after the syntax checks.
 
 ## Milestones
 
@@ -396,9 +411,10 @@ Commands and steps are in README, "Deployment".
     - Not checked: frame rates on real phones and GPUs (the open M2 check).
 - [ ] **M8 – Standalone container.** One image with the bridge and the page, run with `deploy/compose.yml`, behind nginx or Caddy; working plan in [container-plan.md](container-plan.md).
   - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8095`, and also behind Caddy and nginx at a domain root and under `/river/`.
-  - Progress, following the work order in container-plan.md: 2 of 4 PRs merged. Next: the nginx and Caddy configs for the container.
+  - Progress, following the work order in container-plan.md: 3 of 4 PRs merged. Next: publishing the image to GHCR.
   - Bridge part done in #97: `STATIC_DIR`, `HEALTH_PORT` and the security headers (unit tests; the built bridge served `frontend/dist` with an unreachable hub: page, asset, 304, `/stream` snapshot, 404 for `/healthz` and `/assets/../index.html` on the main listener, 503 from the health listener).
   - Container part done in #99: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
+  - Proxy part done in #101: `river-stream.conf` shared by all nginx `/stream` locations, nginx and Caddy configs for the container at a root and under `/river/`, and `compose.proxy-network.yml` (`deploy/test/nginx.py` and `caddy.py` against a stub container, in CI and locally with nginx 1.30.6 and Caddy 2.11.7; `container.py` through the shipped `Caddyfile` against Beszel v0.21.1). Not yet checked behind a public domain with a real certificate.
 
 ## Risks
 

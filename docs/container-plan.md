@@ -231,7 +231,7 @@ The new configs sit next to the existing ones, and all four share the stream set
 - **`river-container.conf`** is a full server block for the container:
   - It redirects HTTP to HTTPS and enables HTTP/2.
   - It adds `add_header Strict-Transport-Security` at server level only. The other headers come from the container, so they are not duplicated.
-  - `location /` uses `proxy_pass http://127.0.0.1:8095/;`. With a URI there, nginx forwards its normalized path. It also turns on `gzip` with `gzip_types` for JS and CSS.
+  - `location /` uses `proxy_pass http://127.0.0.1:8095/;`. With a URI there, nginx forwards its normalized path. It also turns on `gzip` with `gzip_types text/css text/javascript`, the types the container sends (the proxy test caught `application/javascript` matching nothing).
   - `location = /stream` uses `proxy_pass http://127.0.0.1:8095/stream;` and includes `river-stream.conf`.
 - **`river-container-path.conf`** holds locations to include in an existing server block:
   - `location = /river { return 301 /river/; }`
@@ -245,14 +245,14 @@ The new configs sit next to the existing ones, and all four share the stream set
   - `river.example.com { ... }` with automatic HTTPS
   - `header Strict-Transport-Security "max-age=31536000"`
   - `encode` for every path except `/stream`
-  - a plain `reverse_proxy 127.0.0.1:8095` with no `flush_interval`. Caddy already flushes `text/event-stream` responses immediately, and negative `flush_interval` values also change how backend requests are cancelled. The setting is added only if a test shows it is needed.
-- **`Caddyfile.path`** is a snippet for an existing site: `redir /river /river/ 308` and `handle_path /river/* { reverse_proxy 127.0.0.1:8095 }`.
+  - a plain `reverse_proxy 127.0.0.1:8095` with no `flush_interval`. Caddy already flushes `text/event-stream` responses immediately and ignores `flush_interval` for them (the disconnect test passes even with `-1`).
+- **`Caddyfile.path`** is a snippet for an existing site: `redir /river /river/ 308` and `handle_path /river/* { ... }` with the same `encode` matcher and `reverse_proxy 127.0.0.1:8095`.
 
 Caddy has no built-in per-IP connection limit. The Caddy configs therefore rely on the container's global cap of 500 streams, and their comments point to the `caddy-ratelimit` plugin. The README will say plainly that only the nginx configs include per-IP limits.
 
 ### Proxy in Docker
 
-When the proxy itself runs in Docker on another network, it can't reach `127.0.0.1:8095`. A short README section will show joining both containers to a shared external network (`proxy`) and pointing the proxy at `river:8095`. The `ports:` line can then be removed.
+When the proxy itself runs in Docker on another network, it can't reach `127.0.0.1:8095`. `deploy/compose.proxy-network.yml` joins the river to a shared external network (`PROXY_NETWORK`, default `proxy`) and removes the port mapping; the proxy then points at `river:8095`. A README section explains it. `container.py` runs its hub-network case this way, through the shipped `Caddyfile` in a Caddy container.
 
 ## CI and image publishing
 
@@ -279,7 +279,7 @@ When the proxy itself runs in Docker on another network, it can't reach `127.0.0
   - A new `deploy/test/caddy.py` puts Caddy in front of a stub SSE upstream written in the script, for both Caddyfiles. It checks that:
     - events arrive without buffering
     - `/river` redirects
-    - closing the client connection closes the upstream connection within a few seconds. Realtime polling depends on the viewer count dropping.
+    - closing the client connection closes the upstream connection within a few seconds, while the stream is quiet, so the proxy must notice the client leaving without a failed write. Realtime polling depends on the viewer count dropping.
   - `nginx.py` gets the same disconnect check for the container configs.
 
 ### CI images (`deploy/test/compose.ci.yml`)
@@ -361,8 +361,8 @@ Each PR leaves a working, tested deployment:
    - the ignore-file changes and their CI check, the CI smoke and healthy-hub tests
    - `deploy/test/compose.ci.yml` with the hub and nginx images, and its Dependabot entry
    - the README quick start, which says to build from a checkout for now
-3. **Proxies** (next): the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
-4. **Publishing:**
+3. **Proxies** (done, #101): the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
+4. **Publishing** (next):
    - the `publish` job and tag triggers
    - switching `compose.yml` to the GHCR `image:` line, with `build:` commented out
    - the README GHCR notes

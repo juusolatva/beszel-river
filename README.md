@@ -26,7 +26,7 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 | `shared/` | Message types shared by bridge and frontend (type-only). |
 | `bridge/` | Node service: reads the Beszel hub, mixes metrics into abstract channels, serves them over SSE at `/stream`. |
 | `frontend/` | Static WebGL2 page built with Vite; unit tests for everything but the page setup and debug panel. |
-| `deploy/` | Container image (`Dockerfile`), compose file, its overrides and `.env.example`; systemd unit and nginx configs for running without Docker; deployment tests. |
+| `deploy/` | Container image (`Dockerfile`), compose file, its overrides and `.env.example`; nginx and Caddy configs in front of the container; systemd unit and nginx configs for running without Docker; deployment tests. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
 | `docs/container-plan.md` | Working plan for the standalone container image (milestone M8). |
 | [GLOSSARY.md](GLOSSARY.md) | Domain terms for host activity, streams and the visible river. |
@@ -124,7 +124,37 @@ Then open `http://127.0.0.1:8095`. In `.env`, set `BESZEL_EMAIL` and `BESZEL_PAS
 
 **Quoting:** Compose replaces `$name` and `${name}` in unquoted and double-quoted `.env` values, usually with nothing, so a password, token or salt containing `$` changes silently and the login fails. Keep every secret in single quotes, as `.env.example` does: `STREAM_SALT='CHANGE$ME'`, which Compose would otherwise read as `CHANGE`. A `bridge/.env` from the systemd setup is read without this substitution, so add the quotes when copying values from it.
 
-`compose.yml` publishes the page on `127.0.0.1` only. For a public site, put a reverse proxy in front that handles TLS and forwards every path to `http://127.0.0.1:8095`, with response buffering off for `/stream`. Ready-made nginx and Caddy configs for this are planned in [docs/container-plan.md](docs/container-plan.md). The container already sends the page's security headers (Content-Security-Policy and others); the proxy adds `Strict-Transport-Security`. Its `/healthz` is on a separate listener inside the container, so the proxy cannot expose it.
+### Reverse proxy
+
+`compose.yml` publishes the page on `127.0.0.1` only. For a public site, put nginx or Caddy in front, with the configs below, at a domain root or under `/river/`. The proxy handles TLS, `Strict-Transport-Security` and compression of the page and its assets, and passes `/stream` through unbuffered. The container sends the other security headers (Content-Security-Policy and more). Its `/healthz` is on a separate listener inside the container, so the proxy cannot expose it. If `RIVER_PORT` moved the page off 8095, change `8095` in the config to match.
+
+Only the nginx configs limit streams per client: 8 concurrent ones per IPv4 address or IPv6 `/64`, as in "4. nginx" below. Caddy has no such limit built in, so behind it only the container's global cap of 500 streams applies; a plugin such as `caddy-ratelimit` can add one.
+
+**nginx**, own domain or subdomain, with `deploy/nginx/river-container.conf`:
+
+```sh
+sudo certbot certonly --nginx -d river.example.com
+sudo install -D -m 644 -t /etc/nginx/snippets deploy/nginx/river-limits.conf deploy/nginx/river-stream.conf
+sudo cp deploy/nginx/river-container.conf /etc/nginx/conf.d/   # then replace river.example.com in it
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+- `install -D -m 644 -t <dir>`: copies both snippets into `<dir>`, creating it if needed, readable by all.
+- `certbot` and `nginx -t`: as in "4. nginx" below, which also has the fix for nginx older than 1.25.1.
+
+Under a path in an existing site instead: install the two snippets the same way, copy `deploy/nginx/river-container-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-container-path.conf;` inside that site's `server` block, and add `include /etc/nginx/snippets/river-limits.conf;` once to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. Add HSTS to the site if it serves HTTPS only. If the site sends its own Content-Security-Policy, browsers enforce both, so it must still allow inline styles.
+
+**Caddy**, own domain or subdomain: replace `river.example.com` in `deploy/caddy/Caddyfile`, put it in `/etc/caddy/Caddyfile` (or add its site block to yours), then `sudo systemctl reload caddy`. Caddy gets the certificate itself. Under a path in an existing site instead: copy `deploy/caddy/Caddyfile.path` to `/etc/caddy/` and add `import /etc/caddy/Caddyfile.path` inside that site's block. A site-wide `encode` would also compress `/river/stream` and delay its events; give it a matcher that leaves that path out, as the snippet's own `encode` does.
+
+#### Proxy in Docker
+
+A proxy running in a container cannot reach the host's `127.0.0.1:8095`. Put both on a shared network instead:
+
+1. `docker network create proxy`, and attach the proxy's container to it (in its compose file, a `proxy` network with `external: true`).
+2. Add `compose.proxy-network.yml` to `COMPOSE_FILE` in `.env` (for example `COMPOSE_FILE=compose.yml:compose.proxy-network.yml`, or with `compose.beszel-network.yml` as well), set `PROXY_NETWORK` if the network has another name, and run `docker compose up -d`. The river joins that network, and its port is no longer published on the host.
+3. In the proxy config, replace `127.0.0.1:8095` with `river:8095`.
+
+This does not combine with `compose.host-network.yml`. nginx looks up `river` when it starts or reloads, so it fails to start while the river is down, and after `docker compose up -d` recreates the river, nginx needs a reload (`docker exec <nginx container> nginx -s reload`) to find its new address. Caddy looks it up on each connection.
 
 ### Without Docker
 
@@ -176,19 +206,20 @@ Own domain or subdomain, with `deploy/nginx/river.conf`:
 
 ```sh
 sudo certbot certonly --nginx -d river.example.com
-sudo install -D -m 644 deploy/nginx/river-limits.conf /etc/nginx/snippets/river-limits.conf
+sudo install -D -m 644 -t /etc/nginx/snippets deploy/nginx/river-limits.conf deploy/nginx/river-stream.conf
 sudo cp deploy/nginx/river.conf /etc/nginx/conf.d/river.conf   # then replace river.example.com in it
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+- `install -D -m 644 -t <dir>`: copies both snippets into `<dir>`, creating it if needed, readable by all. `river-limits.conf` sets up the per-client limit; `river-stream.conf` holds the settings every `/stream` location includes.
 - `certbot certonly --nginx -d <domain>`: gets a Let's Encrypt certificate through the running nginx without changing its config. The config expects it under `/etc/letsencrypt/live/<domain>/`.
 - `nginx -t`: checks the config; `reload` applies it without dropping connections.
 
 nginx older than 1.25.1 (Debian 12, Ubuntu 24.04) does not know `http2 on;`: delete that line and use `listen 443 ssl http2;`.
 
-Under a path in an existing site instead: copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and copy `river-limits.conf` to the same snippets directory and add `include /etc/nginx/snippets/river-limits.conf;` once to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
+Under a path in an existing site instead: install the two snippets the same way, copy `deploy/nginx/river-path.conf` to `/etc/nginx/snippets/`, add `include /etc/nginx/snippets/river-path.conf;` inside that site's `server` block, and add `include /etc/nginx/snippets/river-limits.conf;` once to the `http` block (for example as a file in `/etc/nginx/conf.d/`). The page is then at `/river/`. The snippet sets no headers, so the page gets the site's: add the `add_header` lines from `river.conf` to that `server` block if it lacks them, and keep inline styles allowed in its CSP.
 
-Both modes allow 8 concurrent stream requests per IPv4 address or IPv6 `/64`, returning 429 above that limit. IPv6 privacy-address rotation within one `/64` shares the same allowance. This does not prevent exhaustion by clients controlling many prefixes. When upgrading an existing configuration, replace the old `limit_conn_zone $binary_remote_addr` line with the limits include and restart nginx once (`sudo systemctl restart nginx`): an existing shared zone cannot change its key during a reload.
+Both modes, and the container configs above, allow 8 concurrent stream requests per IPv4 address or IPv6 `/64`, returning 429 above that limit. IPv6 privacy-address rotation within one `/64` shares the same allowance. This does not prevent exhaustion by clients controlling many prefixes. When upgrading an existing configuration, replace the old `limit_conn_zone $binary_remote_addr` line with the limits include and restart nginx once (`sudo systemctl restart nginx`): an existing shared zone cannot change its key during a reload.
 
 Check: `https://river.example.com/?debug` shows `alive` streams with live channel values.
 
@@ -202,10 +233,11 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
 - **Filament recipe migration:** older recipes without `filaments` now run without per-core profiles. An existing section must explicitly contain `bias`, `center`, `weight` and `tau`; copies of the earlier template need `center: 0` added (as JSON: `"center": 0`), or the section removed/set to `null`. Filaments publish a transformed CPU profile; smoothing and shuffling do not guarantee confidentiality. Leave them disabled when CPU levels must stay private, and change the public template weights before enabling them.
 - **Slow stream readers:** the bridge bounds queued output to 256 KiB per response and disconnects clients that remain blocked for 10 s. While blocked it skips heartbeats and intermediate updates; after draining it sends the latest update. A single event exceeding the byte budget also closes that stream. Browsers reconnect normally.
 - **Base image updates:** `deploy/Dockerfile` pins the multi-platform `node:24.22.1-alpine` digest in every stage. Dependabot proposes monthly Docker updates after a seven-day cooldown; review and merge those PRs to take base-image patches. Rebuilding the same checkout keeps the pinned base.
-- **Updates:** `git pull`, then `docker compose up -d --build` in the deployment directory. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3).
+- **Updates:** `git pull`, then `docker compose up -d --build` in the deployment directory. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3). When a config in `deploy/nginx/` or `deploy/caddy/` changed, copy it again (with your domain and paths) and reload the proxy.
+- **nginx configs from before `river-stream.conf`:** the current `river.conf` and `river-path.conf` include `/etc/nginx/snippets/river-stream.conf` instead of listing the stream settings themselves. Install it (`sudo install -m 644 deploy/nginx/river-stream.conf /etc/nginx/snippets/`) before copying the updated config, or `nginx -t` fails. Nothing else changes.
 - **From the bridge-only container** (`deploy/bridge.Dockerfile`, the `bridge` service on port 8787), which this image replaces:
   - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by uid 1000.
-  - The service is now `river`, and the page and stream are on port 8095. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working with `RIVER_PORT=8787` in `deploy/.env`. nginx then still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless.
+  - The service is now `river`, and the page and stream are on port 8095. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working with `RIVER_PORT=8787` in `deploy/.env`. nginx then still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless. To let the container serve the page too, switch to `river-container.conf` or `river-container-path.conf` ("Reverse proxy" above) and drop `RIVER_PORT`.
   - A hub with `network_mode: host`: use the adapted `compose.host-network.yml` (table above).
   - Before the first `up`, run `docker compose down --remove-orphans` in `deploy/` (with the same `-f` options as before, if any): it removes the old `bridge` container, which would otherwise keep port 8787.
 - **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.

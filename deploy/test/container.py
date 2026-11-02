@@ -1,10 +1,10 @@
 """Run the river image the ways deploy/compose.yml runs it: without a hub, then healthy against a real
-Beszel hub on its Docker network (compose.beszel-network.yml) and on the host's loopback
-(compose.host-network.yml).
+Beszel hub on its Docker network (compose.beszel-network.yml, reached through the shipped Caddyfile in
+a proxy container with compose.proxy-network.yml) and on the host's loopback (compose.host-network.yml).
 
     python3 deploy/test/container.py <image>
 
-The hub image comes from compose.ci.yml. Each Compose run uses a temporary deployment directory with
+The hub and Caddy images come from compose.ci.yml. Each Compose run uses a temporary deployment directory with
 copies of the shipped Compose files, a .env and mix.json, plus one override that swaps the build for
 <image>, so nothing in the checkout is written. Needs Docker with Compose 2.24 or later and free host
 ports 18090, 18095 and 18788 for the host-network run.
@@ -192,24 +192,45 @@ def compose_healthy(root, port):
         run("docker", "compose", "down", cwd=root, check=False)
 
 
+def proxy(directory, network):
+    """The shipped Caddyfile in a container on the proxy network, over plain HTTP on a free loopback port."""
+    caddyfile = Path(directory) / "Caddyfile"
+    text = (DEPLOY / "caddy" / "Caddyfile").read_text()
+    assert "river.example.com {" in text and "127.0.0.1:8095" in text
+    caddyfile.write_text(text.replace("river.example.com {", ":80 {").replace("127.0.0.1:8095", "river:8095"))
+    caddyfile.chmod(0o644)
+    name = f"river-ci-proxy-{SUFFIX}"
+    run("docker", "run", "-d", "--name", name, "--network", network, "-p", "127.0.0.1::80",
+        "-v", f"{caddyfile}:/etc/caddy/Caddyfile:ro", ci_image("caddy"))
+    return name, int(run("docker", "port", name, "80/tcp").splitlines()[0].rsplit(":", 1)[1])
+
+
 def hub_network():
+    """The hub on its Docker network, and the river reached only through a proxy on another one."""
     project = f"river-ci-{SUFFIX}"
     hub = ["docker", "compose", "-f", str(CI_COMPOSE), "-p", project]
+    network = f"river-ci-proxy-{SUFFIX}"
+    caddy = None
     try:
         run(*hub, "up", "-d", "beszel")
         container = run(*hub, "ps", "-q", "beszel")
         run("docker", "exec", container, "/beszel", "superuser", "upsert", *ADMIN)
         setup_hub(run(*hub, "port", "beszel", "8090"))
+        run("docker", "network", "create", network)
         with tempfile.TemporaryDirectory(prefix="river-deploy-") as directory:
-            root = deployment(directory, ["compose.beszel-network.yml"], {
+            root = deployment(directory, ["compose.beszel-network.yml", "compose.proxy-network.yml"], {
                 "BESZEL_URL": "http://beszel:8090",
                 "BESZEL_NETWORK": f"{project}_default",
-                "RIVER_PORT": "18096",
+                "PROXY_NETWORK": network,
             })
-            compose_healthy(root, 18096)
-        print("ok: hub on its Docker network")
+            caddy, port = proxy(directory, network)
+            compose_healthy(root, port)
+        print("ok: hub on its Docker network, page through a proxy on another one")
     finally:
+        if caddy:
+            run("docker", "rm", "-f", caddy, check=False)
         run(*hub, "down", "-v", check=False)
+        run("docker", "network", "rm", network, check=False)
 
 
 def hub_host_network():
