@@ -396,9 +396,9 @@ Commands and steps are in README, "Deployment".
     - Not checked: frame rates on real phones and GPUs (the open M2 check).
 - [ ] **M8 – Standalone container.** One image with the bridge and the page, run with `deploy/compose.yml`, behind nginx or Caddy; working plan in [container-plan.md](container-plan.md).
   - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8095`, and also behind Caddy and nginx at a domain root and under `/river/`.
-  - Progress, following the work order in container-plan.md: 1 of 4 PRs merged. Next: the container image and Compose files.
+  - Progress, following the work order in container-plan.md: 2 of 4 PRs merged. Next: the nginx and Caddy configs for the container.
   - Bridge part done in #97: `STATIC_DIR`, `HEALTH_PORT` and the security headers (unit tests; the built bridge served `frontend/dist` with an unreachable hub: page, asset, 304, `/stream` snapshot, 404 for `/healthz` and `/assets/../index.html` on the main listener, 503 from the health listener).
-  - Container part done: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
+  - Container part done in #99: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
 
 ## Risks
 

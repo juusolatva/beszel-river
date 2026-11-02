@@ -355,13 +355,13 @@ Publishing is a job in `ci.yml`, not a separate workflow, so that images are onl
 Each PR leaves a working, tested deployment:
 
 1. **Bridge** (done, #97): moving this plan to `docs/container-plan.md`, then static serving, security headers and the health listener, with tests and the PLAN HTTP API update. The systemd setup is unaffected because both settings default to off.
-2. **Container** (next):
+2. **Container** (done, #99):
    - `deploy/Dockerfile`, the new `compose.yml` with an active `build:` block and the `image:` line commented out
    - `compose.beszel-network.yml`, the adapted `compose.host-network.yml` and `deploy/.env.example`
    - the ignore-file changes and their CI check, the CI smoke and healthy-hub tests
    - `deploy/test/compose.ci.yml` with the hub and nginx images, and its Dependabot entry
    - the README quick start, which says to build from a checkout for now
-3. **Proxies:** the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
+3. **Proxies** (next): the stream snippet and the old configs switched to it, the container nginx configs, the Caddy configs (with the Caddy image added to `compose.ci.yml`), CI validation, the proxy behaviour and disconnect tests, and the README proxy section and nginx upgrade note.
 4. **Publishing:**
    - the `publish` job and tag triggers
    - switching `compose.yml` to the GHCR `image:` line, with `build:` commented out
