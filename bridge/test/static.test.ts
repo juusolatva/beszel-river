@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
@@ -107,6 +108,8 @@ describe("loadStaticFiles", () => {
     ["a symlink in assets/", "link.js", () => symlinkSync("/etc/passwd", join(dir, "assets", "link.js")), /is a symlink/],
     ["a directory other than assets/", "fonts", () => mkdirSync(join(dir, "fonts")), /is a directory/],
     ["a directory inside assets/", "nested", () => mkdirSync(join(dir, "assets", "nested")), /is a directory/],
+    // Opening a FIFO without O_NONBLOCK would wait for a writer forever.
+    ["a FIFO", "pipe.js", () => execFileSync("mkfifo", [join(dir, "pipe.js")]), /is not a regular file/],
   ])("rejects %s, naming the entry", (_, entry, add, error) => {
     build();
     add();

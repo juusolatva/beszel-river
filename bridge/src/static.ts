@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, constants, type Dirent, fstatSync, openSync, readdirSync, readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join } from "node:path";
 
@@ -55,14 +55,14 @@ export type StaticFiles = ReadonlyMap<string, StaticFile>;
  * from disk afterwards, and no request path is ever turned into a filesystem path.
  */
 export function loadStaticFiles(dir: string): StaticFiles {
-  if (!statSync(dir).isDirectory()) throw new Error(`STATIC_DIR ${dir} is not a directory`);
   const files = new Map<string, StaticFile>();
-  for (const name of readdirSync(dir).sort()) {
-    const path = join(dir, name);
-    if (name === "assets" && lstatSync(path).isDirectory()) {
-      for (const asset of readdirSync(path).sort()) files.set(`/assets/${asset}`, load(join(path, asset), asset, IMMUTABLE));
+  for (const entry of listDirectory(dir)) {
+    const path = join(dir, entry.name);
+    // Dirent types come from the directory listing itself and do not follow symlinks.
+    if (entry.name === "assets" && entry.isDirectory()) {
+      for (const asset of listDirectory(path)) files.set(`/assets/${asset.name}`, load(join(path, asset.name), asset.name, IMMUTABLE));
     } else {
-      files.set(`/${name}`, load(path, name, REVALIDATE));
+      files.set(`/${entry.name}`, load(path, entry.name, REVALIDATE));
     }
   }
   const index = files.get("/index.html");
@@ -71,25 +71,40 @@ export function loadStaticFiles(dir: string): StaticFiles {
   return files;
 }
 
+function listDirectory(path: string): Dirent[] {
+  try {
+    return readdirSync(path, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOTDIR") throw new Error(`STATIC_DIR ${path} is not a directory`, { cause: error });
+    throw error;
+  }
+}
+
+/**
+ * The open descriptor is the only thing checked and read, so the entry cannot change between the two:
+ * O_NOFOLLOW refuses a symlink (ELOOP), O_NONBLOCK keeps a FIFO from blocking startup, fstat checks the type.
+ */
 function load(path: string, name: string, cacheControl: string): StaticFile {
-  const stats = lstatSync(path);
-  if (!stats.isFile()) {
-    const kind = stats.isSymbolicLink() ? "a symlink" : stats.isDirectory() ? "a directory" : "not a regular file";
-    throw new Error(`Static file ${path} is ${kind}; only regular files at the top level and in assets/ are served`);
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ELOOP") throw notServed(path, "a symlink", error);
+    throw error;
+  }
+  let body: Buffer;
+  try {
+    const stats = fstatSync(fd);
+    if (stats.isDirectory()) throw notServed(path, "a directory");
+    if (!stats.isFile()) throw notServed(path, "not a regular file");
+    body = readFileSync(fd);
+  } finally {
+    closeSync(fd);
   }
   if (!SAFE_NAME.test(name)) throw new Error(`Static file ${path} has a name that cannot be served as is`);
   const type = CONTENT_TYPES.get(extname(name));
   if (!type) throw new Error(`Static file ${path} has an unknown extension; add it to CONTENT_TYPES in bridge/src/static.ts`);
 
-  // O_NOFOLLOW and fstat: the file read is the regular file checked, even if the entry changed meanwhile.
-  const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-  let body: Buffer;
-  try {
-    if (!fstatSync(fd).isFile()) throw new Error(`Static file ${path} is not a regular file`);
-    body = readFileSync(fd);
-  } finally {
-    closeSync(fd);
-  }
   const etag = `"${createHash("sha256").update(body).digest("base64url").slice(0, 27)}"`;
   return {
     body,
@@ -97,6 +112,10 @@ function load(path: string, name: string, cacheControl: string): StaticFile {
     cacheControl,
     headers: { ...SECURITY_HEADERS, "Content-Type": type, "Content-Length": body.length, "Cache-Control": cacheControl, ETag: etag },
   };
+}
+
+function notServed(path: string, kind: string, cause?: unknown): Error {
+  return new Error(`Static file ${path} is ${kind}; only regular files at the top level and in assets/ are served`, { cause });
 }
 
 /** Answers `GET` or `HEAD` for a loaded file, with 304 when the client's copy is current. */
