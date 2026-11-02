@@ -175,6 +175,13 @@ jobs:
        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # One release publish at a time, across tags: the job checks out, and so sees the tags, only once it
+    # holds this lock, so an older release cannot take X or latest back from a newer one. GitHub keeps
+    # one waiting run per group and cancels an older waiting one; re-run that release's workflow then.
+    # main runs are already serialized by the workflow's concurrency group.
+    concurrency:
+      group: publish-${{ startsWith(github.ref, 'refs/tags/') && 'release' || github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: read # checkout
       packages: write # push to ghcr.io
@@ -189,13 +196,20 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0 # main and the tags, for the tag checks and the changed-file list
           persist-credentials: false
+      # No QEMU: only the final stage is per platform, and it has no RUN step (deploy/Dockerfile).
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # Before deciding: reading the published edge needs it while the package is private.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Decide what to publish
         id: plan
         env:
           EVENT: ${{ github.event_name }}
           REF: ${{ github.ref }}
           REF_NAME: ${{ github.ref_name }}
-          BEFORE: ${{ github.event.before }}
         run: |
           build=true
           if [[ $REF == refs/tags/* ]]; then
@@ -219,10 +233,16 @@ jobs:
             fi
           else
             version=edge tags=$IMAGE:edge
-            # On a push to main, build only if a file that goes into the image changed. If the list cannot
-            # be made (first push, force-push), build: a spare build is cheap, a stale edge is not.
-            if [ "$EVENT" = push ] && [[ $BEFORE =~ ^[0-9a-f]{40}$ ]] && [[ ! $BEFORE =~ ^0+$ ]] &&
-              changed=$(git diff --name-only "$BEFORE" "$GITHUB_SHA"); then
+            # On a push to main, build only if a file that goes into the image changed since the commit the
+            # published edge was built from (its revision label), so a failed publish is retried by the next
+            # push. If that cannot be worked out (no edge yet, a commit no longer in history), build: a
+            # spare build is cheap, a stale edge is not.
+            revision=$(docker buildx imagetools inspect "$IMAGE:edge" --format \
+              '{{ index (index .Image "linux/amd64").Config.Labels "org.opencontainers.image.revision" }}') ||
+              revision=
+            echo "Published edge: ${revision:-none}"
+            if [ "$EVENT" = push ] && [[ $revision =~ ^[0-9a-f]{40}$ ]] &&
+              changed=$(git diff --name-only "$revision" "$GITHUB_SHA"); then
               build=false
               while IFS= read -r path; do
                 case $path in
@@ -239,15 +259,6 @@ jobs:
           else
             echo "No file that goes into the image changed; edge stays as it is." >> "$GITHUB_STEP_SUMMARY"
           fi
-      # No QEMU: only the final stage is per platform, and it has no RUN step (deploy/Dockerfile).
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        if: steps.plan.outputs.build == 'true'
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        if: steps.plan.outputs.build == 'true'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
         id: build
         if: steps.plan.outputs.build == 'true'
