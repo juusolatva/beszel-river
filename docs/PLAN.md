@@ -19,8 +19,8 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 | Frontend build | `vite` 8.3.4 | Dev server with proxy, static production build. |
 | Rendering | Raw WebGL2, no library | Small needs: a few shaders and two framebuffers. |
 | Tests | `vitest` 5.0.5 + `@vitest/coverage-v8` 5.0.5 (bridge and frontend, same versions) | Normalization and mixing are pure functions; coverage thresholds gate every module but the entry points and the debug panel, with fakes for PocketBase, WebGL2 and `EventSource`. How the river looks and performs is checked in a browser. 4.1.12 hit an npm 10 peer-resolution bug in this workspace. |
-| CI | GitHub Actions: `npm ci --ignore-scripts` (also in the bridge Dockerfile, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 24.22.1, 24 and 26; a `deploy` job builds the bridge image, smoke-tests it, and runs `docker compose config` and `nginx -t`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
-| Deployment | Bridge in Docker (`node:24.22.1-alpine`) next to the hub, or systemd; host nginx serves the static build and proxies `/stream` | See "Deployment". |
+| CI | GitHub Actions: `npm ci --ignore-scripts` (also in `deploy/Dockerfile`, so dependencies run no install scripts), `typecheck`, `coverage`, `build` on Node 24.22.1, 24 and 26; a `deploy` job checks that secrets stay out of git and the image, runs the image without a hub and healthy against a real Beszel hub (on its Docker network and on the host's loopback), and runs `docker compose config` and `nginx -t`. The images it runs are pinned by digest in `deploy/test/compose.ci.yml`. The Node 24 job also scans with SonarQube Cloud (`sonar-project.properties`, coverage from the lcov reporter) on pushes and same-repository pull requests that are not Dependabot's. An OSV-Scanner workflow scans dependencies for known vulnerabilities on pushes, pull requests, and weekly. Actions are pinned to commit SHAs and images to digests; Dependabot proposes updates monthly after a 7-day cooldown | `.github/workflows/ci.yml`, `.github/workflows/osv-scanner.yml`, `.github/dependabot.yml`; tests both ends of the supported range, keeps deployment files valid, and scans for dependency vulnerabilities. A tag can be moved to other code, a SHA cannot. |
+| Deployment | One container (`node:24.22.1-alpine`) where the bridge also serves the page, behind a reverse proxy; or the bridge under systemd with host nginx serving the static build and proxying `/stream` | See "Deployment". |
 
 ## Architecture
 
@@ -49,7 +49,7 @@ Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
 ```
 .github/workflows/ci.yml         CI
 .github/workflows/osv-scanner.yml OSV-Scanner dependency vulnerability scanning
-.github/dependabot.yml           monthly updates for the pinned actions
+.github/dependabot.yml           monthly updates for the pinned actions and Docker images
 sonar-project.properties      SonarQube Cloud project settings
 .dockerignore                 keeps secrets and build output out of the image build context
 AGENTS.md                     instructions for coding agents
@@ -105,12 +105,16 @@ frontend/
     util/math.ts              PRNG, easing, small helpers
   test/                       vitest unit tests; fake-gl.ts is a recording WebGL2 stand-in
 deploy/
-  bridge.Dockerfile           bridge image, built from the repository root
-  compose.yml                 bridge service on the hub's Docker network
-  compose.host-network.yml    override for a hub with network_mode: host
-  beszel-river-bridge.service systemd unit, when the hub does not run in Docker
+  Dockerfile                  container image: bridge and page, built from the repository root
+  compose.yml                 the container on 127.0.0.1:8095, with .env and mix.json next to it
+  compose.beszel-network.yml  override: join the hub's Docker network
+  compose.host-network.yml    override: the host's network, for a hub listening only on loopback
+  .env.example                template for the container's .env
+  beszel-river-bridge.service systemd unit, for running without Docker
   nginx/river.conf            own server block: TLS, static root, /stream proxy
   nginx/river-path.conf       alternative: locations for /river/ in an existing server block
+  nginx/river-limits.conf     per-client connection key, included once in the http block
+  test/                       deployment tests run by CI; compose.ci.yml pins the images they run
 ```
 
 ## Data source: Beszel hub
@@ -315,14 +319,18 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 Commands and steps are in README, "Deployment".
 
-- **Bridge in Docker** (`deploy/bridge.Dockerfile`, `deploy/compose.yml`):
-  - Multi-stage image on `node:24.22.1-alpine` pinned to one multi-platform SHA256 digest in all stages (monthly Dependabot Docker updates with a seven-day cooldown): build with dev dependencies, then a final stage with only `dist/`, production dependencies and `mix.example.json`, running as the `node` user. A `HEALTHCHECK` polls `/healthz`.
-  - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `bridge/mix*.json*` (including environment-specific files and backups), keeping only `.env.example` and `bridge/mix.example.json` as public templates. The Docker context also excludes `node_modules` and build output.
-  - The compose service joins the hub's network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
-  - Environment from `bridge/.env`; compose overrides `BIND_HOST=0.0.0.0` and `BIND_PORT=8787` inside the container and publishes `127.0.0.1:8787:8787`.
-  - A hub with `network_mode: host` is on no Docker network. `deploy/compose.host-network.yml` then puts the bridge on the host network too (`!reset` removes the network and port mapping), with `BIND_HOST=127.0.0.1` and `BESZEL_URL=http://127.0.0.1:8090`.
-  - `bridge/mix.json` is bind-mounted read-only and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it.
-  - Read-only root filesystem, PID limit (`pids_limit: 100`), all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
+- **Container** (`deploy/Dockerfile`, `deploy/compose.yml`):
+  - Multi-stage image on `node:24.22.1-alpine`, pinned to one multi-platform SHA256 digest in all stages (monthly Dependabot Docker updates with a seven-day cooldown). The build and production-dependency stages run on the build machine's platform, since their output is plain JS; the production stage fails if a dependency ships a native addon (`*.node`, `binding.gyp`), which would need a per-architecture install. The final stage has no `RUN` step, so other architectures need no emulation. It holds `bridge/dist`, production dependencies, `frontend/dist` as `/app/frontend` and `mix.example.json`, owned by root, and runs as the `node` user (uid 1000).
+  - One process: the bridge with `STATIC_DIR=/app/frontend` serves the page, the assets and `/stream` on port 8095, with the security headers (see "HTTP API"), and `/healthz` on `127.0.0.1:8788` inside the container (`HEALTH_PORT`). The `HEALTHCHECK` (shell form, so it follows `HEALTH_PORT`) uses that listener; nothing outside the container can reach it.
+  - A deployment directory holds `compose.yml`, `.env` (from `deploy/.env.example`) and `mix.json`. `.env` feeds both Compose's `${...}` substitution and, through `env_file`, the container. The compose `environment` block fixes `BIND_HOST`, `BIND_PORT`, `STATIC_DIR`, `HEALTH_PORT` and `MIX_FILE`, so `.env` cannot change them.
+  - Compose interpolates `$` in unquoted and double-quoted `env_file` values; single-quoted values are literal. `deploy/.env.example` single-quotes every secret, and CI logs in with a password containing `$` to prove it.
+  - Published on `127.0.0.1:${RIVER_PORT:-8095}` only; TLS, HSTS, compression and per-IP limits belong to a reverse proxy in front. `extra_hosts` maps `host.docker.internal` to the host for a hub on the host that listens beyond loopback.
+  - `deploy/compose.beszel-network.yml` joins the hub's external network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
+  - A hub that listens only on the host's loopback (such as one with `network_mode: host`) is unreachable from a bridged container. `deploy/compose.host-network.yml` then puts the river on the host network too: `!reset` removes the port mapping and `extra_hosts`, `BIND_HOST=127.0.0.1`, and both ports become host ports (`RIVER_PORT`, `RIVER_HEALTH_PORT`).
+  - `mix.json` is bind-mounted read-only at `/config/mix.json` and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it. It must be readable by uid 1000.
+  - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `mix*.json*` at any depth (including environment-specific files and backups), keeping only the `.env.example` files and `bridge/mix.example.json` as public templates. CI checks both: `git check-ignore` on the deployment paths, and an image built with marker-filled `deploy/.env`, `deploy/mix.json` and `bridge/mix.json` present must contain no such file names and no marker.
+  - Read-only root filesystem, PID limit (`pids_limit: 100`), 256 MB memory limit, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
+  - `deploy/test/container.py` runs the image without a hub (page, asset, snapshot, 404 for `/healthz` on the public port, 503 from the health listener), then from a temporary deployment directory with each override against a real hub from `deploy/test/compose.ci.yml`, until Docker reports it healthy.
 - **Bridge under systemd** (`deploy/beszel-river-bridge.service`): when the hub does not run in Docker. Runs `node dist/main.js` in `/opt/beszel-river/bridge` as a `beszel-river` user, with the usual systemd sandboxing options plus an empty capability bounding set, `RestrictSUIDSGID`, `RestrictRealtime`, `RestrictNamespaces`, `ProtectClock`, `ProtectHostname`, `ProtectKernelLogs`, `ProtectProc=invisible`, `ProcSubset=pid`, `RemoveIPC`, `SystemCallArchitectures=native` and `UMask=0077`. Executable memory remains available for Node's JIT. `deploy/test/systemd.py` verifies the unit and smoke-tests Node JIT/HTTP, empty capabilities and file permissions in a transient system service; CI runs it with passwordless sudo.
 - **Frontend:** `npm run build -w @beszel-river/frontend`, then copy `frontend/dist/` to the web root. The build uses relative asset URLs (`base: "./"`) and connects to the relative `stream`, so the same files work at a site root or under a path.
 - **nginx** (`deploy/nginx/river.conf`, own server block):
@@ -390,6 +398,7 @@ Commands and steps are in README, "Deployment".
   - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8095`, and also behind Caddy and nginx at a domain root and under `/river/`.
   - Progress, following the work order in container-plan.md: 1 of 4 PRs merged. Next: the container image and Compose files.
   - Bridge part done in #97: `STATIC_DIR`, `HEALTH_PORT` and the security headers (unit tests; the built bridge served `frontend/dist` with an unreachable hub: page, asset, 304, `/stream` snapshot, 404 for `/healthz` and `/assets/../index.html` on the main listener, 503 from the health listener).
+  - Container part done: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
 
 ## Risks
 

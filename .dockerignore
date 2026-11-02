@@ -1,16 +1,16 @@
-# Only the bridge image is built; keep secrets, build output and dependencies out of the context.
+# Context for deploy/Dockerfile, which builds the bridge and the frontend. Keep secrets, build output
+# and dependencies out of it.
 **/node_modules
 **/dist
 **/coverage
 **/.env
 **/.env.*
 !**/.env.example
-bridge/mix*.json*
+# Recipes and their backups in any directory (bridge/, deploy/ or another deployment directory).
+**/mix*.json*
 !bridge/mix.example.json
 .git
 .github
-frontend/src
-frontend/index.html
 docs
 *.log
 sonar-project.properties

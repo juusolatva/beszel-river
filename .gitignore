@@ -3,12 +3,14 @@ dist/
 coverage/
 *.tsbuildinfo
 *.log
+__pycache__/
 
 # Secrets and private tuning
 .env
 .env.*
 !.env.example
-bridge/mix*.json*
+# Recipes and their backups in any directory (bridge/, deploy/ or another deployment directory).
+**/mix*.json*
 !bridge/mix.example.json
 
 .DS_Store

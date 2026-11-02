@@ -1,13 +1,17 @@
-# For a Beszel hub that runs with network_mode: host. Use together with compose.yml:
-#   docker compose -f deploy/compose.yml -f deploy/compose.host-network.yml up -d --build
-# The bridge then shares the host's network as well and reaches the hub at BESZEL_URL=http://127.0.0.1:8090
-# (the hub's PORT). It listens on the host's loopback directly, so no port is published.
+# For a Beszel hub on this host that listens only on loopback, such as one with network_mode: host.
+# Use together with compose.yml:
+#   docker compose -f compose.yml -f compose.host-network.yml up -d --build
+# or set COMPOSE_FILE=compose.yml:compose.host-network.yml in .env.
+# The river then shares the host's network and reaches the hub at BESZEL_URL=http://127.0.0.1:8090 (the
+# hub's port). It listens on the host's loopback directly, so both of its ports are host ports:
+# RIVER_PORT (default 8095) for the page and RIVER_HEALTH_PORT (default 8788) for the health check.
 services:
-  bridge:
+  river:
     network_mode: host
-    networks: !reset null
     ports: !reset []
+    # host.docker.internal has no use on the host's network, and some Docker versions reject it there.
+    extra_hosts: !reset []
     environment:
       BIND_HOST: 127.0.0.1
-
-networks: !reset {}
+      BIND_PORT: "${RIVER_PORT:-8095}"
+      HEALTH_PORT: "${RIVER_HEALTH_PORT:-8788}"

@@ -1,5 +1,6 @@
 # Keeps the SHA-pinned actions in .github/workflows/ current. npm dependencies are updated by hand
-# (exact versions, see AGENTS.md); Docker base image digests are pinned and updated here too.
+# (exact versions, see AGENTS.md). The Docker base image and the images CI runs (deploy/test/compose.ci.yml)
+# are pinned by digest and updated here too.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -14,6 +15,12 @@ updates:
         patterns: ["*"]
   - package-ecosystem: docker
     directory: /deploy
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: docker-compose
+    directory: /deploy/test
     schedule:
       interval: monthly
     cooldown:
