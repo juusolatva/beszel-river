@@ -3,7 +3,11 @@ name: CI
 on:
   push:
     branches: [main]
+    # Release tags: the publish job builds and pushes the image for them.
+    tags: ["v*"]
   pull_request:
+  # A manual run on main rebuilds and publishes edge (for example after changing the publish job).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,7 +34,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
-          cache: npm
+          # The publish job builds the image from the npm registry in Docker, without this cache.
+          cache: npm # zizmor: ignore[cache-poisoning]
       - run: npm ci --ignore-scripts
       - run: npm run typecheck
       # Runs the tests with coverage; fails when a threshold in bridge/ or frontend/vitest.config.ts is not met.
@@ -62,7 +67,7 @@ jobs:
       - name: SonarQube Cloud scan
         if: >-
           matrix.node == '24' &&
-          (github.event_name == 'push' ||
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
            (github.event_name == 'pull_request' &&
             github.event.pull_request.head.repo.full_name == github.repository &&
             github.event.pull_request.user.login != 'dependabot[bot]'))
@@ -155,5 +160,142 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          package-manager-cache: false # only Node itself is needed here
       - name: Check systemd sandbox
         run: python3 deploy/test/systemd.py
+
+  # Publishes ghcr.io/juusolatva/beszel-river from a commit that passed every check in this run: edge from
+  # main when a file that goes into the image changed, and X.Y.Z, X.Y, X and latest from a vX.Y.Z tag.
+  # No build cache is shared with other runs, so a pull request cannot poison a published image.
+  publish:
+    needs: [check, deploy]
+    if: >-
+      github.repository == 'juusolatva/beszel-river' &&
+      ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # One release publish at a time, across tags: the job checks out, and so sees the tags, only once it
+    # holds this lock, so an older release cannot take X or latest back from a newer one. GitHub keeps
+    # one waiting run per group and cancels an older waiting one; re-run that release's workflow then.
+    # main runs are already serialized by the workflow's concurrency group.
+    concurrency:
+      group: publish-${{ startsWith(github.ref, 'refs/tags/') && 'release' || github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read # checkout
+      packages: write # push to ghcr.io
+      id-token: write # Sigstore signing certificate for the attestations
+      attestations: write # store the provenance and SBOM attestations (gh attestation verify)
+      artifact-metadata: write # link the image to this repository (storage record)
+    env:
+      IMAGE: ghcr.io/juusolatva/beszel-river
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0 # main and the tags, for the tag checks and the changed-file list
+          persist-credentials: false
+      # No QEMU: only the final stage is per platform, and it has no RUN step (deploy/Dockerfile).
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # Before deciding: reading the published edge needs it while the package is private.
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Decide what to publish
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          build=true
+          if [[ $REF == refs/tags/* ]]; then
+            # A tag on an unmerged branch must not publish latest.
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+              { echo "::error::$REF_NAME is not on main"; exit 1; }
+            semver='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+            if [[ $REF_NAME =~ ^v${semver}$ ]]; then
+              major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]}
+              version=${REF_NAME#v}
+              # The moving tags follow the newest release: a patch for an older line does not move them back.
+              newest() { git tag -l "$1" | grep -E "^v${semver}\$" | sort -V | tail -n 1; }
+              tags=$IMAGE:$version
+              [ "$(newest "v$major.$minor.*")" != "$REF_NAME" ] || tags+=",$IMAGE:$major.$minor"
+              [ "$(newest "v$major.*")" != "$REF_NAME" ] || tags+=",$IMAGE:$major"
+              [ "$(newest 'v*')" != "$REF_NAME" ] || tags+=",$IMAGE:latest"
+            elif [[ $REF_NAME =~ ^v${semver}-[0-9A-Za-z.-]+$ ]]; then
+              version=${REF_NAME#v} tags=$IMAGE:$version # pre-release: only its own tag
+            else
+              echo "::error::$REF_NAME is not a vX.Y.Z release tag"; exit 1
+            fi
+          else
+            version=edge tags=$IMAGE:edge
+            # On a push to main, build only if a file that goes into the image changed since the commit the
+            # published edge was built from (its revision label), so a failed publish is retried by the next
+            # push. If that cannot be worked out (no edge yet, a commit no longer in history), build: a
+            # spare build is cheap, a stale edge is not.
+            revision=$(docker buildx imagetools inspect "$IMAGE:edge" --format \
+              '{{ index (index .Image "linux/amd64").Config.Labels "org.opencontainers.image.revision" }}') ||
+              revision=
+            echo "Published edge: ${revision:-none}"
+            if [ "$EVENT" = push ] && [[ $revision =~ ^[0-9a-f]{40}$ ]] &&
+              changed=$(git diff --name-only "$revision" "$GITHUB_SHA"); then
+              build=false
+              while IFS= read -r path; do
+                case $path in
+                  bridge/test/* | frontend/test/* | vitest.config.ts | */vitest.config.ts | *.md) ;;
+                  bridge/* | frontend/* | shared/* | package.json | package-lock.json | .npmrc | \
+                    tsconfig.base.json | deploy/Dockerfile | .dockerignore) build=true ;;
+                esac
+              done <<< "$changed"
+            fi
+          fi
+          { echo "build=$build"; echo "version=$version"; echo "tags=$tags"; } >> "$GITHUB_OUTPUT"
+          if [ "$build" = true ]; then
+            echo "Publishing ${tags//,/, }" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No file that goes into the image changed; edge stays as it is." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build and push
+        id: build
+        if: steps.plan.outputs.build == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.plan.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.plan.outputs.version }}
+            REVISION=${{ github.sha }}
+          # GitHub attestations below instead of BuildKit's, which show up as unknown/unknown platforms.
+          provenance: false
+          sbom: false
+      - name: Attest build provenance
+        if: steps.plan.outputs.build == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Generate SBOM
+        if: steps.plan.outputs.build == 'true'
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: ${{ runner.temp }}/sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Attest SBOM
+        if: steps.plan.outputs.build == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          sbom-path: ${{ runner.temp }}/sbom.spdx.json
+          push-to-registry: true

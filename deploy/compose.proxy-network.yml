@@ -1,7 +1,7 @@
 # For a reverse proxy that itself runs in Docker: joins the proxy's network, so the proxy reaches the
 # river at river:8095 instead of 127.0.0.1:8095, and stops publishing the port on the host. Use together
 # with compose.yml (and compose.beszel-network.yml if needed):
-#   docker compose -f compose.yml -f compose.proxy-network.yml up -d --build
+#   docker compose -f compose.yml -f compose.proxy-network.yml up -d
 # or set COMPOSE_FILE=compose.yml:compose.proxy-network.yml in .env. Not with compose.host-network.yml.
 services:
   river:

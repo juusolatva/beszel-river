@@ -1,6 +1,6 @@
 # For a Beszel hub on this host that listens only on loopback, such as one with network_mode: host.
 # Use together with compose.yml:
-#   docker compose -f compose.yml -f compose.host-network.yml up -d --build
+#   docker compose -f compose.yml -f compose.host-network.yml up -d
 # or set COMPOSE_FILE=compose.yml:compose.host-network.yml in .env.
 # The river then shares the host's network and reaches the hub at BESZEL_URL=http://127.0.0.1:8090 (the
 # hub's port). It listens on the host's loopback directly, so both of its ports are host ports:

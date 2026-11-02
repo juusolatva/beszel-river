@@ -4,10 +4,10 @@ a proxy container with compose.proxy-network.yml) and on the host's loopback (co
 
     python3 deploy/test/container.py <image>
 
-The hub and Caddy images come from compose.ci.yml. Each Compose run uses a temporary deployment directory with
-copies of the shipped Compose files, a .env and mix.json, plus one override that swaps the build for
-<image>, so nothing in the checkout is written. Needs Docker with Compose 2.24 or later and free host
-ports 18090, 18095 and 18788 for the host-network run.
+The hub and Caddy images come from compose.ci.yml. Each Compose run uses a temporary deployment
+directory with copies of the shipped Compose files, a .env and mix.json, plus one override that runs
+<image> instead of the published image, so nothing in the checkout is written. Needs Docker with
+Compose 2.24 or later and free host ports 18090, 18095 and 18788 for the host-network run.
 """
 
 import http.client
@@ -156,7 +156,7 @@ def setup_hub(url):
 
 
 def deployment(directory, overrides, settings):
-    """A deployment directory as README describes it, with the image swapped in for the build."""
+    """A deployment directory as README describes it, running the image under test."""
     root = Path(directory)
     for name in ["compose.yml", *overrides]:
         shutil.copy(DEPLOY / name, root / name)
