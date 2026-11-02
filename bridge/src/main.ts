@@ -4,10 +4,12 @@ import { BeszelClient } from "./beszel/client.js";
 import { RealtimeSource } from "./beszel/realtime-source.js";
 import { SystemsSource } from "./beszel/systems-source.js";
 import { loadConfig, type Config } from "./config.js";
+import { HealthServer } from "./health.js";
 import { log } from "./log.js";
 import { HostTable } from "./pipeline/hosts.js";
 import { loadMixConfig, TICK_S } from "./pipeline/mix.js";
 import { StreamServer } from "./server.js";
+import { loadStaticFiles } from "./static.js";
 import { UpstreamWatch } from "./upstream.js";
 
 const BROADCAST_DEBOUNCE_MS = 250;
@@ -25,6 +27,8 @@ try {
 for (const secret of ["BESZEL_PASSWORD", "BESZEL_TOKEN", "STREAM_SALT"]) delete process.env[secret];
 
 const hosts = new HostTable(config.salt, loadMixConfig(config.mixFile));
+// Like the recipe, a bad build stops startup before the bridge listens or authenticates.
+const files = config.staticDir === undefined ? undefined : loadStaticFiles(config.staticDir);
 const client = new BeszelClient(config.beszelUrl, config.auth);
 let live = false;
 const upstream = new UpstreamWatch(() => client.connected);
@@ -32,13 +36,17 @@ client.pb.realtime.onDisconnect = (subscriptions) => {
   if (live && subscriptions.length > 0) upstream.markDisconnected();
 };
 
+const healthy = (): boolean => live && client.connected;
 const server = new StreamServer({
   host: config.bindHost,
   port: config.bindPort,
   snapshot: () => hosts.frame(new Date()),
-  healthy: () => live && client.connected,
+  ...(config.healthPort === undefined ? { healthy } : {}),
+  ...(files ? { files } : {}),
   onClients: viewersChanged,
 });
+// Loopback only, whatever BIND_HOST is: the image's HEALTHCHECK runs inside the container.
+const health = config.healthPort === undefined ? null : new HealthServer({ host: "127.0.0.1", port: config.healthPort, healthy });
 
 // Beszel updates every host within a second or two of each other; one frame covers the batch.
 let pending: NodeJS.Timeout | undefined;
@@ -105,7 +113,9 @@ async function connect(): Promise<void> {
 }
 
 const port = await server.listen();
-log("info", `Listening on http://${config.bindHost}:${port} (GET /stream, GET /healthz), source ${config.source}`);
+const routes = [files ? "the page" : "", "GET /stream", health ? "" : "GET /healthz"].filter(Boolean).join(", ");
+log("info", `Listening on http://${config.bindHost}:${port} (${routes}), source ${config.source}`);
+if (health) log("info", `Health on http://127.0.0.1:${await health.listen()}/healthz`);
 setInterval(() => {
   // The SDK reconnects on its own; until it does, or forever with an expired token, statuses are stale.
   if (live) {
@@ -125,7 +135,7 @@ void connect();
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
     log("info", `${signal} received, shutting down`);
-    void Promise.all([server.close(), client.close()]).then(
+    void Promise.all([server.close(), health?.close(), client.close()]).then(
       () => process.exit(0),
       (error: unknown) => {
         log("error", "Shutdown failed", error);

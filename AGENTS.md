@@ -15,12 +15,13 @@ A public web page that turns live metrics from a Beszel hub into an abstract riv
 | Path | Contents |
 |---|---|
 | `shared/src/index.ts` | `Frame`, `Stream`, channel and SSE event types. Type-only: `exports` has only a `types` condition, so consumers must use `import type`. |
-| `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE. Tests in `bridge/test/`. |
+| `bridge/` | Node service. `src/beszel/` talks to the hub (`systems-source.ts` 60 s, `realtime-source.ts` the 1 s layer), `src/pipeline/` turns samples into channels, `src/server.ts` serves SSE and, with `STATIC_DIR`, the page loaded into memory by `src/static.ts`; `src/health.ts` is `/healthz` and its own listener for `HEALTH_PORT`. Tests in `bridge/test/`. |
 | `frontend/` | Vite + raw WebGL2 page. `src/source/` produces frames, `src/sim/` moves particles, `src/render/` draws them, `src/debug/` is the `?debug` panel. Look tunables are `LOOK` in `src/config.ts`. Unit tests, including WebGL2 and EventSource fakes, in `frontend/test/`. |
 | `deploy/` | Bridge Dockerfile, `compose.yml` and its host-network override `compose.host-network.yml`, systemd unit, nginx configs (`river.conf` for an own server block, `river-path.conf` for a path in an existing one). CI builds the image and checks the configs. |
 | `.github/` | Workflows (`ci.yml`, `osv-scanner.yml`) and `dependabot.yml` (updates for the pinned actions and Docker base image). |
 | `sonar-project.properties` | SonarQube Cloud settings. The scan reads `bridge/coverage/lcov.info` and `frontend/coverage/lcov.info`; CI prefixes their paths with the workspace. Coverage leaves out both `main.ts` files and `frontend/src/debug/`, the code outside the test scope. |
 | `docs/PLAN.md` | Plan. |
+| `docs/container-plan.md` | Working plan for milestone M8 (standalone container). Each PR moves its finished part into `docs/PLAN.md`; the file is deleted when M8 is done. |
 | `GLOSSARY.md` | Domain terms for host activity, streams and the visible river. |
 | `docs/images/` | README screenshots: JPEG, 1280 px wide, metadata stripped. |
 

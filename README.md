@@ -28,6 +28,7 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 | `frontend/` | Static WebGL2 page built with Vite; unit tests for everything but the page setup and debug panel. |
 | `deploy/` | Bridge Dockerfile, compose file and its host-network override, systemd unit, nginx configs. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
+| `docs/container-plan.md` | Working plan for the standalone container image (milestone M8). |
 | [GLOSSARY.md](GLOSSARY.md) | Domain terms for host activity, streams and the visible river. |
 | `docs/images/` | Screenshots used in this README. |
 | `.github/` | CI workflows (`ci.yml`, `osv-scanner.yml`) and Dependabot config for their actions. |
@@ -62,6 +63,8 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
    - An enabled filament recipe publishes a transformed per-core CPU profile; mixing, jitter and daily shuffling can still reveal sustained CPU levels. Leave `filaments` omitted or `null` if those levels must remain private. Change the example's public weights before production use.
 4. Optionally set `SOURCE=realtime` for 1 s updates instead of 60 s ones. The bridge then asks the hub for each up host's live metrics while at least one page is open, and for 30 s after the last one closes; meanwhile the hub fetches from those agents every second, as it does while someone watches a system's 1-minute chart in Beszel.
 5. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
+
+`STATIC_DIR` and `HEALTH_PORT` are for the standalone container image ([docs/container-plan.md](docs/container-plan.md)): the bridge then serves the page itself and moves `/healthz` to its own loopback listener. Leave both unset when nginx serves the page. To try it locally: `npm run build`, then set `STATIC_DIR=../frontend/dist` in `bridge/.env` and open `http://127.0.0.1:8787/`.
 
 Configuration and the mix format are described in [docs/PLAN.md](docs/PLAN.md) under "Bridge".
 

@@ -1,6 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../src/config.js", () => ({ loadConfig: vi.fn() }));
@@ -22,7 +23,7 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
-async function interceptStartup(mixFile: string) {
+async function interceptStartup(mixFile: string, staticDir?: string) {
   const [{ loadConfig }, { StreamServer }, { BeszelClient }] = await Promise.all([
     import("../src/config.js"),
     import("../src/server.js"),
@@ -36,6 +37,8 @@ async function interceptStartup(mixFile: string) {
     bindPort: 8787,
     salt: "startup-test-salt",
     mixFile,
+    staticDir,
+    healthPort: undefined,
   });
   // Stop valid startup before sockets, timers, signal handlers or hub requests.
   const listen = vi.spyOn(StreamServer.prototype, "listen").mockRejectedValue(reachedListener);
@@ -73,6 +76,16 @@ describe("bridge recipe startup", () => {
     expect(process.env.BESZEL_PASSWORD).toBeUndefined();
     expect(process.env.BESZEL_TOKEN).toBeUndefined();
     expect(process.env.STREAM_SALT).toBeUndefined();
+  });
+
+  it("rejects a static build without index.html before listening or authenticating", async () => {
+    const staticDir = join(directory, "dist");
+    mkdirSync(staticDir);
+    const { listen, login } = await interceptStartup(fileURLToPath(new URL("../mix.example.json", import.meta.url)), staticDir);
+
+    await expect(import("../src/main.js")).rejects.toThrow(/has no index.html/);
+    expect(listen).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
   });
 
   it("rejects an invalid recipe before listening or authenticating", async () => {

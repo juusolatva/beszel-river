@@ -14,6 +14,10 @@ export interface Config {
   salt: string;
   /** Mixing weights; see `mix.example.json`. */
   mixFile: string;
+  /** The frontend build to serve next to `/stream`; unset when nginx serves it. */
+  staticDir: string | undefined;
+  /** Port for `/healthz` alone on 127.0.0.1; unset keeps `/healthz` on the main listener. */
+  healthPort: number | undefined;
 }
 
 /** Reads and validates the environment; throws one error listing every problem. */
@@ -38,6 +42,9 @@ export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
   const port = Number(value("BIND_PORT", "8787"));
   if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push(`BIND_PORT must be 1-65535, got "${env.BIND_PORT}"`);
 
+  const healthPort = optionalPort(env, "HEALTH_PORT", errors);
+  if (healthPort !== undefined && healthPort === port) errors.push("HEALTH_PORT must differ from BIND_PORT");
+
   const salt = value("STREAM_SALT");
   if (salt && salt.length < 16) errors.push("STREAM_SALT must be at least 16 characters");
 
@@ -49,9 +56,19 @@ export function loadConfig(env: NodeJS.ProcessEnv, now = new Date()): Config {
     bindPort: port,
     salt,
     mixFile: value("MIX_FILE", "mix.json"),
+    staticDir: env.STATIC_DIR?.trim() || undefined,
+    healthPort,
   };
   if (errors.length > 0) throw new Error(`Invalid configuration:\n  ${errors.join("\n  ")}`);
   return config;
+}
+
+function optionalPort(env: NodeJS.ProcessEnv, name: string, errors: string[]): number | undefined {
+  const raw = env[name]?.trim();
+  if (!raw) return undefined;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push(`${name} must be 1-65535, got "${raw}"`);
+  return port;
 }
 
 function loadAuth(env: NodeJS.ProcessEnv, now: Date, errors: string[], value: (name: string) => string): BeszelAuth {
