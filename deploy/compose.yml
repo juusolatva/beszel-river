@@ -9,7 +9,8 @@ services:
     # RIVER_VERSION in .env: a major version (1, the default), a minor (1.0) or an exact release (1.0.0);
     # edge follows main. The major version brings fixes and features but never a breaking release.
     image: ghcr.io/juusolatva/beszel-river:${RIVER_VERSION:-1}
-    # Build from a checkout instead (run from deploy/ with: docker compose up -d --build):
+    # Build from a checkout instead: comment out image above, uncomment build, and run
+    # docker compose up -d --build in deploy/.
     # build:
     #   context: ..
     #   dockerfile: deploy/Dockerfile

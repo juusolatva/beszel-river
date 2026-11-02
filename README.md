@@ -4,11 +4,12 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=juusolatva_beszel-river&metric=coverage)](https://sonarcloud.io/summary/new_code?id=juusolatva_beszel-river)
 [![Node](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fjuusolatva%2Fbeszel-river%2Fmain%2Fpackage.json&query=%24.engines.node&label=node&logo=nodedotjs)](package.json)
+[![Image](https://img.shields.io/github/v/tag/juusolatva/beszel-river?sort=semver&label=image&logo=docker)](https://github.com/juusolatva/beszel-river/pkgs/container/beszel-river)
 [![License: MIT](https://img.shields.io/github/license/juusolatva/beszel-river)](LICENSE)
 
 A web page that turns live metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: all milestones (M0–M7) done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: milestones M0–M7 done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). M8, the standalone container image, is published as `ghcr.io/juusolatva/beszel-river` (v1.0.0) and awaits its end-to-end check. Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Screenshots
 
@@ -38,6 +39,7 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 
 - Node.js ≥ 24.22.1 (production target: Node 24.22.1 LTS, see `.nvmrc`); CI checks 24.22.1, the latest 24 and 26
 - npm ≥ 11.10 (use npm 11 on Node 24 for dependency changes so the lockfile stays consistent); `.npmrc` requires releases to be at least 7 days old when resolving package versions
+- To run the container: Docker with Compose 2.24.0 or later, on a 64-bit amd64 or arm64 system (a Raspberry Pi needs a 64-bit OS)
 
 ## Development
 
@@ -58,7 +60,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
-3. `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored and required. A missing, unreadable or invalid recipe stops the bridge before it listens or authenticates to the hub. Omit `filaments` or set it to `null` to disable per-core profiles. Enabling them requires all four fields (`bias`, `center`, `weight`, `tau`); incomplete sections fail startup. `pulseScatter` and `glide` still use defaults (see `docs/PLAN.md`, "Bridge configuration"). For local development only, explicitly set `MIX_FILE=mix.example.json` to use the public example without copying it.
+3. `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored and required. A missing, unreadable or invalid recipe stops the bridge before it listens or authenticates to the hub. Omit `filaments` or set it to `null` to disable per-core profiles. Enabling them requires all four fields (`bias`, `center`, `weight`, `tau`); incomplete sections fail startup. `pulseScatter` and `glide` are optional; fields left out take their defaults (see `docs/PLAN.md`, "Bridge configuration"). For local development only, explicitly set `MIX_FILE=mix.example.json` to use the public example without copying it.
    - An enabled filament recipe publishes a transformed per-core CPU profile; mixing, jitter and daily shuffling can still reveal sustained CPU levels. Leave `filaments` omitted or `null` if those levels must remain private. Change the example's public weights before production use.
 4. Optionally set `SOURCE=realtime` for 1 s updates instead of 60 s ones. The bridge then asks the hub for each up host's live metrics while at least one page is open, and for 30 s after the last one closes; meanwhile the hub fetches from those agents every second, as it does while someone watches a system's 1-minute chart in Beszel.
 5. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
@@ -97,7 +99,7 @@ The image is published on GitHub's container registry for amd64 and arm64. A dep
 
 ```sh
 git clone https://github.com/juusolatva/beszel-river.git && cd beszel-river/deploy
-cp .env.example .env && chmod 600 .env     # then fill it in (below)
+cp .env.example .env && chmod 600 .env     # then fill it in (below) before going on
 cp ../bridge/mix.example.json mix.json     # then change the weights: the template is public
 sudo chown 1000:1000 mix.json && sudo chmod 400 mix.json
 docker compose up -d
@@ -108,7 +110,9 @@ docker compose ps                          # "(healthy)" once logged in to the h
 - `chown 1000:1000 mix.json`: the container runs as the `node` user (uid 1000), which must read the bind-mounted recipe; otherwise startup stops with an "unreadable recipe" error. `chmod 400`: only that user can read it, and nobody can write it; edit it later with `sudo`, which can.
 - `up -d`: pulls the image and starts the container in the background. `ps` lists it with its health.
 
-Then open `http://127.0.0.1:8095`. In `.env`, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` (or `BESZEL_TOKEN`), `STREAM_SALT`, and `BESZEL_URL` as the container reaches the hub:
+Once it is healthy, open `http://127.0.0.1:8095`. If it stays `(health: starting)` or turns `(unhealthy)`, `docker compose logs river` says why.
+
+In `.env`, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` (or `BESZEL_TOKEN`), `STREAM_SALT`, and `BESZEL_URL` as the container reaches the hub:
 
 | Hub | `BESZEL_URL` | Also |
 |---|---|---|
@@ -119,7 +123,7 @@ Then open `http://127.0.0.1:8095`. In `.env`, set `BESZEL_EMAIL` and `BESZEL_PAS
 
 - `docker inspect -f '{{json .NetworkSettings.Networks}}' beszel` prints the hub container's networks; `beszel` is its container name.
 - `COMPOSE_FILE` in `.env` adds an override file to every `docker compose` command run in this directory. Running them from elsewhere, pass both files instead: `docker compose -f compose.yml -f compose.host-network.yml up -d`. The overrides use `!reset`, which needs Docker Compose 2.24.0 or later (`docker compose version`).
-- With `compose.host-network.yml` the container shares the host's network, so its two ports are host ports: `RIVER_PORT` (default 8095) for the page and `RIVER_HEALTH_PORT` (default 8788) for the health check. Change them in `.env` if they are taken. `RIVER_PORT` also moves the page in the other cases.
+- With `compose.host-network.yml` the container shares the host's network, so its two ports are host ports: `RIVER_PORT` (default 8095) for the page and `RIVER_HEALTH_PORT` (default 8788) for the health check. Change them in `.env` if they are taken. `RIVER_PORT` also moves the page in the other cases, except with `compose.proxy-network.yml`, which publishes no port.
 
 **Quoting:** Compose replaces `$name` and `${name}` in unquoted and double-quoted `.env` values, usually with nothing, so a password, token or salt containing `$` changes silently and the login fails. Keep every secret in single quotes, as `.env.example` does: `STREAM_SALT='CHANGE$ME'`, which Compose would otherwise read as `CHANGE`. A `bridge/.env` from the systemd setup is read without this substitution, so add the quotes when copying values from it.
 
@@ -142,7 +146,7 @@ Each published image has signed build provenance and an SBOM. To check that an i
 gh attestation verify oci://ghcr.io/juusolatva/beszel-river:1 -R juusolatva/beszel-river
 ```
 
-To build the image yourself instead, uncomment the `build:` block in `compose.yml` and run `docker compose up -d --build` in `deploy/` of a checkout.
+To build the image yourself instead, in `deploy/` of a checkout, comment out the `image:` line in `compose.yml`, uncomment the `build:` block and run `docker compose up -d --build`. With the `image:` line left in, the local build takes the published name, and the next `docker compose pull` replaces it. To update a build like this, see "Updates" under Maintenance.
 
 ### Reverse proxy
 
@@ -181,12 +185,13 @@ This does not combine with `compose.host-network.yml`. nginx looks up `river` wh
 #### 1. Configure
 
 ```sh
+sudo install -d -o "$USER" /opt/beszel-river
 git clone https://github.com/juusolatva/beszel-river.git /opt/beszel-river && cd /opt/beszel-river
 cp bridge/.env.example bridge/.env           # set BESZEL_EMAIL and BESZEL_PASSWORD (or BESZEL_TOKEN), STREAM_SALT
 cp bridge/mix.example.json bridge/mix.json   # then change the weights: the template is public
 ```
 
-The systemd unit expects the checkout in `/opt/beszel-river`. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
+`install -d -o "$USER"` creates `/opt/beszel-river` owned by you, so the clone and the builds below need no `sudo`. The systemd unit expects the checkout there. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
 
 #### 2. Bridge under systemd
 
@@ -253,11 +258,11 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
 - **Filament recipe migration:** older recipes without `filaments` now run without per-core profiles. An existing section must explicitly contain `bias`, `center`, `weight` and `tau`; copies of the earlier template need `center: 0` added (as JSON: `"center": 0`), or the section removed/set to `null`. Filaments publish a transformed CPU profile; smoothing and shuffling do not guarantee confidentiality. Leave them disabled when CPU levels must stay private, and change the public template weights before enabling them.
 - **Slow stream readers:** the bridge bounds queued output to 256 KiB per response and disconnects clients that remain blocked for 10 s. While blocked it skips heartbeats and intermediate updates; after draining it sends the latest update. A single event exceeding the byte budget also closes that stream. Browsers reconnect normally.
 - **Base image updates:** `deploy/Dockerfile` pins the multi-platform `node:24.22.1-alpine` digest in every stage. Dependabot proposes monthly Docker updates within the Node 24 line after a seven-day cooldown; merging one rebuilds `edge`, and the next release carries it to the version tags. A new Node major is a deliberate change (see `AGENTS.md`, "Node"), so Dependabot does not propose it. Rebuilding the same checkout keeps the pinned base.
-- **Updates:** `docker compose pull && docker compose up -d` in the deployment directory pulls the newest image for `RIVER_VERSION` and recreates the container if it changed. `git pull` first if you deploy from a checkout, to get changed compose files. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3). When a config in `deploy/nginx/` or `deploy/caddy/` changed, copy it again (with your domain and paths) and reload the proxy.
+- **Updates:** `docker compose pull && docker compose up -d` in the deployment directory pulls the newest image for `RIVER_VERSION` and recreates the container if it changed. `git pull` first if you deploy from a checkout, to get changed compose files. If you build the image yourself ("Image versions"), there is nothing to pull: run `git pull && docker compose up -d --build` instead. Without Docker, rebuild the bridge (step 2's build, then `sudo systemctl restart beszel-river-bridge`) and the frontend (step 3). When a config in `deploy/nginx/` or `deploy/caddy/` changed, copy it again (with your domain and paths) and reload the proxy.
 - **nginx configs from before `river-stream.conf`:** the current `river.conf` and `river-path.conf` include `/etc/nginx/snippets/river-stream.conf` instead of listing the stream settings themselves. Install it (`sudo install -m 644 deploy/nginx/river-stream.conf /etc/nginx/snippets/`) before copying the updated config, or `nginx -t` fails. Nothing else changes.
 - **Releases** (maintainers): CI publishes the image only from commits that passed every check in the same run. `edge` comes from `main`, rebuilt when a file that goes into the image changed since the commit the published `edge` was built from; a `vX.Y.Z` tag on a commit on `main` publishes `X.Y.Z` and moves `X.Y`, `X` and `latest` unless a newer release already holds them. A tag such as `v1.1.0-rc.1` publishes only its own tag. Releases publish one at a time; push one tag and let its publish job start before the next, since GitHub cancels an older waiting run when a third arrives (re-run it if that happens). To release, tag `main` and push the tag:
   ```sh
-  git checkout main && git pull && git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0
+  git checkout main && git pull && git tag -a v1.0.1 -m "v1.0.1" && git push origin v1.0.1   # the next version
   ```
   The package inherits the repository's public visibility. If it ever shows as private, change it in the package settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
 - **From an image built from a checkout** (before the image was published): `compose.yml` now pulls the published image. Run `docker compose up -d` once; `docker image rm beszel-river-river` then removes the old local build.
