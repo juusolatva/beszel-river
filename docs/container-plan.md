@@ -354,8 +354,8 @@ Publishing is a job in `ci.yml`, not a separate workflow, so that images are onl
 
 Each PR leaves a working, tested deployment:
 
-1. **Bridge** (done on `feat/static-serving`): moving this plan to `docs/container-plan.md`, then static serving, security headers and the health listener, with tests and the PLAN HTTP API update. The systemd setup is unaffected because both settings default to off.
-2. **Container:**
+1. **Bridge** (done, #97): moving this plan to `docs/container-plan.md`, then static serving, security headers and the health listener, with tests and the PLAN HTTP API update. The systemd setup is unaffected because both settings default to off.
+2. **Container** (next):
    - `deploy/Dockerfile`, the new `compose.yml` with an active `build:` block and the `image:` line commented out
    - `compose.beszel-network.yml`, the adapted `compose.host-network.yml` and `deploy/.env.example`
    - the ignore-file changes and their CI check, the CI smoke and healthy-hub tests
