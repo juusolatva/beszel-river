@@ -19,6 +19,12 @@ updates:
       interval: monthly
     cooldown:
       default-days: 7
+    # The base image's Node line is the production runtime: a new major is a deliberate change made with
+    # .nvmrc, engines, the CI matrix and the docs (AGENTS.md). Without this, a major update would also
+    # replace the patch updates for the current line.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker-compose
     directory: /deploy/test
     schedule:
