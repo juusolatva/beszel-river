@@ -29,12 +29,14 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
                         │  realtime subscription, logged in as a read-only user
                         ▼
-                 bridge (VPS, 127.0.0.1:8787)
+                 bridge (VPS: container on 127.0.0.1:8095, or systemd on 127.0.0.1:8787)
                    ingest → normalize → mix → anonymize → broadcast
-                        │  SSE GET /stream (abstract channels only)
+                        │  SSE GET /stream (abstract channels only); in the container also the page
                         ▼
-                 nginx ── static frontend (WebGL2) ──► browsers
+                 reverse proxy (nginx or Caddy; TLS) ── page (WebGL2) and /stream ──► browsers
 ```
+
+Without Docker, nginx serves the static frontend itself and proxies only `/stream` (see "Deployment").
 
 - Credentials stay in the bridge.
 - Raw metrics never leave the bridge, so the browser (and its devtools) only ever sees abstract channels.
@@ -162,7 +164,7 @@ Knowledge of Beszel field names stays in `bridge/src/beszel/` plus the two place
 
 ### Bridge configuration
 
-Environment variables (template: `bridge/.env.example`):
+Environment variables (templates: `bridge/.env.example`; for the container `deploy/.env.example`, where `deploy/compose.yml` fixes `BIND_HOST`, `BIND_PORT`, `STATIC_DIR`, `HEALTH_PORT` and `MIX_FILE`):
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -178,7 +180,7 @@ Environment variables (template: `bridge/.env.example`):
 | `STATIC_DIR` | (none) | Frontend build to serve next to `/stream` (the container image sets `/app/frontend`). Unset when nginx serves the page. See "HTTP API". |
 | `HEALTH_PORT` | (none) | Serve `/healthz` only on `127.0.0.1:HEALTH_PORT` and answer 404 for it on the main listener. Must differ from `BIND_PORT`. Unset keeps `/healthz` on the main listener. |
 
-Mixing weights are read from the configured `MIX_FILE` (`bridge/mix.json` by default). A missing, unreadable or invalid file stops startup before the bridge listens or authenticates to the hub, in every environment and deployment. Startup never substitutes the public example: losing a private recipe must not enable its known filament mapping. For local development or isolated CI smoke tests only, an operator may explicitly select `MIX_FILE=mix.example.json`. `mix.json` is git-ignored, so the recipe stays secret even if the repository becomes public. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
+Mixing weights are read from the configured `MIX_FILE` (`bridge/mix.json` by default). A missing, unreadable or invalid file stops startup before the bridge listens or authenticates to the hub, in every environment and deployment. Startup never substitutes the public example: losing a private recipe must not enable its known filament mapping. For local development or isolated CI smoke tests only, an operator may explicitly select `MIX_FILE=mix.example.json`. `mix.json` is git-ignored at any depth, so the recipe stays out of the public repository. Format: each channel is `clamp01(bias + Σ weight × (feature − center))`, smoothed with time constant `tau` seconds; features are `cpu`, `mem`, `net`, `netChange`, `disk`, `diskChange`, `load`, `burst`, `txShare`, `temp`.
 
 The optional `filaments` entry maps each value of the per-core profile the same way. Omitted or `null` disables filaments; enabling them requires explicit finite `bias`, `center`, `weight` and `tau` values, with `tau >= 0`. Incomplete sections fail startup. There is no implicit recipe: the old defaults (0, 0, 1, 3 s) preserved normalized CPU percentages, and sorting public filament arrays recovered profile extrema despite daily shuffling. Smoothing and rounding reduce precision but do not hide sustained CPU levels. An explicit recipe is an operator choice to publish a transformed CPU profile, not a confidentiality guarantee; leave it disabled if those levels must remain private. Existing partial recipes must be completed deliberately or removed; copies of the earlier example need `"center": 0` added. The example includes every field and its public weights must still be changed before production use.
 
@@ -283,7 +285,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - **Sources:** `StreamSource` (`EventSource` on `/stream`) and `DemoSource` (generated channels) share one interface. `?demo` in the URL forces the demo source; in dev it is also the fallback when the bridge is not running.
   - `StreamSource` accepts only `v: 1` frames and clamps every channel to 0..1; `filaments` is kept only with exactly 6 numbers.
   - `DemoSource` sends filaments too (wandering around `flow`, with an occasional busy lane); the `?debug` panel toggles them per stream.
-  - The browser reconnects by itself after a dropped connection. An HTTP error (nginx's 502 while the bridge restarts) closes an `EventSource` for good, so `StreamSource` then reopens it after 5 s, doubling up to 60 s. The browser's `online` event skips the rest of the wait.
+  - The browser reconnects by itself after a dropped connection. An HTTP error (the proxy's 502 while the bridge restarts) closes an `EventSource` for good, so `StreamSource` then reopens it after 5 s, doubling up to 60 s. The browser's `online` event skips the rest of the wait.
   - After 20 s without a connection, every stream thins out and greys as if its host were down, so a stale river does not pass for live data; the snapshot after reconnecting restores it. A bridge restart or a short network drop stays within the 20 s.
   - In dev, when the bridge is not running, the page hands over to `DemoSource` for good (it stops listening, so showing the tab again does not reconnect alongside the demo).
 - **Smoothing:** each channel eases exponentially toward its latest value (time constant 1–5 s), so 60 s and 1 s updates both look continuous.
@@ -434,5 +436,6 @@ Commands and steps are in README, "Deployment".
 | `rt_metrics` is internal and undocumented. | Optional (M6); `systems` remains the default and keeps running underneath. Its own SDK connection, one subscription change at a time, refused topics dropped; hosts fall back to `1m` records 10 s after their last realtime sample. |
 | Hub unreachable or bridge login expired while running. | After 30 s every stream is sent not alive, so the river dries up instead of flowing on stale values; `/healthz` returns 503 at once. |
 | 1 s polling load on agents. | Subscribe only while viewers are connected. |
-| Public `/stream` abuse. | `limit_conn` per IP; payload is tiny; one upstream subscription regardless of viewers. |
+| Public `/stream` abuse. | The nginx configs' `limit_conn` per IPv4 address or IPv6 `/64` (Caddy has none built in); the bridge's global cap of 500 streams; payload is tiny; one upstream subscription regardless of viewers. |
+| A tampered published image. | Built only by the `publish` job from a commit that passed CI, with signed build provenance and an SBOM (`gh attestation verify`); `compose.yml` can still build from a checkout. |
 | Recipe leaks via frontend code. | Mixing happens in the bridge; the frontend only knows channel → visual. |
