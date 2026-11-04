@@ -5,7 +5,7 @@
 #   	...
 #   }
 # For another path, replace /river everywhere; the container needs no change. If RIVER_PORT in .env
-# moved the container's port, change 8095 below to match.
+# moved the container's port, change 8787 below to match.
 #
 # The container sends the page's security headers (Content-Security-Policy and more); the site adds
 # HSTS. If the site sends its own Content-Security-Policy too, browsers enforce both, so a site policy
@@ -20,5 +20,5 @@ redir /river /river/ 308
 handle_path /river/* {
 	@river_compress not path /stream
 	encode @river_compress
-	reverse_proxy 127.0.0.1:8095
+	reverse_proxy 127.0.0.1:8787
 }

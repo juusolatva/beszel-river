@@ -29,7 +29,7 @@ A public web page showing a continuous river of rainbow-coloured particles with 
 Beszel agents ──► Beszel hub (PocketBase, :8090, on the VPS)
                         │  realtime subscription, logged in as a read-only user
                         ▼
-                 bridge (VPS: container on 127.0.0.1:8095, or systemd on 127.0.0.1:8787)
+                 bridge (VPS: container or systemd, on 127.0.0.1:8787)
                    ingest → normalize → mix → anonymize → broadcast
                         │  SSE GET /stream (abstract channels only); in the container also the page
                         ▼
@@ -108,7 +108,7 @@ frontend/
   test/                       vitest unit tests; fake-gl.ts is a recording WebGL2 stand-in
 deploy/
   Dockerfile                  container image: bridge and page, built from the repository root
-  compose.yml                 the container on 127.0.0.1:8095, with .env and mix.json next to it
+  compose.yml                 the container on 127.0.0.1:8787, with .env and mix.json next to it
   compose.beszel-network.yml  override: join the hub's Docker network
   compose.host-network.yml    override: the host's network, for a hub listening only on loopback
   compose.proxy-network.yml   override: join a proxy container's network instead of publishing the port
@@ -116,7 +116,7 @@ deploy/
   beszel-river-bridge.service systemd unit, for running without Docker
   nginx/river.conf            without Docker: own server block, TLS, static root, /stream proxy
   nginx/river-path.conf       without Docker: locations for /river/ in an existing server block
-  nginx/river-container.conf  container: own server block, TLS, everything proxied to 127.0.0.1:8095
+  nginx/river-container.conf  container: own server block, TLS, everything proxied to 127.0.0.1:8787
   nginx/river-container-path.conf container: locations for /river/ in an existing server block
   nginx/river-limits.conf     per-client connection key, included once in the http block
   nginx/river-stream.conf     settings every /stream location includes
@@ -329,16 +329,16 @@ Commands and steps are in README, "Deployment".
 
 - **Container** (`deploy/Dockerfile`, `deploy/compose.yml`):
   - Multi-stage image on `node:24.22.1-alpine`, pinned to one multi-platform SHA256 digest in all stages (monthly Dependabot Docker updates with a seven-day cooldown, within the Node major: a new major changes the production runtime and is made together with `.nvmrc`, `engines` and the CI matrix). The build and production-dependency stages run on the build machine's platform, since their output is plain JS; the production stage fails if a dependency ships a native addon (`*.node`, `binding.gyp`), which would need a per-architecture install. The final stage has no `RUN` step, so other architectures need no emulation. It holds `bridge/dist`, production dependencies, `frontend/dist` as `/app/frontend` and `mix.example.json`, owned by root, and runs as the `node` user (uid 1000).
-  - One process: the bridge with `STATIC_DIR=/app/frontend` serves the page, the assets and `/stream` on port 8095, with the security headers (see "HTTP API"), and `/healthz` on `127.0.0.1:8788` inside the container (`HEALTH_PORT`). The `HEALTHCHECK` (shell form, so it follows `HEALTH_PORT`) uses that listener; nothing outside the container can reach it.
+  - One process: the bridge with `STATIC_DIR=/app/frontend` serves the page, the assets and `/stream` on port 8787, with the security headers (see "HTTP API"), and `/healthz` on `127.0.0.1:8788` inside the container (`HEALTH_PORT`). The `HEALTHCHECK` (shell form, so it follows `HEALTH_PORT`) uses that listener; nothing outside the container can reach it.
   - A deployment directory holds `compose.yml`, `.env` (from `deploy/.env.example`) and `mix.json`. `.env` feeds both Compose's `${...}` substitution and, through `env_file`, the container. The compose `environment` block fixes `BIND_HOST`, `BIND_PORT`, `STATIC_DIR`, `HEALTH_PORT` and `MIX_FILE`, so `.env` cannot change them.
   - Compose interpolates `$` in unquoted and double-quoted `env_file` values; single-quoted values are literal. `deploy/.env.example` single-quotes every secret, and CI logs in with a password containing `$` to prove it.
-  - Published on `127.0.0.1:${RIVER_PORT:-8095}` only; TLS, HSTS, compression and per-IP limits belong to a reverse proxy in front. `extra_hosts` maps `host.docker.internal` to the host for a hub on the host that listens beyond loopback.
+  - Published on `127.0.0.1:${RIVER_PORT:-8787}` only; TLS, HSTS, compression and per-IP limits belong to a reverse proxy in front. `extra_hosts` maps `host.docker.internal` to the host for a hub on the host that listens beyond loopback.
   - `deploy/compose.beszel-network.yml` joins the hub's external network (`BESZEL_NETWORK`, default `beszel_default`, the network of a compose project in a directory named `beszel`), so `BESZEL_URL` is `http://<hub service>:8090`.
   - A hub that listens only on the host's loopback (such as one with `network_mode: host`) is unreachable from a bridged container. `deploy/compose.host-network.yml` then puts the river on the host network too: `!reset` removes the port mapping and `extra_hosts`, `BIND_HOST=127.0.0.1`, and both ports become host ports (`RIVER_PORT`, `RIVER_HEALTH_PORT`).
   - `mix.json` is bind-mounted read-only at `/config/mix.json` and required (`create_host_path: false`): the template's recipe is public, so production must not fall back to it. It must be readable by uid 1000.
   - `.gitignore` and `.dockerignore` exclude `.env`, `.env.*` and `mix*.json*` at any depth (including environment-specific files and backups), keeping only the `.env.example` files and `bridge/mix.example.json` as public templates. CI checks both: `git check-ignore` on the deployment paths, and an image built with marker-filled `deploy/.env`, `deploy/mix.json` and `bridge/mix.json` present must contain no such file names and no marker.
   - Read-only root filesystem, PID limit (`pids_limit: 100`), 256 MB memory limit, all capabilities dropped, `no-new-privileges`, log rotation (3 × 10 MB).
-  - `deploy/compose.proxy-network.yml` is for a reverse proxy that runs in Docker itself: it joins the proxy's external network (`PROXY_NETWORK`, default `proxy`) next to the default one and removes the port mapping, so the proxy reaches `river:8095`. It does not combine with the host-network override.
+  - `deploy/compose.proxy-network.yml` is for a reverse proxy that runs in Docker itself: it joins the proxy's external network (`PROXY_NETWORK`, default `proxy`) next to the default one and removes the port mapping, so the proxy reaches `river:8787`. It does not combine with the host-network override.
   - `deploy/test/container.py` runs the image without a hub (page, asset, snapshot, 404 for `/healthz` on the public port, 503 from the health listener), then from a temporary deployment directory against a real hub from `deploy/test/compose.ci.yml` until Docker reports it healthy: on the hub's network with the proxy-network override, checked through the shipped `Caddyfile` in a Caddy container, and with the host-network override.
 - **Publishing** (the `publish` job in `.github/workflows/ci.yml`):
   - Runs after `check` and `deploy` in the same run, only in this repository, for pushes to `main`, `v*` tags and manual runs on `main`. It checks out exactly `github.sha` with full history.
@@ -348,7 +348,7 @@ Commands and steps are in README, "Deployment".
   - GitHub artifact attestations (`actions/attest`): SLSA build provenance and an SPDX SBOM (`anchore/sbom-action`), pushed to the registry too, so `gh attestation verify oci://ghcr.io/juusolatva/beszel-river:<tag> -R juusolatva/beszel-river` works. BuildKit's own attestations are off; they show up as `unknown/unknown` platforms.
   - `packages: write`, `id-token: write`, `attestations: write` and `artifact-metadata: write` on this job only; the workflow default stays `contents: read`. The package, created by the first push from this public repository's workflow, inherited the repository's public visibility.
   - `compose.yml` uses `image: ghcr.io/juusolatva/beszel-river:${RIVER_VERSION:-1}`, with the `build:` block commented out for building from a checkout. CI's container tests run the image built in the same run in place of the published one.
-- **Reverse proxy for the container** (`deploy/nginx/river-container.conf` and `river-container-path.conf`, `deploy/caddy/Caddyfile` and `Caddyfile.path`): each forwards every path to `127.0.0.1:8095`, at a domain root or under `/river/`.
+- **Reverse proxy for the container** (`deploy/nginx/river-container.conf` and `river-container-path.conf`, `deploy/caddy/Caddyfile` and `Caddyfile.path`): each forwards every path to `127.0.0.1:8787`, at a domain root or under `/river/`.
   - The proxy adds only `Strict-Transport-Security`; the container's own security and caching headers pass through. Under a path, a site's own CSP is enforced next to the container's, so it must allow inline styles.
   - Path mode redirects `/river` to `/river/` (relative URLs need the slash) and strips the prefix, so the container sees its own paths.
   - Compression for the page and assets (nginx: `gzip_types text/css text/javascript`, the container's types, plus `text/html`; Caddy: `encode` with a matcher excluding `/stream`). Caddy's default `encode` matches `text/*` and would compress `text/event-stream` too.
@@ -420,9 +420,10 @@ Commands and steps are in README, "Deployment".
     - The noise rewrite returned identical values for 51 100 sample points.
     - Not checked: frame rates on real phones and GPUs (the open M2 check).
 - [ ] **M8 – Standalone container.** One image with the bridge and the page, run with `deploy/compose.yml`, behind nginx or Caddy. Built in four PRs (bridge, container, proxies, publishing); its working plan was deleted with the last one.
-  - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8095`, and also behind Caddy and nginx at a domain root and under `/river/`.
+  - Done when: the GHCR image started from `deploy/compose.yml` shows a flowing river from a real hub at `127.0.0.1:8787`, and also behind Caddy and nginx at a domain root and under `/river/`.
   - First publish (`edge` from b1967b9, after #103): the job succeeded; the image index has amd64 and arm64 with the commit as its revision label, pulls without logging in, has SLSA provenance and SPDX SBOM attestations (attestations API; `gh attestation verify` accepted the provenance as built and signed by `ci.yml` on `main`), and passed `container.py` as pulled.
-  - Still to check: tag `v1.0.0`, then run the published image against a real hub and agent, with the hub on the same Docker network, reached by IP and in loopback-only host-network mode, behind Caddy and nginx.
+  - Checked on a VPS: the published `v1.0.0` image, behind nginx on a public domain with a real certificate, ran without problems. That showed port 8095 clashing with another service, so the port moved to 8787 (v1.0.1).
+  - Still to check: the published image against a real hub and agent with the hub on the same Docker network, reached by IP and in loopback-only host-network mode, behind Caddy, and under `/river/`.
   - Bridge part done in #97: `STATIC_DIR`, `HEALTH_PORT` and the security headers (unit tests; the built bridge served `frontend/dist` with an unreachable hub: page, asset, 304, `/stream` snapshot, 404 for `/healthz` and `/assets/../index.html` on the main listener, 503 from the health listener).
   - Container part done in #99: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
   - Proxy part done in #101: `river-stream.conf` shared by all nginx `/stream` locations, nginx and Caddy configs for the container at a root and under `/river/`, and `compose.proxy-network.yml` (`deploy/test/nginx.py` and `caddy.py` against a stub container, in CI and locally with nginx 1.30.6 and Caddy 2.11.7; `container.py` through the shipped `Caddyfile` against Beszel v0.21.1). Not yet checked behind a public domain with a real certificate.

@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix="river-nginx-") as directory:
     # Real-IP header trust exists only in this isolated test server, never in the shipped configs.
     trust = "set_real_ip_from 0.0.0.0/0; real_ip_header X-Test-Client;\n"
     # Hold upstream bodies open so nginx must count concurrent downstream stream requests. The bridge
-    # (8787) and the container (8095) are both stubs inside the nginx container.
+    # and the container share port 8787, so one stub inside the nginx container serves both.
     held = 'location /stream { limit_rate_after 512; limit_rate 1; return 200 "' + "x" * 1024 + '"; }'
     (root / "default.conf").write_text(
         "include /etc/nginx/snippets/river-limits.conf;\n"
@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix="river-nginx-") as directory:
         + stream_location("river.conf") + "\ninclude /etc/nginx/snippets/river-path.conf;\n}\n"
         + "server { listen 8081; " + trust
         + stream_location("river-container.conf") + "\ninclude /etc/nginx/snippets/river-container-path.conf;\n}\n"
-        + f"server {{ listen 8787; {held} }}\nserver {{ listen 8095; {held} }}\n"
+        + f"server {{ listen 8787; {held} }}\n"
     )
     try:
         docker("run", "-d", "--name", name, "-p", "127.0.0.1::8080", "-p", "127.0.0.1::8081",
@@ -129,8 +129,8 @@ with tempfile.TemporaryDirectory(prefix="river-nginx-") as directory:
     # The shipped files with only their ports changed; the [::] listens need IPv6 in the network namespace.
     for config in ["river-container.conf", "river-container-path.conf"]:
         text = (configs / config).read_text()
-        assert "127.0.0.1:8095" in text, config
-        text = text.replace("127.0.0.1:8095", f"127.0.0.1:{upstream.port}")
+        assert "127.0.0.1:8787" in text, config
+        text = text.replace("127.0.0.1:8787", f"127.0.0.1:{upstream.port}")
         text = text.replace("listen 80;", f"listen 127.0.0.1:{http_port};")
         text = text.replace("listen 443 ssl;", f"listen 127.0.0.1:{https_port} ssl;")
         text = "\n".join(line for line in text.splitlines() if "listen [::]" not in line)

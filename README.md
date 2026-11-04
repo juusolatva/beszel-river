@@ -88,7 +88,7 @@ Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/con
 
 Two ways to run it, both listening only on the host's loopback. Background and the reasons for each setting: [docs/PLAN.md](docs/PLAN.md), "Deployment".
 
-- **Container:** one image, `ghcr.io/juusolatva/beszel-river`, holds the bridge and the page, started with `deploy/compose.yml` at `http://127.0.0.1:8095`.
+- **Container:** one image, `ghcr.io/juusolatva/beszel-river`, holds the bridge and the page, started with `deploy/compose.yml` at `http://127.0.0.1:8787`.
 - **Without Docker:** the bridge under systemd on `127.0.0.1:8787`, with nginx serving the page and proxying `/stream` to it.
 
 Either way, first create the Beszel user as in "Bridge setup" above.
@@ -110,7 +110,7 @@ docker compose ps                          # "(healthy)" once logged in to the h
 - `chown 1000:1000 mix.json`: the container runs as the `node` user (uid 1000), which must read the bind-mounted recipe; otherwise startup stops with an "unreadable recipe" error. `chmod 400`: only that user can read it, and nobody can write it; edit it later with `sudo`, which can.
 - `up -d`: pulls the image and starts the container in the background. `ps` lists it with its health.
 
-Once it is healthy, open `http://127.0.0.1:8095`. If it stays `(health: starting)` or turns `(unhealthy)`, `docker compose logs river` says why.
+Once it is healthy, open `http://127.0.0.1:8787`. If it stays `(health: starting)` or turns `(unhealthy)`, `docker compose logs river` says why.
 
 In `.env`, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` (or `BESZEL_TOKEN`), `STREAM_SALT`, and `BESZEL_URL` as the container reaches the hub:
 
@@ -123,7 +123,7 @@ In `.env`, set `BESZEL_EMAIL` and `BESZEL_PASSWORD` (or `BESZEL_TOKEN`), `STREAM
 
 - `docker inspect -f '{{json .NetworkSettings.Networks}}' beszel` prints the hub container's networks; `beszel` is its container name.
 - `COMPOSE_FILE` in `.env` adds an override file to every `docker compose` command run in this directory. Running them from elsewhere, pass both files instead: `docker compose -f compose.yml -f compose.host-network.yml up -d`. The overrides use `!reset`, which needs Docker Compose 2.24.0 or later (`docker compose version`).
-- With `compose.host-network.yml` the container shares the host's network, so its two ports are host ports: `RIVER_PORT` (default 8095) for the page and `RIVER_HEALTH_PORT` (default 8788) for the health check. Change them in `.env` if they are taken. `RIVER_PORT` also moves the page in the other cases, except with `compose.proxy-network.yml`, which publishes no port.
+- With `compose.host-network.yml` the container shares the host's network, so its two ports are host ports: `RIVER_PORT` (default 8787) for the page and `RIVER_HEALTH_PORT` (default 8788) for the health check. Change them in `.env` if they are taken. `RIVER_PORT` also moves the page in the other cases, except with `compose.proxy-network.yml`, which publishes no port.
 
 **Quoting:** Compose replaces `$name` and `${name}` in unquoted and double-quoted `.env` values, usually with nothing, so a password, token or salt containing `$` changes silently and the login fails. Keep every secret in single quotes, as `.env.example` does: `STREAM_SALT='CHANGE$ME'`, which Compose would otherwise read as `CHANGE`. A `bridge/.env` from the systemd setup is read without this substitution, so add the quotes when copying values from it.
 
@@ -150,7 +150,7 @@ To build the image yourself instead, in `deploy/` of a checkout, comment out the
 
 ### Reverse proxy
 
-`compose.yml` publishes the page on `127.0.0.1` only. For a public site, put nginx or Caddy in front, with the configs below, at a domain root or under `/river/`. The proxy handles TLS, `Strict-Transport-Security` and compression of the page and its assets, and passes `/stream` through unbuffered. The container sends the other security headers (Content-Security-Policy and more). Its `/healthz` is on a separate listener inside the container, so the proxy cannot expose it. If `RIVER_PORT` moved the page off 8095, change `8095` in the config to match.
+`compose.yml` publishes the page on `127.0.0.1` only. For a public site, put nginx or Caddy in front, with the configs below, at a domain root or under `/river/`. The proxy handles TLS, `Strict-Transport-Security` and compression of the page and its assets, and passes `/stream` through unbuffered. The container sends the other security headers (Content-Security-Policy and more). Its `/healthz` is on a separate listener inside the container, so the proxy cannot expose it. If `RIVER_PORT` moved the page off 8787, change `8787` in the config to match.
 
 Only the nginx configs limit streams per client: 8 concurrent ones per IPv4 address or IPv6 `/64`, as in "4. nginx" below. Caddy has no such limit built in, so behind it only the container's global cap of 500 streams applies; a plugin such as `caddy-ratelimit` can add one.
 
@@ -172,11 +172,11 @@ Under a path in an existing site instead: install the two snippets the same way,
 
 #### Proxy in Docker
 
-A proxy running in a container cannot reach the host's `127.0.0.1:8095`. Put both on a shared network instead:
+A proxy running in a container cannot reach the host's `127.0.0.1:8787`. Put both on a shared network instead:
 
 1. `docker network create proxy`, and attach the proxy's container to it (in its compose file, a `proxy` network with `external: true`).
 2. Add `compose.proxy-network.yml` to `COMPOSE_FILE` in `.env` (for example `COMPOSE_FILE=compose.yml:compose.proxy-network.yml`, or with `compose.beszel-network.yml` as well), set `PROXY_NETWORK` if the network has another name, and run `docker compose up -d`. The river joins that network, and its port is no longer published on the host.
-3. In the proxy config, replace `127.0.0.1:8095` with `river:8095`.
+3. In the proxy config, replace `127.0.0.1:8787` with `river:8787`.
 
 This does not combine with `compose.host-network.yml`. nginx looks up `river` when it starts or reloads, so it fails to start while the river is down, and after `docker compose up -d` recreates the river, nginx needs a reload (`docker exec <nginx container> nginx -s reload`) to find its new address. Caddy looks it up on each connection.
 
@@ -265,10 +265,11 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
   git checkout main && git pull && git tag -a v1.0.1 -m "v1.0.1" && git push origin v1.0.1   # the next version
   ```
   The package inherits the repository's public visibility. If it ever shows as private, change it in the package settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
+- **From v1.0.0** (port 8095): the container now listens on 8787, the bridge's usual port, because 8095 clashed with other services. After `docker compose pull && docker compose up -d` the page is at `http://127.0.0.1:8787`. A proxy config copied from v1.0.0 still points at 8095: change it to 8787 (or `river:8787` on a shared network), or set `RIVER_PORT=8095` in `deploy/.env` to keep the old host port. Under `compose.host-network.yml` the default `RIVER_PORT` moves the same way.
 - **From an image built from a checkout** (before the image was published): `compose.yml` now pulls the published image. Run `docker compose up -d` once; `docker image rm beszel-river-river` then removes the old local build.
 - **From the bridge-only container** (`deploy/bridge.Dockerfile`, the `bridge` service on port 8787), which this image replaces:
   - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by uid 1000.
-  - The service is now `river`, and the page and stream are on port 8095. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working with `RIVER_PORT=8787` in `deploy/.env`. nginx then still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless. To let the container serve the page too, switch to `river-container.conf` or `river-container-path.conf` ("Reverse proxy" above) and drop `RIVER_PORT`.
+  - The service is now `river`, and the port is still 8787, now serving the page as well as the stream. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working unchanged: nginx still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless. To let the container serve the page too, switch to `river-container.conf` or `river-container-path.conf` ("Reverse proxy" above).
   - A hub with `network_mode: host`: use the adapted `compose.host-network.yml` (table above).
   - Before the first `up`, run `docker compose down --remove-orphans` in `deploy/` (with the same `-f` options as before, if any): it removes the old `bridge` container, which would otherwise keep port 8787.
 - **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.
