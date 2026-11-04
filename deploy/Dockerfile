@@ -42,7 +42,7 @@ LABEL org.opencontainers.image.source="https://github.com/juusolatva/beszel-rive
       org.opencontainers.image.version="$VERSION" \
       org.opencontainers.image.revision="$REVISION"
 # Defaults for a plain docker run; compose.yml sets the same values so .env cannot change them.
-ENV NODE_ENV=production BIND_HOST=0.0.0.0 BIND_PORT=8095 STATIC_DIR=/app/frontend HEALTH_PORT=8788 \
+ENV NODE_ENV=production BIND_HOST=0.0.0.0 BIND_PORT=8787 STATIC_DIR=/app/frontend HEALTH_PORT=8788 \
     MIX_FILE=/config/mix.json
 WORKDIR /app
 # Owned by root and read-only to the node user.
@@ -55,7 +55,7 @@ COPY --from=build /app/frontend/dist frontend/
 COPY bridge/mix.example.json bridge/
 WORKDIR /app/bridge
 USER node
-EXPOSE 8095
+EXPOSE 8787
 # Shell form, so it follows a HEALTH_PORT set at run time (compose.host-network.yml moves it).
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --start-interval=2s \
     CMD wget -q -O /dev/null "http://127.0.0.1:${HEALTH_PORT}/healthz" || exit 1

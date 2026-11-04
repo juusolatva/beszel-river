@@ -111,12 +111,12 @@ def smoke():
     """No hub: the page and an empty snapshot are served, and the health listener says 503."""
     name = f"river-smoke-{SUFFIX}"
     try:
-        run("docker", "run", "-d", "--name", name, "-p", "127.0.0.1::8095",
+        run("docker", "run", "-d", "--name", name, "-p", "127.0.0.1::8787",
             "-e", "BESZEL_URL=http://127.0.0.1:9", "-e", "BESZEL_EMAIL=ci@example.com", "-e", "BESZEL_PASSWORD=ci",
             "-e", f"STREAM_SALT={SALT}",
             # Explicitly the public recipe: this isolated test has no real hub or private metrics.
             "-e", "MIX_FILE=mix.example.json", RIVER)
-        port = int(run("docker", "port", name, "8095/tcp").splitlines()[0].rsplit(":", 1)[1])
+        port = int(run("docker", "port", name, "8787/tcp").splitlines()[0].rsplit(":", 1)[1])
         wait_for("the page", lambda: request(port, "/")[0] == 200)
         check_page(port)
         assert snapshot(port)["streams"] == []
@@ -196,8 +196,8 @@ def proxy(directory, network):
     """The shipped Caddyfile in a container on the proxy network, over plain HTTP on a free loopback port."""
     caddyfile = Path(directory) / "Caddyfile"
     text = (DEPLOY / "caddy" / "Caddyfile").read_text()
-    assert "river.example.com {" in text and "127.0.0.1:8095" in text
-    caddyfile.write_text(text.replace("river.example.com {", ":80 {").replace("127.0.0.1:8095", "river:8095"))
+    assert "river.example.com {" in text and "127.0.0.1:8787" in text
+    caddyfile.write_text(text.replace("river.example.com {", ":80 {").replace("127.0.0.1:8787", "river:8787"))
     caddyfile.chmod(0o644)
     name = f"river-ci-proxy-{SUFFIX}"
     run("docker", "run", "-d", "--name", name, "--network", network, "-p", "127.0.0.1::80",

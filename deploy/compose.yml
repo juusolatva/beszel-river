@@ -1,4 +1,4 @@
-# The river: page and stream from one container at http://127.0.0.1:8095. Next to this file: .env
+# The river: page and stream from one container at http://127.0.0.1:8787. Next to this file: .env
 # (from .env.example) and mix.json (from bridge/mix.example.json, then edited). README, "Deployment".
 #   docker compose up -d
 # For a hub in Docker or one listening only on loopback, add an override (see .env.example).
@@ -19,7 +19,7 @@ services:
     environment:
       # Fixed container settings; listed here so .env cannot override them.
       BIND_HOST: 0.0.0.0
-      BIND_PORT: "8095"
+      BIND_PORT: "8787"
       STATIC_DIR: /app/frontend
       HEALTH_PORT: "8788"
       MIX_FILE: /config/mix.json
@@ -34,9 +34,9 @@ services:
           create_host_path: false
     ports:
       # Loopback only: put a reverse proxy in front for anything public.
-      - "127.0.0.1:${RIVER_PORT:-8095}:8095"
+      - "127.0.0.1:${RIVER_PORT:-8787}:8787"
       # LAN testing only, plain HTTP: replace the line above with
-      # - "${RIVER_PORT:-8095}:8095"
+      # - "${RIVER_PORT:-8787}:8787"
     extra_hosts:
       # Lets BESZEL_URL=http://host.docker.internal:8090 reach a hub on this host.
       - "host.docker.internal:host-gateway"

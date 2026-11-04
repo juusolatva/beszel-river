@@ -29,8 +29,8 @@ with tempfile.TemporaryDirectory(prefix="river-caddy-") as directory:
     root = Path(directory)
     for file in ["Caddyfile", "Caddyfile.path"]:
         text = (CONFIGS / file).read_text()
-        assert "127.0.0.1:8095" in text, file
-        (root / file).write_text(text.replace("127.0.0.1:8095", f"127.0.0.1:{upstream.port}"))
+        assert "127.0.0.1:8787" in text, file
+        (root / file).write_text(text.replace("127.0.0.1:8787", f"127.0.0.1:{upstream.port}"))
     own = (root / "Caddyfile").read_text()
     assert "river.example.com {" in own
     # The shipped site under the name localhost, and a plain-HTTP site importing the path snippet.

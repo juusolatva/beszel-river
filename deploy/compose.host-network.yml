@@ -4,7 +4,7 @@
 # or set COMPOSE_FILE=compose.yml:compose.host-network.yml in .env.
 # The river then shares the host's network and reaches the hub at BESZEL_URL=http://127.0.0.1:8090 (the
 # hub's port). It listens on the host's loopback directly, so both of its ports are host ports:
-# RIVER_PORT (default 8095) for the page and RIVER_HEALTH_PORT (default 8788) for the health check.
+# RIVER_PORT (default 8787) for the page and RIVER_HEALTH_PORT (default 8788) for the health check.
 services:
   river:
     network_mode: host
@@ -13,5 +13,5 @@ services:
     extra_hosts: !reset []
     environment:
       BIND_HOST: 127.0.0.1
-      BIND_PORT: "${RIVER_PORT:-8095}"
+      BIND_PORT: "${RIVER_PORT:-8787}"
       HEALTH_PORT: "${RIVER_HEALTH_PORT:-8788}"

@@ -1,6 +1,6 @@
 """Shared checks for the container proxy configs (nginx.py, caddy.py).
 
-The proxy under test runs with host networking, with its upstream port changed from 8095 to a stub
+The proxy under test runs with host networking, with its upstream port changed from 8787 to a stub
 that stands in for the container: it serves a page, an asset and an SSE stream, records the paths it
 is asked for, and notices when the proxy closes a stream's upstream connection. With SOURCE=realtime
 the container polls the hub only while it has viewers, so a proxy that kept upstream streams open

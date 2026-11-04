@@ -1,8 +1,8 @@
 # Site config for the container (deploy/compose.yml), which serves the page and the stream on
-# 127.0.0.1:8095. Replace river.example.com, put this in /etc/caddy/Caddyfile (or paste the block into
+# 127.0.0.1:8787. Replace river.example.com, put this in /etc/caddy/Caddyfile (or paste the block into
 # yours), then: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
 # Caddy gets and renews the certificate itself and redirects HTTP to HTTPS. If RIVER_PORT in .env
-# moved the container's port, change 8095 below to match.
+# moved the container's port, change 8787 below to match.
 #
 # Caddy has no per-IP connection limit, so this config relies on the container's global cap of 500
 # streams. A plugin such as caddy-ratelimit can add per-client limits; the nginx configs have them.
@@ -18,5 +18,5 @@ river.example.com {
 
 	# Caddy flushes text/event-stream responses at once and closes the upstream request when the viewer
 	# leaves, which the container needs to count viewers; no streaming options are needed.
-	reverse_proxy 127.0.0.1:8095
+	reverse_proxy 127.0.0.1:8787
 }
