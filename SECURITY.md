@@ -13,7 +13,7 @@ Report them privately through GitHub's private vulnerability reporting:
 1. Go to the repository's Security tab.
 2. Click Report a vulnerability.
 
-If that option is unavailable, please send an email to me with the details.
+If that option is unavailable, please contact me using the email address on my GitHub profile.
 
 Please include:
 
