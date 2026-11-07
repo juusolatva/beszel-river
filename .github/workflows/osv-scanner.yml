@@ -24,10 +24,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: osv-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   scan-scheduled:
     permissions:
@@ -48,6 +44,12 @@ jobs:
   # a `needs:` of scan-pr: a failed need skips scan-pr, and a skipped check passes.
   guard-osv-results:
     name: Guard OSV result paths
+    # Only pull_request and merge_group run this job, so a newer push may cancel
+    # an older run. Scans of main stay outside any group: queued scans there
+    # would replace each other.
+    concurrency:
+      group: osv-guard-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read # Read commit contents
     if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
