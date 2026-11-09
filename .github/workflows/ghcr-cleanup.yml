@@ -21,7 +21,8 @@ concurrency:
 
 jobs:
   cleanup:
-    if: github.repository == 'juusolatva/beszel-river'
+    # Only main's script gets the package-writing token: a manual run from another branch is refused.
+    if: github.repository == 'juusolatva/beszel-river' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

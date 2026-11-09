@@ -10,6 +10,9 @@ image index lists. Deleted, once older than MIN_AGE: everything else, which is
 
 Environment: GITHUB_TOKEN (packages: write, or a token with read:packages for a dry run), OWNER,
 PACKAGE, DRY_RUN ("true" lists what would go without deleting).
+
+Anything unexpected (a failed request, a version without tag metadata, an index without manifests)
+raises instead of being read as "no tags" or "no children": either would delete a live manifest.
 """
 
 import base64
