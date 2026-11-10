@@ -25,6 +25,10 @@ updates:
     ignore:
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+    # node and the final stage's alpine base must stay on the same Alpine release (deploy/Dockerfile).
+    groups:
+      base-images:
+        patterns: ["*"]
   - package-ecosystem: docker-compose
     directory: /deploy/test
     schedule:
