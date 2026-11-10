@@ -1,0 +1,42 @@
+name: Clean up images
+
+# Deletes ghcr.io/juusolatva/beszel-river versions that no tag needs: replaced edge builds and the
+# attestations once pushed to the registry (.github/scripts/ghcr_cleanup.py). Tagged images and their
+# platform manifests stay.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: List what would be deleted without deleting it
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: ghcr-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    # Only main's script gets the package-writing token: a manual run from another branch is refused.
+    if: github.repository == 'juusolatva/beszel-river' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout
+      packages: write # delete package versions (the repository has admin on the package it published)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Delete untagged versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: juusolatva
+          PACKAGE: beszel-river
+          # Scheduled runs delete; manual runs only list unless dry-run is unticked.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || 'false' }}
+        run: python3 -I .github/scripts/ghcr_cleanup.py

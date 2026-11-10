@@ -146,6 +146,8 @@ Each published image has signed build provenance and an SBOM. To check that an i
 gh attestation verify oci://ghcr.io/juusolatva/beszel-river:1 -R juusolatva/beszel-river
 ```
 
+The attestations are in GitHub's attestation store, not in the registry, so `--bundle-from-oci` finds none.
+
 To build the image yourself instead, in `deploy/` of a checkout, comment out the `image:` line in `compose.yml`, uncomment the `build:` block and run `docker compose up -d --build`. With the `image:` line left in, the local build takes the published name, and the next `docker compose pull` replaces it. To update a build like this, see "Updates" under Maintenance.
 
 ### Reverse proxy
