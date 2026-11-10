@@ -62,7 +62,8 @@ def wait_for(what, check, seconds=60):
             result = check()
             if result:
                 return result
-        except OSError:
+        # A server still starting can also close or garble a response (HTTPException, not an OSError).
+        except (OSError, http.client.HTTPException):
             pass
         if time.monotonic() > deadline:
             raise AssertionError(f"timed out waiting for {what}")
