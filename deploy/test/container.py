@@ -132,7 +132,7 @@ def smoke():
         run("docker", "rm", "-f", name, check=False)
 
 
-def setup_hub(url):
+def setup_hub(container, url):
     """A superuser through the hub's CLI, then the river's read-only user through its API."""
     connection_port = int(url.rsplit(":", 1)[1])
 
@@ -148,7 +148,10 @@ def setup_hub(url):
         finally:
             connection.close()
 
+    # The hub answers only after applying its migrations; a CLI write before that can find the database
+    # locked (SQLITE_BUSY).
     wait_for("the hub", lambda: request(connection_port, "/api/health")[0] == 200)
+    run("docker", "exec", container, "/beszel", "superuser", "upsert", *ADMIN)
     token = api("/api/collections/_superusers/auth-with-password",
                 {"identity": ADMIN[0], "password": ADMIN[1]})["token"]
     api("/api/collections/users/records",
@@ -214,8 +217,7 @@ def hub_network():
     try:
         run(*hub, "up", "-d", "beszel")
         container = run(*hub, "ps", "-q", "beszel")
-        run("docker", "exec", container, "/beszel", "superuser", "upsert", *ADMIN)
-        setup_hub(run(*hub, "port", "beszel", "8090"))
+        setup_hub(container, run(*hub, "port", "beszel", "8090"))
         run("docker", "network", "create", network)
         with tempfile.TemporaryDirectory(prefix="river-deploy-") as directory:
             root = deployment(directory, ["compose.beszel-network.yml", "compose.proxy-network.yml"], {
@@ -238,8 +240,7 @@ def hub_host_network():
     try:
         # A hub that listens only on the host's loopback, which a bridged container cannot reach.
         run("docker", "run", "-d", "--name", name, "--network", "host", HUB, "serve", "--http=127.0.0.1:18090")
-        run("docker", "exec", name, "/beszel", "superuser", "upsert", *ADMIN)
-        setup_hub("127.0.0.1:18090")
+        setup_hub(name, "127.0.0.1:18090")
         with tempfile.TemporaryDirectory(prefix="river-deploy-") as directory:
             root = deployment(directory, ["compose.host-network.yml"], {
                 "BESZEL_URL": "http://127.0.0.1:18090",
