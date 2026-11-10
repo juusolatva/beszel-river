@@ -57,16 +57,18 @@ def request(port, path, method="GET"):
 
 def wait_for(what, check, seconds=60):
     deadline = time.monotonic() + seconds
+    error = None
     while True:
         try:
             result = check()
             if result:
                 return result
         # A server still starting can also close or garble a response (HTTPException, not an OSError).
-        except (OSError, http.client.HTTPException):
-            pass
+        # The last one is kept, so a fault that never clears shows its cause, not just the timeout.
+        except (OSError, http.client.HTTPException) as e:
+            error = e
         if time.monotonic() > deadline:
-            raise AssertionError(f"timed out waiting for {what}")
+            raise AssertionError(f"timed out waiting for {what}") from error
         time.sleep(0.5)
 
 
