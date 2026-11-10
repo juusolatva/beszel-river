@@ -10,13 +10,14 @@
 # The final stage is plain Alpine with only the node binary and the two C++ runtime libraries it links
 # against, copied from the Node image for the target platform: no npm, npx, yarn or corepack, which the
 # service never runs but which image scanners report. Both images must be on the same Alpine release
-# (checked in the deps stage); Dependabot updates them together.
+# (checked in the deps stage), so both tags name it: moving to a new Alpine release changes both lines,
+# and Dependabot proposes only updates within it.
 
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS runtime
 
-FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS node
+FROM node:24.22.1-alpine3.24@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS node
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine3.24@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
 WORKDIR /app
 # npm ci needs every workspace manifest the lockfile names.
 COPY package.json package-lock.json .npmrc ./
@@ -30,7 +31,7 @@ COPY bridge/ bridge/
 COPY frontend/ frontend/
 RUN npm run build
 
-FROM --platform=$BUILDPLATFORM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS deps
+FROM --platform=$BUILDPLATFORM node:24.22.1-alpine3.24@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS deps
 # node is built against its image's musl and libstdc++, so the runtime base must be the same Alpine
 # release (patch levels may differ). Checked here because the final stage cannot run anything.
 COPY --from=runtime /etc/alpine-release /tmp/runtime-alpine-release
