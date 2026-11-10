@@ -1,0 +1,49 @@
+name: Image scan
+
+# The published images against the current advisory database, weekly: an advisory published after an
+# image went out shows up in code scanning without a new build. The CI deploy job scans every build
+# before it is published (.github/workflows/ci.yml).
+on:
+  schedule:
+    - cron: '20 5 * * 1'
+  workflow_dispatch:
+
+permissions: {}
+
+# A newer scan supersedes a running one: both read the same published images.
+concurrency:
+  group: image-scan
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    if: ${{ github.repository == 'juusolatva/beszel-river' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout: the pinned scanner image and .trivyignore
+      security-events: write # upload SARIF to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        # edge shows what the next release fixes; latest what deployments on the default tag run.
+        tag: [edge, latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Every severity with a fix, unlike the CI gate: code scanning is where mediums get noticed. The
+      # package is public, so Trivy pulls the image without logging in (linux/amd64; arm64 has the same
+      # packages).
+      - name: Scan published image
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          trivy=$(python3 deploy/test/ci_images.py trivy)
+          docker run --rm -v "$PWD:/src:ro" -w /src -v "$RUNNER_TEMP:/out" "$trivy" \
+            image --scanners vuln --ignore-unfixed --format sarif --output "/out/trivy-$TAG.sarif" \
+            "ghcr.io/juusolatva/beszel-river:$TAG"
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/trivy-${{ matrix.tag }}.sarif
+          category: image-${{ matrix.tag }}
