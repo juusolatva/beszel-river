@@ -1,5 +1,5 @@
-# Third-party images the CI deploy job runs, pinned by digest; Dependabot updates them (docker-compose).
-# The tests read each reference with ci_images.py, so no digest is written anywhere else. Only the hub
+# Third-party images the CI jobs run, pinned by digest; Dependabot updates them (docker-compose).
+# The jobs read each reference with ci_images.py, so no digest is written anywhere else. Only the hub
 # is ever started from this file (deploy/test/container.py).
 name: river-ci
 
@@ -14,4 +14,9 @@ services:
     profiles: [never]
   caddy:
     image: caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    profiles: [never]
+  # Scans the image each CI run builds (ci.yml) and, weekly, the published ones (image-scan.yml). The
+  # image rather than aquasecurity/trivy-action, whose tags were once replaced with malicious code.
+  trivy:
+    image: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
     profiles: [never]

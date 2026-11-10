@@ -25,6 +25,14 @@ updates:
     ignore:
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # node's tag names its Alpine release (-alpine3.24) and the final stage's alpine base must match it
+      # (deploy/Dockerfile), so a new Alpine release is a deliberate change to both, not an update.
+      - dependency-name: alpine
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    # Patch and digest updates of both images in one pull request.
+    groups:
+      base-images:
+        patterns: ["*"]
   - package-ecosystem: docker-compose
     directory: /deploy/test
     schedule:

@@ -114,6 +114,16 @@ jobs:
           status=0
           docker run --rm --user root --entrypoint grep beszel-river:ci -rqsF "$MARKER" /app || status=$?
           [ "$status" -eq 1 ] || { echo "::error::secret content in the image (grep exit $status)"; exit 1; }
+      # A fixed HIGH or CRITICAL advisory fails the run, so publish never pushes the image. Trivy reads a
+      # saved copy and needs no Docker socket. Accepted advisories go in .trivyignore, which it reads from
+      # the checkout, each with a comment saying why. image-scan.yml rescans the published images weekly.
+      - name: Scan image for vulnerabilities
+        run: |
+          trivy=$(python3 deploy/test/ci_images.py trivy)
+          docker save beszel-river:ci -o "$RUNNER_TEMP/image.tar"
+          docker run --rm -v "$RUNNER_TEMP/image.tar:/scan/image.tar:ro" -v "$PWD:/src:ro" -w /src "$trivy" \
+            image --input /scan/image.tar --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+          rm "$RUNNER_TEMP/image.tar"
       # Without a hub, then healthy against a real hub on its Docker network and on the host's loopback.
       - name: Test container
         run: python3 deploy/test/container.py beszel-river:ci
