@@ -71,6 +71,15 @@ await runCpuBenchmark();
 
 It compares analytic braid centres with the cache using fixed synthetic channel snapshots, seed, particle limit and simulated steps. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
 
+The motion-only GPU prototype has a separate real-shader correctness check. With Vite running, open `http://localhost:5173/test/gpu-benchmark.html` and run:
+
+```js
+const { runGpuMotionBrowserChecks } = await import("/test/gpu-particles.browser.ts");
+runGpuMotionBrowserChecks();
+```
+
+It preloads identical CPU/GPU states with spawning disabled, checks lifetime and boundary deaths, and compares motion after one and 120 steps, including a resized flow grid and a variable-step lifetime regression. The prototype records a Float32-effective step after clamping, feeds it to both backends, and retains the original callback interval separately. Production CPU timing is unchanged. Readbacks belong to this untimed test only. Run browser checks separately from coverage; software WebGL checks correctness, not target-device performance.
+
 The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
 
 ```js

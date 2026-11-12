@@ -31,6 +31,7 @@ it("includes canvas layout reads in callback work and replays the final rendered
   expect(result.timing.callbackMs.median).toBeGreaterThanOrEqual(20);
   expect(result.validation.finalStateMatches).toBe(true);
   expect(result.trace).toHaveLength(3);
+  expect(result.metadata.effectiveStep).toBe("Float32(clamp(interval, 0, LOOK.maxDt))");
   await expect(runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/Reload/);
   await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/not implemented/);
 });

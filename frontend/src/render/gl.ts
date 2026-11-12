@@ -3,21 +3,32 @@ export interface Program {
   uniform(name: string): WebGLUniformLocation | null;
 }
 
-export function createProgram(gl: WebGL2RenderingContext, vertexSource: string, fragmentSource: string): Program {
+export function createProgram(gl: WebGL2RenderingContext, vertexSource: string, fragmentSource: string, feedbackVaryings?: readonly string[]): Program {
+  const program = gl.createProgram();
+  if (!program) throw new Error("createProgram failed");
+  const shaders: WebGLShader[] = [];
   const compile = (type: GLenum, source: string): WebGLShader => {
     const shader = gl.createShader(type);
     if (!shader) throw new Error("createShader failed");
+    shaders.push(shader);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(`Shader compile failed: ${gl.getShaderInfoLog(shader)}`);
     return shader;
   };
 
-  const program = gl.createProgram();
-  gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSource));
-  gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSource));
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`Program link failed: ${gl.getProgramInfoLog(program)}`);
+  try {
+    gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSource));
+    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSource));
+    if (feedbackVaryings) gl.transformFeedbackVaryings(program, feedbackVaryings, gl.INTERLEAVED_ATTRIBS);
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`Program link failed: ${gl.getProgramInfoLog(program)}`);
+  } catch (error) {
+    gl.deleteProgram(program);
+    throw error;
+  } finally {
+    for (const shader of shaders) gl.deleteShader(shader);
+  }
 
   const locations = new Map<string, WebGLUniformLocation | null>();
   return {

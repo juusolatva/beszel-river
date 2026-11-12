@@ -87,6 +87,11 @@ export class StreamSlot {
     return this.centers[i] + (this.centers[i + 1] - this.centers[i]) * (position - i);
   }
 
+  /** Copies the cached centre line into caller-owned texture storage. */
+  writeCenters(out: Float32Array, offset: number): void {
+    for (let i = 0; i < CENTER_SAMPLES; i++) out[offset + i] = this.centers[i];
+  }
+
   /** Rebuilds after easing/layout, replacing per-particle sine evaluations with interpolation. */
   rebuildCenters(): void {
     for (let i = 0; i < CENTER_SAMPLES; i++) {

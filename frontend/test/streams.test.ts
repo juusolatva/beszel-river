@@ -342,3 +342,14 @@ describe("StreamSet", () => {
     expect(drift(0)).toBeLessThan(0);
   });
 });
+
+it("copies cached centres without touching surrounding storage", () => {
+  const slot = new StreamSlot();
+  slot.center = 0.7; slot.half = 0.3; slot.phase = 0.4;
+  slot.rebuildCenters();
+  const out = new Float32Array(66).fill(123);
+  slot.writeCenters(out, 1);
+  for (let i = 0; i < 64; i++) expect(out[i + 1]).toBeCloseTo(slot.centerAt(-0.02 + i * 1.1 / 63), 6);
+  expect(out[0]).toBe(123);
+  expect(out[65]).toBe(123);
+});

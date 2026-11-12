@@ -3,6 +3,12 @@ import { createProgram, createTarget, deleteTarget } from "../src/render/gl";
 import { callsTo, createFakeGl } from "./fake-gl";
 
 describe("createProgram", () => {
+  it("registers interleaved feedback varyings before linking", () => {
+    const { gl, calls } = createFakeGl();
+    createProgram(gl, "v", "f", ["v_motion", "v_identity"]);
+    expect(callsTo(calls, "transformFeedbackVaryings")[0].slice(1)).toEqual([["v_motion", "v_identity"], "INTERLEAVED_ATTRIBS"]);
+    expect(calls.findIndex(([n]) => n === "transformFeedbackVaryings")).toBeLessThan(calls.findIndex(([n]) => n === "linkProgram"));
+  });
   it("compiles and links both shaders, and caches uniform locations", () => {
     const { gl, calls } = createFakeGl();
     const program = createProgram(gl, "vertex source", "fragment source");
@@ -15,6 +21,16 @@ describe("createProgram", () => {
     expect(location).toEqual({ uniform: "u_aspect" });
     expect(program.uniform("u_aspect")).toBe(location);
     expect(callsTo(calls, "getUniformLocation")).toHaveLength(1);
+  });
+
+  it("releases shader handles and deletes failed programs", () => {
+    for (const options of [{}, { compileLog: "bad shader" }, { linkLog: "bad program" }, { overrides: { createProgram: () => null } }]) {
+      const { gl, calls } = createFakeGl(options);
+      try { createProgram(gl, "v", "f"); } catch { /* Expected allocation/compile/link failures. */ }
+      const created = callsTo(calls, "createShader").length;
+      expect(callsTo(calls, "deleteShader")).toHaveLength(created);
+      expect(callsTo(calls, "deleteProgram")).toHaveLength("compileLog" in options || "linkLog" in options ? 1 : 0);
+    }
   });
 
   it("caches a missing uniform as null too", () => {
