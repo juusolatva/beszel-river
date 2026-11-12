@@ -119,7 +119,7 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
   const budget = matches("(pointer: coarse)") ? 8000 : MAX_PARTICLES;
 
   return {
-    particles: int("particles", reducedMotion ? budget / 2 : budget, 100, MAX_PARTICLES),
+    particles: int("particles", reducedMotion ? Math.floor(budget / 2) : budget, 100, MAX_PARTICLES),
     particlesFixed: params.has("particles"),
     motion: reducedMotion ? 0.5 : 1,
     demo: params.has("demo"),

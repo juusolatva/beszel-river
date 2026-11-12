@@ -23,6 +23,10 @@ describe("readConfig", () => {
     expect(readConfig("", (q) => q === "(pointer: coarse)")).toMatchObject({ particles: 8000, motion: 1 });
     expect(readConfig("", (q) => q === "(prefers-reduced-motion: reduce)")).toMatchObject({ particles: 5000, motion: 0.5 });
     expect(readConfig("", () => true)).toMatchObject({ particles: 4000, motion: 0.5 });
+    expect(readConfig("?particles=invalid", (q) => q === "(prefers-reduced-motion: reduce)"))
+      .toMatchObject({ particles: 5000, particlesFixed: true, motion: 0.5 });
+    expect(readConfig("?particles=invalid", () => true))
+      .toMatchObject({ particles: 4000, particlesFixed: true, motion: 0.5 });
   });
 
   it("parses flags, clamps integer parameters, and ignores non-numbers", () => {
