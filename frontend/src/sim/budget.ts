@@ -20,15 +20,17 @@ const PAUSE = 0.25;
  * particles above the new limit live on for up to `LOOK.lifeRange` s, so slow frames count only once
  * they are gone; otherwise one overload would cut the limit several times over.
  *
- * The display period is the fastest frame interval seen, at most 1/30 s, so a 30 Hz display or a
- * throttled browser is not taken for overload. A page starts with an empty pool, so its first frames
- * show the display's own rate. It never creeps back up: that would follow an overloaded device down
- * and stop seeing the overload. Switching to a 30 Hz power-saving mode mid-session can therefore thin
- * the river, at most to the quarter-pool floor.
+ * The display period is the fastest confirmed cadence, at most 1/30 s. Three similar faster intervals
+ * confirm a new cadence, so one timing glitch cannot poison it. A page starts with an empty pool, so
+ * its first frames show the display's own rate. It never creeps back up: that would follow an
+ * overloaded device down and stop seeing the overload. Switching to a 30 Hz power-saving mode
+ * mid-session can therefore thin the river, at most to the quarter-pool floor.
  */
 export class ParticleBudget {
   limit: number;
   private period = MAX_PERIOD;
+  private candidatePeriod = MAX_PERIOD;
+  private candidateSamples = 0;
   private slowTime = 0;
   private fastTime = 0;
   /** Seconds of keeping up before a rise; doubles on every drop, so the limit settles instead of swinging. */
@@ -49,9 +51,21 @@ export class ParticleBudget {
       // Separate sustained-load windows on either side of a hidden tab or debugger stop.
       this.slowTime = 0;
       this.fastTime = 0;
+      this.candidateSamples = 0;
       return false;
     }
-    this.period = Math.min(this.period, interval);
+    // Require a repeatable faster cadence; one short callback gap must not poison the budget.
+    if (interval < this.period) {
+      if (this.candidateSamples > 0 && Math.abs(interval - this.candidatePeriod) <= this.candidatePeriod * 0.1) this.candidateSamples++;
+      else {
+        this.candidatePeriod = interval;
+        this.candidateSamples = 1;
+      }
+      if (this.candidateSamples >= 3) {
+        this.period = Math.min(this.period, this.candidatePeriod);
+        this.candidateSamples = 0;
+      }
+    } else this.candidateSamples = 0;
 
     if (workSeconds > WORK_SLOW * this.period || interval > Math.max(SLOW * this.period, SLOW_FLOOR)) {
       if (live <= this.limit) this.slowTime += interval;

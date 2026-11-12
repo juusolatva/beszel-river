@@ -9,6 +9,37 @@ function run(budget: ParticleBudget, interval: number, seconds: number, live = 0
 }
 
 describe("ParticleBudget", () => {
+  it("ignores a transient short interval after learning the display period", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000, 0.008);
+    expect(budget.update(0.0001, 1000, 0)).toBe(false);
+    expect(run(budget, 1 / 60, 30, 1000, 0.008)).toBe(false);
+    expect(budget.limit).toBe(1000);
+  });
+
+  it("can recover after a short-interval timing glitch", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 2.1, 1000, 0.013);
+    expect(budget.limit).toBe(800);
+    budget.update(0.0001, 800, 0);
+    expect(run(budget, 1 / 60, 21, 800, 0.008)).toBe(true);
+    expect(budget.limit).toBe(880);
+  });
+
+  it.each([360, 480])("still detects work overload on a %i Hz display", (hz) => {
+    const budget = new ParticleBudget(1000, false);
+    expect(run(budget, 1 / hz, 2.1, 1000, (1 / hz) * 0.75)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
+  it("confirms a modest refresh-rate increase after earlier calibration", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000, 0.001);
+    // Above 70% of 64 Hz, but below 70% of the previously learned 60 Hz period.
+    expect(run(budget, 1 / 64, 2.2, 1000, 0.0113)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
   it.each([
     [60, 0.013],
     [60, 0.018],
