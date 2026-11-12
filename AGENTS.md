@@ -82,6 +82,11 @@ These protect the point of the project. Do not break them without a change to `d
 - A WebGL2 transform-feedback GPU prototype is conditional on CPU work remaining the bottleneck after those changes. Follow the prototype gate and tasks in `docs/PLAN.md`; keep the CPU implementation as the reference. Start with CPU stream easing and a CPU-generated flow texture, and explicitly solve spawning, particle accounting and safe stream-slot reuse without per-frame synchronous GPU readback.
 - GPU simulation needs browser tests that execute shaders and compare small deterministic readbacks within tolerances; fake-WebGL tests only verify orchestration. Software WebGL is suitable for correctness, not laptop or phone performance claims. A prototype is not authorization to replace the production simulation.
 
+## Suggested ambient sound
+
+- Consider optional ambient sound as a future addition to the river demo. If sound is added, include a visible, accessible volume slider with a mute option. Keep sound off until the visitor explicitly enables it.
+- Lower-end devices are an intended audience: assess audio CPU/power cost alongside animation, and keep the silent experience fully usable. This is a suggestion, not an implemented feature; specify the design in `docs/PLAN.md` before implementation.
+
 ## Git
 
 - Work on a branch and open a pull request against `main`; `main` only receives merges.
