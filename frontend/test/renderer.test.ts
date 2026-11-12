@@ -12,6 +12,32 @@ function passes(calls: Call[]): { read: unknown; wrote: unknown } {
 }
 
 describe("Renderer", () => {
+  it.each([true, false])("normalizes deposits against 60 Hz decay (half-float: %s)", (halfFloat) => {
+    const { gl, calls } = createFakeGl({ halfFloat });
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    const instances = new Float32Array(INSTANCE_FLOATS);
+    const referenceBrightness = 1 / (1 - Math.exp(-(1 / 60) / LOOK.trailTau));
+    for (const dt of [0, 1 / 240, 1 / 60, 1 / 30, LOOK.maxDt]) {
+      calls.length = 0;
+      renderer.render(instances, 1, dt, 1);
+      const uniforms = new Map(callsTo(calls, "uniform1f").map(([location, value]) => [(location as { uniform: string }).uniform, value as number]));
+      const scale = uniforms.get("u_depositScale");
+      expect(scale).toBeDefined();
+      expect(Number.isFinite(scale)).toBe(true);
+      expect(uniforms.get("u_floor")).toBe(halfFloat ? 0.0005 : 1.5 / 255);
+      const decay = uniforms.get("u_decay")!;
+      expect(decay).toBeCloseTo(Math.exp(-dt / LOOK.trailTau), 12);
+      if (dt === 0) expect(scale).toBe(0);
+      else {
+        // A constant deposit at a pixel has the same equilibrium before the floor/tone mapping.
+        expect(scale! / (1 - decay)).toBeCloseTo(referenceBrightness, 10);
+        expect(scale).toBeGreaterThan(0);
+      }
+      if (dt === 1 / 60) expect(scale).toBe(1);
+    }
+  });
+
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     new Renderer(gl, 1000);

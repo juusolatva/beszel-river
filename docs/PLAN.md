@@ -306,7 +306,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
     - It scatters around the lane centre by 0.32 of the half-width in an idle lane down to 0.05 in a busy one, and keeps that place instead of steering to the band's centre. Idle lanes blur into one haze; a busy core draws a tight strand, which is also up to 1.25× faster (0.85× when idle).
     - When filaments appear or stop, spawning blends between lanes and the plain band over about 3 s.
 - **Trails:**
-  - Two framebuffers alternate: each frame draws the previous one dimmed (decay 0.93–0.97), then the new particles on top.
+  - Two framebuffers alternate: each frame draws the previous one dimmed by `exp(-dt / trailTau)`, then the new particles on top. Deposits scale by `(1 - exp(-dt / trailTau)) / (1 - exp(-(1/60) / trailTau))`, preserving 60 Hz intensity and equalizing steady-state accumulation before the trail floor and tone mapping. Decay and deposits use the simulation's clamped dt. The per-frame floor, especially in 8-bit targets, still makes faint trails refresh-rate-dependent; missed motion is not reconstructed.
   - Particles are drawn as streaks from their previous position, so faster particles get longer tails.
 - **Colour:**
   - OKLCH, so all hues look equally bright; converted to linear sRGB in the particle vertex shader.
@@ -353,7 +353,10 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 - Review: retain the CPU-first sequence. Tasks 3–5 are measured experiments, and the GPU prototype remains conditional; there is no measured basis for accepting them in this increment. Starting implementation does not satisfy Task 0's target-device baseline.
 - Task 0: production assets built with Node 24.22.1 and npm 11.19.1 before changes (27.07 kB JS, gzip 10.88 kB). X280 AC/battery and real-phone timing runs are unverified. No hardware speedup or 22 ms → 15 ms result is claimed.
 - Task 1: 26 budget tests pass, including synthetic 30/60/120/240 Hz traces. New tests first failed on the old implementation. A real Chrome/SwiftShader startup fixture exposed a partial-first-interval calibration bug: a 1 ms first callback followed by 60 Hz and 8 ms work incorrectly reduced the limit to 16,000. Excluding that initial interval retained 20,000. Pause handling now resets both sustained timing windows; recovery starts fresh after resuming.
+- Task 2: two new renderer tests first failed for the missing uniform, then all nine renderer tests passed. They check zero dt, 240/60/30 Hz and `LOOK.maxDt` for both formats, with identical steady-state accumulation before the floor. Actual shader readbacks in Chrome/SwiftShader confirmed zero dt deposits no energy. A stationary faint streak (lightness 0.75, chroma 0, intensity 0.05, half-width 2 px) after 2 s produced screen red bytes 131/129/116 at 30/60/240 Hz in RGBA16F, and 97/27/17 in RGBA8. This fixture demonstrates substantial residual floor/quantization effects in the 8-bit fallback; it is not proof of visual equivalence or of restored missed motion. Real-display flicker acceptance remains unverified.
+- Browser correctness: deterministic seed-42 channel fixtures exercised both target formats at normal and reduced motion, with filament removal/reintroduction, replacement of all 32 stream IDs while old particles drained, offline/reconnect, aspect/DPR resize and eventual last-stream removal. Live counts matched per-stream counts, instance values stayed finite, draining finished, and no WebGL errors occurred. The draining fixture initially allowed only 20 s; matching the existing unit test's 44 s window passed without a simulation change. The rendered page was inspected at 960×640/DPR 1. These software-rendered checks do not measure target-device performance.
 - Validation: `npm run typecheck`, `npm run coverage` and `npm run build` passed. Coverage ran all 204 bridge and 99 frontend tests with the existing thresholds. Target-device cadence, battery throttling and thermal measurements remain pending.
+- Integration: an independent code review found no correctness issues in Tasks 1–2. The first increment implements those tasks; their hardware acceptance, Tasks 0 and 3–6, and the conditional GPU work remain pending.
 
 ### Task 0: Establish a repeatable baseline
 
@@ -382,9 +385,9 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 **Interface:** Add shader uniform `u_depositScale`; multiply particle linear RGB intensity by it once. Keep `Renderer.render`'s signature and the existing trail decay unchanged.
 
-- [ ] Add failing renderer tests for uniform values at dt = 0, 1/240, 1/60, 1/30 and `LOOK.maxDt`: scale is zero at zero dt, one at 60 Hz and finite throughout. Check the recurrence `Bnext = exp(-dt/tau) * B + depositScale` has the same steady-state B at 30/60/240 Hz within floating-point tolerance (before floor and tone mapping).
-- [ ] Run `npm test -w frontend -- test/renderer.test.ts` and confirm the new expectations fail.
-- [ ] Set the uniform to `-Math.expm1(-dt / LOOK.trailTau) / -Math.expm1(-(1 / 60) / LOOK.trailTau)`. Use the same clamped dt as decay and simulation; do not deposit an entire hidden-tab interval on return. Keep `intensityScale` multiplication separate and applied once.
+- [x] Add failing renderer tests for uniform values at dt = 0, 1/240, 1/60, 1/30 and `LOOK.maxDt`: scale is zero at zero dt, one at 60 Hz and finite throughout. Check the recurrence `Bnext = exp(-dt/tau) * B + depositScale` has the same steady-state B at 30/60/240 Hz within floating-point tolerance (before floor and tone mapping).
+- [x] Run `npm test -w frontend -- test/renderer.test.ts` and confirm the new expectations fail.
+- [x] Set the uniform to `-Math.expm1(-dt / LOOK.trailTau) / -Math.expm1(-(1 / 60) / LOOK.trailTau)`. Use the same clamped dt as decay and simulation; do not deposit an entire hidden-tab interval on return. Keep `intensityScale` multiplication separate and applied once.
 - [ ] Pass tests and compare brightness/trails in a browser at available refresh rates, with deliberately missed frames and thin/full pools. Exercise half-float and 8-bit target paths: the existing floor and quantization mean exact visual equivalence is not guaranteed. Record residual flicker rather than claiming missed motion is restored.
 
 ### Task 3: Cache braid centres (part 2)

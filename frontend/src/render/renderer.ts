@@ -105,6 +105,8 @@ export class Renderer {
       gl.useProgram(this.particles.program);
       gl.uniform1f(this.particles.uniform("u_aspect"), aspect);
       gl.uniform1f(this.particles.uniform("u_pixel"), 1 / this.height);
+      // Match the trail decay at any frame rate, retaining the original deposit at 60 Hz.
+      gl.uniform1f(this.particles.uniform("u_depositScale"), -Math.expm1(-dt / LOOK.trailTau) / -Math.expm1(-(1 / 60) / LOOK.trailTau));
       gl.bindVertexArray(this.particleVao);
       gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, instances, 0, count * INSTANCE_FLOATS);
