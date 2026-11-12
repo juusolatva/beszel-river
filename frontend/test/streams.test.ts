@@ -1,5 +1,5 @@
 import type { Frame, Stream } from "@beszel-river/shared";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LOOK } from "../src/config";
 import { FILAMENTS, MAX_STREAMS, StreamSet, StreamSlot, laneCenter } from "../src/sim/streams";
 
@@ -45,6 +45,66 @@ describe("StreamSlot.pickLane", () => {
 
     slot.laneWeights.set([1, 2, 3, 4, 5, 6]);
     expect(slot.pickLane(0.9999)).toBe(5);
+  });
+});
+
+describe("StreamSlot.centerAt", () => {
+  const analytic = (slot: StreamSlot, y: number): number => slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+
+  it("samples in-range centres without evaluating a sine per particle", () => {
+    const set = new StreamSet(1);
+    set.apply(frame(stream("a")));
+    set.update(1 / 60, 1.6);
+    const slot = slotOf(set, "a");
+    const sine = vi.spyOn(Math, "sin");
+    try {
+      for (let i = 0; i <= 100; i++) expect(Number.isFinite(slot.centerAt(-0.02 + 1.1 * i / 100))).toBe(true);
+      expect(sine).not.toHaveBeenCalled();
+    } finally {
+      sine.mockRestore();
+    }
+  });
+
+  it("keeps interpolation error below a thousandth of the half-width, including endpoints", () => {
+    const slot = new StreamSlot();
+    slot.center = 0.9;
+    for (const half of [0, 0.01, 0.4, 1.3]) for (const phase of [0, 0.13, 0.99]) for (const angle of [0, 2.1, 6.28]) {
+      slot.half = half;
+      slot.phase = phase;
+      slot.braidAngle = angle;
+      slot.rebuildCenters();
+      for (let i = 0; i <= 1000; i++) {
+        const y = -0.02 + 1.1 * i / 1000;
+        expect(Math.abs(slot.centerAt(y) - analytic(slot, y))).toBeLessThanOrEqual(0.001 * half + 1e-12);
+      }
+    }
+  });
+
+  it("keeps analytic behaviour outside the cached interval", () => {
+    const slot = new StreamSlot();
+    slot.center = 0.8;
+    slot.half = 0.25;
+    slot.phase = 0.3;
+    slot.rebuildCenters();
+    for (const y of [-2, -0.020001, 1.080001, 3]) expect(slot.centerAt(y)).toBe(analytic(slot, y));
+  });
+
+  it("rebuilds after layout easing, resize and slot reuse", () => {
+    const set = new StreamSet(1);
+    set.apply(frame(stream("a"), stream("b")));
+    for (const aspect of [1.6, 0.5, 3]) {
+      run(set, 0.5, aspect);
+      const slot = slotOf(set, "a");
+      for (const y of [-0.02, 0.5, 1.08]) expect(Math.abs(slot.centerAt(y) - analytic(slot, y))).toBeLessThanOrEqual(0.001 * slot.half + 1e-12);
+    }
+    const old = slotOf(set, "a");
+    set.apply(frame(stream("b")));
+    run(set, 30);
+    set.apply(frame(stream("c"), stream("b")));
+    expect(Math.abs(old.centerAt(0.5) - analytic(old, 0.5))).toBeLessThanOrEqual(0.001 * old.half + 1e-12);
+    set.update(1 / 60, 1.6);
+    expect(slotOf(set, "c")).toBe(old);
+    expect(Math.abs(old.centerAt(0.5) - analytic(old, 0.5))).toBeLessThanOrEqual(0.001 * old.half + 1e-12);
   });
 });
 

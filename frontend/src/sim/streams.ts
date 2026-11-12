@@ -8,6 +8,10 @@ export const MAX_STREAMS = 32;
 export const FILAMENTS = 6;
 /** Share of a fully present stream of width 0; bands and spawn shares grow from it with width. */
 export const MIN_SHARE = 0.6;
+const CENTER_MIN_Y = -0.02;
+const CENTER_MAX_Y = 1.08;
+const CENTER_SAMPLES = 64;
+const CENTER_SCALE = (CENTER_SAMPLES - 1) / (CENTER_MAX_Y - CENTER_MIN_Y);
 
 /** Centre of filament lane `j`, in band half-widths from the centre line. */
 export function laneCenter(j: number): number {
@@ -64,6 +68,7 @@ export class StreamSlot {
   brightness = 0;
   chroma = 0;
   streakSeconds = 0;
+  private readonly centers = new Float64Array(CENTER_SAMPLES);
 
   /** Lane index for a uniform random number `u` in [0, 1), weighted by lane activity. */
   pickLane(u: number): number {
@@ -74,7 +79,20 @@ export class StreamSlot {
 
   /** Centre line of the band at height `y`; it swings sideways so neighbouring streams braid. */
   centerAt(y: number): number {
-    return this.center + this.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + this.phase) + this.braidAngle);
+    if (y < CENTER_MIN_Y || y > CENTER_MAX_Y) {
+      return this.center + this.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + this.phase) + this.braidAngle);
+    }
+    const position = (y - CENTER_MIN_Y) * CENTER_SCALE;
+    const i = Math.min(Math.floor(position), CENTER_SAMPLES - 2);
+    return this.centers[i] + (this.centers[i + 1] - this.centers[i]) * (position - i);
+  }
+
+  /** Rebuilds after easing/layout, replacing per-particle sine evaluations with interpolation. */
+  rebuildCenters(): void {
+    for (let i = 0; i < CENTER_SAMPLES; i++) {
+      const y = CENTER_MIN_Y + i / CENTER_SCALE;
+      this.centers[i] = this.center + this.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + this.phase) + this.braidAngle);
+    }
   }
 }
 
@@ -120,6 +138,7 @@ export class StreamSet {
       this.easeLanes(slot, slot.latest.filaments, dt);
       this.easeLayout(slot, dt);
       this.derive(slot);
+      slot.rebuildCenters();
       if (!slot.inFrame && slot.presence < 0.01 && slot.particles === 0) {
         this.release(slot);
         released = true;
@@ -204,6 +223,8 @@ export class StreamSet {
     slot.phase = hashString(`${stream.id}:phase`);
     slot.particles = 0;
     slot.spawnCarry = 0;
+    // Pending frames can claim a released slot at the end of update, before the next layout pass.
+    slot.rebuildCenters();
   }
 
   private release(slot: StreamSlot): void {

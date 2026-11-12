@@ -25,8 +25,9 @@ function setup(capacity: number, ...streams: Stream[]) {
     let n = 0;
     for (let end = t + seconds; t < end; t += DT) {
       set.update(DT, ASPECT);
-      field.update(t, ASPECT);
       particles.spawn(DT, set);
+      // The field depends only on time/aspect; no particle can sample it while the pool is empty.
+      if (particles.count > 0) field.update(t, ASPECT);
       n = particles.step(DT, set, field, ASPECT, 2);
     }
     return n;
@@ -35,6 +36,16 @@ function setup(capacity: number, ...streams: Stream[]) {
 }
 
 describe("ParticleSystem", () => {
+  it.each([undefined, [0.1, 0.2, 0.9, 0.3, 0.1, 0]])("keeps cached-centre trajectories close to the analytic reference (%s)", (filaments) => {
+    const actual = setup(1000, stream("a", { filaments }));
+    const reference = setup(1000, stream("a", { filaments }));
+    for (const slot of reference.set.slots) slot.centerAt = (y) => slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+    const count = actual.run(2);
+    expect(reference.run(2)).toBe(count);
+    // The centre approximation is bounded by 0.001*half; allow 0.001 world units for accumulated motion.
+    for (let i = 0; i < count * INSTANCE_FLOATS; i++) expect(Math.abs(actual.particles.instances[i] - reference.particles.instances[i])).toBeLessThan(0.001);
+  });
+
   it("starts empty and spawns nothing without streams", () => {
     const { particles, run } = setup(100);
     expect(particles.count).toBe(0);

@@ -62,6 +62,15 @@ runRendererBrowserChecks();
 
 This requires WebGL2 and `EXT_color_buffer_float`. It checks faint/full-intensity accumulation at 30/60/120/240 Hz, the forced 8-bit fallback, zero dt and fading to black. It runs shader readbacks synchronously; stop other CPU-heavy checks while it runs. Software WebGL checks correctness, not device performance.
 
+For the paired CPU benchmark, open `http://localhost:5173/test/benchmark.html` with Vite running, then run this in that page's console:
+
+```js
+const { runCpuBenchmark } = await import("/test/cpu-benchmark.browser.ts");
+await runCpuBenchmark();
+```
+
+It compares analytic braid centres with the cache using fixed synthetic channel snapshots, seed, particle limit and simulated steps. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
+
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
