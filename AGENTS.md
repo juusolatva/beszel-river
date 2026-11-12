@@ -74,6 +74,13 @@ These protect the point of the project. Do not break them without a change to `d
 - Vite's dev proxy keeps `/stream` open when the bridge dies, so check lost-connection behaviour behind nginx (the CI configs work locally with `nginx:stable-alpine`) or against the bridge directly.
 - The frontend's unit tests run in Node: they check the simulation's rules and the renderer's GL calls, not how the river looks or how fast it draws. Check visual changes in a browser; `?debug` shows a channel panel and fps, and `?seed=N` makes runs repeatable. Headless Chromium renders WebGL2 in software (about 11 fps) with `--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, so it can check behaviour but not performance. It also keeps every core busy, so do not run it on the machine whose metrics you are measuring; replay recorded frames instead.
 
+## Planned frontend performance work
+
+- Follow `docs/PLAN.md`, "Frontend performance implementation plan", for the planned CPU work: work-aware budgeting, frame-rate-normalized deposits, cached braid centres, inlined interleaved flow sampling, and smaller instance uploads. These are pending changes, not descriptions of current behaviour.
+- Measure each optimization separately with the same recorded frames, seed, viewport, particle limit and power mode. Preserve the river's appearance, stream draining, daily ID rotation and reduced motion; keep hot paths allocation-free. Do not claim the estimated 22 ms → 15 ms improvement without hardware measurements.
+- A WebGL2 transform-feedback GPU prototype is conditional on CPU work remaining the bottleneck after those changes. Follow the prototype gate and tasks in `docs/PLAN.md`; keep the CPU implementation as the reference. Start with CPU stream easing and a CPU-generated flow texture, and explicitly solve spawning, particle accounting and safe stream-slot reuse without per-frame synchronous GPU readback.
+- GPU simulation needs browser tests that execute shaders and compare small deterministic readbacks within tolerances; fake-WebGL tests only verify orchestration. Software WebGL is suitable for correctness, not laptop or phone performance claims. A prototype is not authorization to replace the production simulation.
+
 ## Git
 
 - Work on a branch and open a pull request against `main`; `main` only receives merges.
