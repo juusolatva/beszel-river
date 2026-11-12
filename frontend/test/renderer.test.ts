@@ -12,6 +12,87 @@ function passes(calls: Call[]): { read: unknown; wrote: unknown } {
 }
 
 describe("Renderer", () => {
+  it("normalizes deposits and the trail floor against 60 Hz decay", () => {
+    const { gl, calls } = createFakeGl({ halfFloat: true });
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    const instances = new Float32Array(INSTANCE_FLOATS);
+    const referenceBrightness = (1 - 0.0005) / (1 - Math.exp(-(1 / 60) / LOOK.trailTau));
+    for (const dt of [0, 1 / 240, 1 / 60, 1 / 30, LOOK.maxDt]) {
+      calls.length = 0;
+      renderer.render(instances, 1, dt, 1);
+      const uniforms = new Map(callsTo(calls, "uniform1f").map(([location, value]) => [(location as { uniform: string }).uniform, value as number]));
+      const scale = uniforms.get("u_depositScale");
+      expect(scale).toBeDefined();
+      expect(Number.isFinite(scale)).toBe(true);
+      const floor = uniforms.get("u_floor")!;
+      expect(floor).toBeCloseTo(0.0005 * scale!, 12);
+      const decay = uniforms.get("u_decay")!;
+      expect(decay).toBeCloseTo(Math.exp(-dt / LOOK.trailTau), 12);
+      if (dt === 0) expect(scale).toBe(0);
+      else {
+        // The entire recurrence, including the floor, has the same positive equilibrium.
+        expect((scale! - floor) / (1 - decay)).toBeCloseTo(referenceBrightness, 10);
+        expect(scale).toBeGreaterThan(0);
+      }
+      if (dt === 1 / 60) expect(scale).toBe(1);
+    }
+  });
+
+  it("accumulates 8-bit trails at 60 Hz while presenting every high-refresh callback", () => {
+    const { gl, calls } = createFakeGl();
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    const instances = new Float32Array(INSTANCE_FLOATS);
+    for (let frame = 0; frame < 4; frame++) {
+      calls.length = 0;
+      renderer.render(instances, 1, 1 / 240, 1);
+      expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(frame === 3 ? 1 : 0);
+      expect(callsTo(calls, "drawArrays")).toHaveLength(frame === 3 ? 2 : 1);
+    }
+    expect(callsTo(calls, "uniform1f")).toContainEqual([{ uniform: "u_depositScale" }, 1]);
+    expect(callsTo(calls, "uniform1f")).toContainEqual([{ uniform: "u_decay" }, Math.exp(-(1 / 60) / LOOK.trailTau)]);
+    expect(callsTo(calls, "uniform1f")).toContainEqual([{ uniform: "u_floor" }, 1.5 / 255]);
+  });
+
+  it.each([30, 60, 120, 144, 240])("uses the same number of 8-bit deposits per second at %i Hz", (hz) => {
+    const { gl, calls } = createFakeGl();
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    calls.length = 0;
+    const instances = new Float32Array(INSTANCE_FLOATS);
+    for (let i = 0; i < hz; i++) renderer.render(instances, 1, 1 / hz, 1);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(60);
+    const deposits = callsTo(calls, "uniform1f").filter(([location]) => (location as { uniform: string }).uniform === "u_depositScale");
+    expect(deposits).toHaveLength(60);
+    expect(deposits.every(([, value]) => value === 1)).toBe(true);
+  });
+
+  it("retains fractional fallback time but clears it when render targets are resized", () => {
+    const { gl, calls } = createFakeGl();
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    const instances = new Float32Array(INSTANCE_FLOATS);
+    renderer.render(instances, 1, 1 / 120, 1);
+    renderer.resize(200, 100);
+    calls.length = 0;
+    renderer.render(instances, 1, 1 / 120, 2);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
+    calls.length = 0;
+    renderer.render(instances, 1, 1 / 120, 2);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(1);
+  });
+
+  it("does not fade or deposit in the 8-bit target at zero dt", () => {
+    const { gl, calls } = createFakeGl();
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    calls.length = 0;
+    renderer.render(new Float32Array(INSTANCE_FLOATS), 1, 0, 1);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
+    expect(callsTo(calls, "drawArrays")).toHaveLength(1);
+  });
+
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     new Renderer(gl, 1000);
@@ -95,7 +176,7 @@ describe("Renderer", () => {
     expect(callsTo(calls, "blendFunc")).toEqual([["ONE", "ONE"]]);
     const uniforms = new Map(callsTo(calls, "uniform1f").map(([location, value]) => [(location as { uniform: string }).uniform, value]));
     expect(uniforms.get("u_decay")).toBeCloseTo(Math.exp(-0.02 / LOOK.trailTau));
-    expect(uniforms.get("u_floor")).toBe(0.0005);
+    expect(uniforms.get("u_floor")).toBeCloseTo(0.0005 * (1 - Math.exp(-0.02 / LOOK.trailTau)) / (1 - Math.exp(-(1 / 60) / LOOK.trailTau)), 12);
     expect(uniforms.get("u_aspect")).toBe(4 / 3);
     expect(uniforms.get("u_pixel")).toBe(1 / 600);
     expect(uniforms.get("u_exposure")).toBe(LOOK.exposure);

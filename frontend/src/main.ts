@@ -89,19 +89,15 @@ resize();
 const stats: Stats = { fps: 0, particles: 0, limit: config.particles, simMs: 0 };
 if (config.debug) mountDebugPanel(debug, stats);
 
-let last = performance.now();
+let last: number | undefined;
 let t = 0;
 let raf = requestAnimationFrame(frame);
 
 function frame(now: number): void {
-  const interval = (now - last) / 1000;
+  // The first callback may arrive partway through a display period; do not calibrate from it.
+  const interval = last === undefined ? 0 : (now - last) / 1000;
   const dt = Math.min(interval, LOOK.maxDt);
   last = now;
-  if (budget.update(interval, particles.count)) {
-    particles.limit = budget.limit;
-    particles.intensityScale = budget.intensityScale;
-    stats.limit = budget.limit;
-  }
   if (dt > 0) {
     t += dt;
     const simStart = performance.now();
@@ -113,6 +109,13 @@ function frame(now: number): void {
     stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
     stats.particles = count;
     renderer.render(particles.instances, count, dt, aspect);
+    // Include rendering submission and any driver stalls; this does not measure GPU execution.
+    const workSeconds = (performance.now() - simStart) / 1000;
+    if (budget.update(interval, particles.count, workSeconds)) {
+      particles.limit = budget.limit;
+      particles.intensityScale = budget.intensityScale;
+      stats.limit = budget.limit;
+    }
   }
   raf = requestAnimationFrame(frame);
 }

@@ -295,7 +295,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - **Simulation:**
   - The particle pool is fixed-size, held in `Float32Array`s and updated on the CPU.
   - Budget: 20 000 particles on desktop, 8 000 when `(pointer: coarse)` matches.
-  - Move the simulation to the GPU (WebGL2 transform feedback) only if that budget turns out too small.
+  - Consider a WebGL2 transform-feedback prototype only if CPU simulation remains a measured bottleneck after the planned CPU optimizations below; it is not required for the current implementation.
 - **Motion:**
   - Particles spawn along the bottom edge inside their stream's band.
   - Vertical speed = base × lerp(0.6, 2.5, `flow`).
@@ -306,7 +306,8 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
     - It scatters around the lane centre by 0.32 of the half-width in an idle lane down to 0.05 in a busy one, and keeps that place instead of steering to the band's centre. Idle lanes blur into one haze; a busy core draws a tight strand, which is also up to 1.25× faster (0.85× when idle).
     - When filaments appear or stop, spawning blends between lanes and the plain band over about 3 s.
 - **Trails:**
-  - Two framebuffers alternate: each frame draws the previous one dimmed (decay 0.93–0.97), then the new particles on top.
+  - Two framebuffers alternate: each accumulation step draws the previous one dimmed by `exp(-dt / trailTau)`, then the new particles on top. Deposits and the trail floor scale by `(1 - exp(-dt / trailTau)) / (1 - exp(-(1/60) / trailTau))`, preserving the 60 Hz look and equalizing steady-state accumulation, including the floor, before tone mapping.
+  - Half-float targets accumulate at the display rate using the simulation's clamped dt. The 8-bit fallback accumulates in fixed 1/60 s steps so faint deposits do not disappear at high refresh rates. It retains fractional time between callbacks, resets it on resize, and presents the latest target every callback. Simulation still follows the display rate, but visible trail motion in the fallback is limited to 60 Hz. Below 60 Hz, multiple accumulation passes use the latest particle positions; this costs extra passes and does not reconstruct missed motion. The 8-bit fallback retains its lower precision and dimmer faint trails relative to half-float at 60 Hz.
   - Particles are drawn as streaks from their previous position, so faster particles get longer tails.
 - **Colour:**
   - OKLCH, so all hues look equally bright; converted to linear sRGB in the particle vertex shader.
@@ -319,12 +320,143 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - devicePixelRatio is capped at 1.5.
   - The `EventSource` closes while the tab is hidden.
   - `prefers-reduced-motion`: half the particles, half the speed and sideways noise, half-speed braiding, and pulse flashes and spawn waves at a quarter of their strength, rising over 0.6 s instead of 0.3 s.
-  - Adaptive budget (`sim/budget.ts`): after 2 s of frames slower than 1.5× the display period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool, and particles get brighter (up to 2×) so the river keeps its weight. After 10 s of keeping up it rises by a tenth; each drop doubles that wait, up to 2 min, so it settles. A drop only stops spawning, so slow frames count again only once the particles above the new limit have died: frames slowed by those would otherwise cause a second drop. The display period is the fastest frame interval seen, at most 1/30 s, learned while the pool fills on load, so a 30 Hz display or throttled browser is left alone. `?particles=N` fixes the count.
+  - Adaptive budget (`sim/budget.ts`): after 2 s of callback work above 70% of the learned display period, or frames slower than 1.5× that period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool. Callback work includes stream updates, flow-field generation, spawning, simulation and render submission; it does not measure asynchronous GPU execution. Particles get brighter (up to 2×) so the river keeps its weight. Recovery requires work below 50% of the period and frames keeping up for 10 s, then raises the limit by a tenth; each drop doubles that wait, up to 2 min. A drop only stops spawning, so overload counts again only once particles above the new limit have died. The display period is the fastest confirmed cadence, at most 1/30 s, learned while the pool fills. Three successive faster intervals within 10% of the candidate confirm a new cadence; a single short timing glitch and the partial interval before the first callback cannot establish it. Invalid timing samples are ignored, and pauses over 0.25 s reset both timing windows and pending calibration. Switching refresh or power mode retains the fastest learned period, so it can conservatively thin the river. `?particles=N` fixes the count.
   - The simulation and renderer allocate nothing per frame: the band layout sorts into a preallocated list, and the noise function uses plain locals (its output is unchanged).
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
 
 The bridge rejects hub URLs with unsupported schemes or embedded credentials without logging the rejected value, rejects malformed JSON recipes without echoing file snippets, and deletes secret variables (`BESZEL_PASSWORD`, `BESZEL_TOKEN`, `STREAM_SALT`) from `process.env` once configuration is loaded. Log records escape CR/LF, HTTP error URLs omit userinfo, and error cause chains stop after five entries (including cycles).
+
+## Frontend performance implementation plan
+
+> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. Checkboxes and the implementation record below track progress; the Frontend section above describes implemented behaviour. Unchecked hardware acceptance is not implied by passing unit or software-browser tests.
+
+**Goal:** Degrade smoothly on slower hardware and reduce per-particle CPU work while preserving the river's appearance and lifecycle.
+
+**Architecture:** Keep the CPU simulation and existing WebGL2 renderer for parts 1 and 2. First adapt particle count to measured callback work and normalize trail deposits, then measure three independent hot-path optimizations. A GPU prototype is a separate, conditional experiment.
+
+**Tech stack:** Existing TypeScript, typed arrays, raw WebGL2/GLSL and Vitest; no new dependencies.
+
+**Spec:** This section and the existing Frontend section; privacy and stream semantics elsewhere in this document remain unchanged.
+
+### Constraints and review focus
+
+- No per-particle or per-frame allocations in simulation/rendering. Allocate tables and buffers at construction or resize; retain Node 24.22.1 compatibility and existing coverage thresholds.
+- Preserve exact CPU stream particle accounting, filament selection, spawning weights, offline draining, daily ID rotation and reduced motion through parts 1 and 2.
+- Test high-refresh displays, startup calibration, battery throttling and hidden-tab pauses in the budget task. CPU callback timing does not measure completed asynchronous GPU work.
+- Test zero dt, missed frames, trail-floor behaviour and both render-target formats in the brightness task. Normalizing accumulation does not reconstruct motion between missed frames.
+- Test centre-table boundaries and shrinking/resizing flow grids in the sampling tasks; particles can lie outside the visible y range.
+- Test recycled particle slots, changing vitality/chroma, DPR resize, empty pools and sparse pools in the instance task. Per-particle width is not a per-stream constant.
+- Browser checks must exercise stream replacement while old particles drain, lane transitions and reduced motion after every visual/layout change.
+
+### Review and implementation record — 2026-11-12
+
+- Review: retain the CPU-first sequence. Tasks 3–5 are measured experiments, and the GPU prototype remains conditional; there is no measured basis for accepting them in this increment. Starting implementation does not satisfy Task 0's target-device baseline.
+- Task 0: production assets built with Node 24.22.1 and npm 11.19.1 before changes (27.07 kB JS, gzip 10.88 kB). X280 AC/battery and real-phone timing runs are unverified. No hardware speedup or 22 ms → 15 ms result is claimed.
+- Task 1: 26 budget tests pass, including synthetic 30/60/120/240 Hz traces. New tests first failed on the old implementation. A real Chrome/SwiftShader startup fixture exposed a partial-first-interval calibration bug: a 1 ms first callback followed by 60 Hz and 8 ms work incorrectly reduced the limit to 16,000. Excluding that initial interval retained 20,000. Pause handling now resets both sustained timing windows; recovery starts fresh after resuming.
+- Task 2: two new renderer tests first failed for the missing uniform, then all nine renderer tests passed. They check zero dt, 240/60/30 Hz and `LOOK.maxDt` for both formats, with identical steady-state accumulation before the floor. Actual shader readbacks in Chrome/SwiftShader confirmed zero dt deposits no energy. A stationary faint streak (lightness 0.75, chroma 0, intensity 0.05, half-width 2 px) after 2 s produced screen red bytes 131/129/116 at 30/60/240 Hz in RGBA16F, and 97/27/17 in RGBA8. This fixture demonstrates substantial residual floor/quantization effects in the 8-bit fallback; it is not proof of visual equivalence or of restored missed motion. Real-display flicker acceptance remains unverified.
+- Browser correctness: deterministic seed-42 channel fixtures exercised both target formats at normal and reduced motion, with filament removal/reintroduction, replacement of all 32 stream IDs while old particles drained, offline/reconnect, aspect/DPR resize and eventual last-stream removal. Live counts matched per-stream counts, instance values stayed finite, draining finished, and no WebGL errors occurred. The draining fixture initially allowed only 20 s; matching the existing unit test's 44 s window passed without a simulation change. The rendered page was inspected at 960×640/DPR 1. These software-rendered checks do not measure target-device performance.
+- Validation: `npm run typecheck`, `npm run coverage` and `npm run build` passed. Coverage ran all 204 bridge and 99 frontend tests with the existing thresholds. Target-device cadence, battery throttling and thermal measurements remain pending.
+- Integration: an independent code review found no correctness issues in Tasks 1–2. The first increment implements those tasks; their hardware acceptance, Tasks 0 and 3–6, and the conditional GPU work remain pending.
+
+#### PR #114 review corrections
+
+- Gemini's transient-short-interval finding was reproduced by two failing tests: a 0.1 ms sample permanently lowered the work thresholds and prevented recovery at 60 Hz. Calibration now needs three consistent faster intervals instead of accepting an isolated minimum. This also avoids imposing an arbitrary maximum refresh rate; synthetic 360/480 Hz overload tests still pass.
+- Qodo's faint-trail finding is supported by the initial readbacks above. Scaling the floor alone improved half-float output but left RGBA8 inconsistent: the faint-streak red bytes were 55/27/17/65 at 30/60/120/240 Hz. That experiment was rejected for the fallback.
+- Task 2's unchanged-floor requirement is superseded by the trail behaviour described above: normalize the half-float floor too, and use fixed 60 Hz accumulation in RGBA8. This preserves the 60 Hz fallback look and avoids sub-byte high-refresh deposits, at the cost of 60 Hz trail motion and extra passes below 60 Hz. Hardware performance and real-display motion acceptance remain pending.
+- The persistent `frontend/test/renderer.browser.ts` regression fixture first failed against the previous renderer (faint half-float red bytes 131/129/126/116). The fix passes: faint red bytes 129/129/129/127 in half-float and 27/27/27/27 in RGBA8; at intensity 0.3 they are 230/230/229/229 and 222/222/222/222. Both formats also reach black after particles leave and add no energy at zero dt. These are actual shader readbacks in Chrome/SwiftShader, not hardware performance results.
+- Correction validation: all 31 budget and 16 renderer tests pass, including a further red→green check for a modest 60→64 Hz refresh increase. Typecheck, coverage (204 bridge / 111 frontend tests, unchanged thresholds), production build and diff checks pass. The initial coverage run overlapped software Chrome and hit the existing 5 s timeouts in `frees a removed stream's particles as they die, so its slot is released` and `drains the river when every stream leaves, and fades a later stream in`; rerunning after closing Chrome passed without changing either test or its timeout. The two-format lifecycle fixture again passed lane changes, all-32-stream rotation, reduced motion, offline/reconnect, aspect/DPR resize and complete draining. Independent review found no actionable issues.
+
+### Task 0: Establish a repeatable baseline
+
+**Files:** Record results under this section; inspect `frontend/src/main.ts`, `frontend/src/debug/panel.ts` and `frontend/src/render/renderer.ts`. Temporary profiling instrumentation must not allocate in hot loops or ship unintentionally.
+
+- [ ] Build production assets and replay the same recorded channel sequence with the same seed, viewport, DPR and browser. Do not measure live host metrics while a software-rendered browser is loading that host.
+- [ ] Capture three 60-second runs after a 30-second warmup on the X280, separately on AC and battery, and on an available real phone. Record browser/OS, refresh rate, power mode and thermal conditions. Mark unavailable hardware as unverified.
+- [ ] Record median/p95 callback work, simulation work, upload submission time, frame intervals/missed display periods, live count and limit. Measure fixed-count runs for optimization comparisons, then adaptive runs for user-visible behaviour. CPU upload timing can include driver stalls; it is not a GPU execution measurement.
+- [ ] Repeat the same procedure after each task and retain a before/after ledger, including rejected experiments. The supplied 22 ms baseline and estimated 15 ms outcome are hypotheses until reproduced. Require improvements beyond baseline run-to-run variance, without visual regressions.
+
+### Task 1: Budget from work as well as frame intervals (part 1)
+
+**Files:** `frontend/src/sim/budget.ts`, `frontend/src/main.ts`, `frontend/test/budget.test.ts`; update the Frontend budget description when shipped.
+
+**Interface:** Change `ParticleBudget.update` to `update(interval: number, live: number, workSeconds: number): boolean`; all time arguments are seconds. Measure from immediately before stream/field/spawn/step work to immediately after `renderer.render`, then update the budget for the next frame using the current live count. Include the whole simulation and render submission, not only `stats.simMs`.
+
+- [x] Add failing tests: 60 Hz with 13 ms work drops 1000 → 800 after more than 2 seconds; 60 Hz with 8 ms work remains at 1000; sustained 18–22 ms callback work triggers a drop. At 240 Hz, 3 ms work triggers a drop; at 30 Hz, 10 ms does not.
+- [x] Add tests for the boundary (70% of period is not overloaded), recovery hysteresis, fixed count, live count above the new limit, floor/ceiling, pause/zero/invalid samples, and cheap callbacks with slow frame intervals. Preserve existing interval-based overload detection as a fallback for GPU pressure.
+- [x] Run `npm test -w frontend -- test/budget.test.ts` and confirm the new assertions fail before implementation.
+- [x] Treat work above 70% of the learned display period OR the existing slow-interval condition as overload. Permit recovery only below 50% work utilization AND the existing fast-interval condition. Preserve the 2-second drop window, 20% drops, quarter-pool floor, 10% rises, doubled recovery wait up to 120 seconds, and wait for excess particles to drain. Retain initial fastest-period calibration capped at 1/30 s, using full intervals between animation callbacks and confirming faster cadence with three consistent samples; reject nonfinite or negative timing inputs and reset sustained timing windows on pauses over 0.25 s. Do not let a long pause become measured sustained overload.
+- [ ] Pass the targeted tests, then verify adaptive behaviour at 30/60/120/240 Hz in synthetic traces and on available hardware. Record that switching refresh/power mode mid-session retains the current conservative fastest-period assumption. Keep brightness compensation unchanged.
+
+### Task 2: Normalize the particle deposit (part 1)
+
+**Files:** `frontend/src/render/renderer.ts`, `frontend/src/render/shaders/particle.vert`, `frontend/test/renderer.test.ts`, `frontend/test/renderer.browser.ts`; update the Frontend trail description when shipped.
+
+**Interface:** Add shader uniform `u_depositScale`; multiply particle linear RGB intensity by it once. Keep `Renderer.render`'s signature and the exponential trail decay. Following PR review, scale the floor with deposits in half-float targets and use fixed 60 Hz accumulation in RGBA8; see the review corrections above.
+
+- [x] Add failing renderer tests for uniform values at dt = 0, 1/240, 1/60, 1/30 and `LOOK.maxDt`: scale is zero at zero dt, one at 60 Hz and finite throughout. Check the recurrence `Bnext = exp(-dt/tau) * B + depositScale` has the same steady-state B at 30/60/240 Hz within floating-point tolerance (before floor and tone mapping).
+- [x] Run `npm test -w frontend -- test/renderer.test.ts` and confirm the new expectations fail.
+- [x] Set the uniform to `-Math.expm1(-dt / LOOK.trailTau) / -Math.expm1(-(1 / 60) / LOOK.trailTau)` and scale the floor with it. Use the same clamped dt as simulation in half-float targets; in RGBA8 accumulate that clamped time in 1/60 s steps. Do not deposit an entire hidden-tab interval on return. Keep `intensityScale` multiplication separate and applied once.
+- [ ] Pass tests and compare brightness/trails in a browser at available refresh rates, with deliberately missed frames and thin/full pools. Exercise half-float and 8-bit target paths: the existing floor and quantization mean exact visual equivalence is not guaranteed. Record residual flicker rather than claiming missed motion is restored.
+
+### Task 3: Cache braid centres (part 2)
+
+**Files:** `frontend/src/sim/streams.ts`, `frontend/test/streams.test.ts`, `frontend/test/particles.test.ts`.
+
+**Interface:** Keep `StreamSlot.centerAt(y: number): number`; add a preallocated 64-entry centre table per slot and a `rebuildCenters(): void` method called after layout easing and derivation in `StreamSet.update`.
+
+- [ ] Add failing tests comparing interpolated centres with the analytic sine across phases, widths and y in [-0.02, 1.08]. Require absolute error at most `0.001 * half` plus floating-point tolerance. Include exact endpoints, zero width, slot reuse and resize.
+- [ ] Run `npm test -w frontend -- test/streams.test.ts test/particles.test.ts` and confirm the approximation/cache assertions fail.
+- [ ] Fill the table once per used stream per frame over [-0.02, 1.08], then interpolate in `centerAt`. Use the original analytic expression outside that interval so callers do not silently acquire clamping semantics. No array creation during rebuild or sampling.
+- [ ] Pass tests, inspect fixed-seed filament and plain-band runs in a browser, and measure the change alone. This is an approximation, not bit-identical motion; retain it only if its measured benefit exceeds noise.
+
+### Task 4: Inline interleaved flow sampling (part 2)
+
+**Files:** `frontend/src/sim/noise.ts`, `frontend/src/sim/particles.ts`, `frontend/test/noise.test.ts`, `frontend/test/particles.test.ts`.
+
+**Interface:** Expose read-only access to `FlowField.cols`, `rows`, `cell` and interleaved `vectors: Float32Array` (`vx, vy` per grid point). Replace separate vx/vy storage. Keep `sample(x, y)` as a reference/test API, but remove calls to it from `ParticleSystem.step`.
+
+- [ ] Add failing checks for interleaved grid values and bilinear results at cell centres, edges, out-of-bounds positions and after aspect changes. Compare deterministic particle trajectories with the pre-change implementation within a documented float tolerance.
+- [ ] Run `npm test -w frontend -- test/noise.test.ts test/particles.test.ts` and confirm new layout expectations fail.
+- [ ] Cache field references and dimensions outside the particle loop; inline the existing clamping and four-corner weighted interpolation. Preserve arithmetic order where possible and avoid `sx`/`sy` property writes per particle. Reallocate the field only when grid dimensions change.
+- [ ] Pass tests and benchmark separately from Task 3. Interleaving improves locality; it still reads eight scalar components per sample. JIT inlining may already remove call overhead, so reject the rewrite if the measured gain is within noise.
+
+### Task 5: Reduce instance writes and uploads (part 2, measured experiment)
+
+**Files:** `frontend/src/sim/particles.ts`, `frontend/src/render/renderer.ts`, `frontend/src/render/shaders/particle.vert`, `frontend/test/particles.test.ts`, `frontend/test/renderer.test.ts`, `frontend/test/fake-gl.ts` as needed.
+
+**Design:** Start with six dynamic floats per stable particle slot: tail.xy, head.xy, hue and intensity. Keep stream index and size jitter in a separate two-float buffer updated on spawn/reuse. Supply current chroma in a preallocated 32-entry per-stream uniform array, lightness as a uniform, and size/DPR scale as a uniform. Chroma must still respond to vitality every frame. Six is an initial target; do not force five by lossy packing or extra indirection without evidence.
+
+**Interfaces:** Keep `ParticleSystem.count` as the live count and preserve the free list and stream counters. Add `drawCount` as the highest occupied slot plus one, `metadata: Float32Array`, and preallocated dirty-slot tracking. Extend `Renderer.render` to accept the dynamic buffer, metadata updates, draw count and current stream chroma/size scale. Finalize the typed argument contract in this task's change before modifying callers; update `main.ts` and its test harness callers together.
+
+- [ ] Add failing tests for stable slot-to-metadata identity across deaths, free-list reuse and stream rotation; exact live counts; zero intensity on dead slots; width changes on DPR resize; and per-stream chroma changes without metadata uploads. Check attribute stride/divisors, uniform uploads and metadata dirtiness clearing after upload.
+- [ ] Run `npm test -w frontend -- test/particles.test.ts test/renderer.test.ts` and confirm new layout assertions fail.
+- [ ] Replace live-instance compaction with stable slots; zero intensity once on death, skip inactive slots in simulation, and trim `drawCount` when high slots die. Clip zero-intensity instances in the vertex shader before expensive colour conversion. Batch adjacent dirty metadata slots without allocating temporary arrays. Upload only the dynamic prefix through `drawCount`.
+- [ ] Pass tests and benchmark dense, sparse and draining pools. Six floats across holes may cost more than nine floats compacted to live particles, and metadata upload calls also cost time. Keep this design only if total callback work improves beyond noise without material sparse-pool/GPU regressions; otherwise retain the nine-float layout and record the rejected experiment. Do not trade lifecycle correctness for an upload-size target.
+
+### Task 6: Validate and integrate parts 1 and 2
+
+- [ ] After each accepted task, update the shipped Frontend description and run `npm run typecheck`, `npm run coverage`, `npm run build` before its logical commit. Do not lower thresholds or remove behavioural tests to accommodate a layout change.
+- [ ] Repeat Task 0's fixed and adaptive runs. Record each accepted/rejected optimization and the combined result, distinguishing CPU work from frame cadence and GPU time. Check lost connection, last-stream removal, daily replacement at all 32 stream slots, reduced motion, resize and hidden-tab return in a real browser.
+- [ ] Aim for sustained work below 70% of the display period after adaptation (about 11.7 ms at 60 Hz), with fewer missed periods and no visible brightness discontinuity when the pool thins. The existing quarter-pool floor may prevent this on some devices; report that outcome rather than silently lowering the floor or declaring success.
+- [ ] If the remaining bottleneck is CPU simulation, evaluate the conditional GPU prototype below against fixed 30 Hz simulation with interpolated rendering. Neither alternative is included in parts 1 and 2, and 30 Hz is not a prerequisite for a GPU experiment.
+
+### Conditional GPU prototype plan
+
+**Trigger:** Parts 1 and 2 have measured results, and real target hardware still misses the desired cadence because of CPU simulation/upload work. GPU fill-rate or trail-buffer bandwidth pressure alone is not a reason to port simulation.
+
+**Scope:** An isolated experimental branch, retaining the CPU implementation as the reference. Candidate new files are `frontend/src/sim/gpu-particles.ts` and `frontend/src/render/shaders/simulate.vert`; adapt GL program linking, renderer buffer inputs and browser tests as needed. Do not switch the production default as part of the prototype.
+
+- [ ] Build the smallest transform-feedback pass: alternate two particle-state buffers, update velocity/position/age in a vertex shader with rasterization disabled, and draw directly from the resulting state. Never bind the same buffer as feedback output and vertex input simultaneously. Keep stream easing/layout on the CPU; initially upload the existing coarse flow grid as a texture rather than porting noise generation too.
+- [ ] Prototype deterministic slot-local respawning with explicit per-stream quotas and generation identifiers. Document differences from the CPU global free-list allocator before accepting them. Include filament-weighted spawning, variable lifetimes, exits at screen boundaries, adaptive limit changes and draining; no synchronous per-frame state readback.
+- [ ] Solve safe stream-slot reuse explicitly. One candidate is stopping spawns, then retaining the old stream state for the maximum particle lifetime in simulation time after the final spawn. Generations prevent old particles acquiring a new stream's parameters. Compare the potentially longer wait with exact CPU counts, especially daily replacement of 32 streams; do not silently change the pending-frame semantics. If exact accounting is required, evaluate asynchronous summaries separately and measure their cost.
+- [ ] Run real-browser shader tests on small deterministic fixtures, reading back only for tests: verify motion tolerances, slope bounds, birth/death, draining, stream generations and finite state. Keep CPU unit tests for shared stream rules and fake-WebGL tests for buffer/program orchestration. Do not treat fake calls as proof that GLSL implements the rules.
+- [ ] Benchmark the prototype against the optimized CPU baseline using Task 0's workload on the X280 and a real phone. Record callback work, frame cadence, GPU cost where supported, power/thermal behaviour and memory. Account for the GPU processing inactive slots and for trail rendering that remains unchanged.
+- [ ] Decide keep/reject from measured gains and visual/lifecycle parity. Only a separate production proposal should address final accounting semantics, capability/resource failure handling, context loss, CPU fallback and maintenance of both implementations. If available hardware cannot validate performance, leave the result explicitly unverified.
+
+### Measurement ledger
+
+No implementation measurements have been made for this plan yet. Add device/build/workload identifiers, baseline and changed median/p95 values, variance, visual results and keep/reject decisions here as tasks run.
 
 ## Deployment
 
@@ -432,6 +564,10 @@ Commands and steps are in README, "Deployment".
   - Container part done in #99: `deploy/Dockerfile`, `compose.yml` with the two overrides and `.env.example`, built from a checkout (`deploy/test/container.py` in CI and locally with Beszel v0.21.1: without a hub, and healthy with a `$` password in single quotes, on the hub's Docker network and with the host-network override on moved ports).
   - Proxy part done in #101: `river-stream.conf` shared by all nginx `/stream` locations, nginx and Caddy configs for the container at a root and under `/river/`, and `compose.proxy-network.yml` (`deploy/test/nginx.py` and `caddy.py` against a stub container, in CI and locally with nginx 1.30.6 and Caddy 2.11.7; `container.py` through the shipped `Caddyfile` against Beszel v0.21.1). Not yet checked behind a public domain with a real certificate.
   - Publishing done in #103: the `publish` job and `compose.yml` on the GHCR image. The job's tag and change decisions were checked by running its script on a scratch clone (main pushes with docs-only, test-only and source changes, a zero and an unknown `before`, a manual run; tags `v1.0.0`, `v1.1.0`, then `v1.0.1`, `v1.2.0-rc.1`, `v2.0.0`, then `v1.1.1`, `vfoo` and a tag off `main`). The arm64 image, built with the Dockerfile's cross-platform stages, passed `container.py` locally under QEMU. The job itself first runs when this is merged.
+- [ ] **Frontend performance (parts 1 and 2).** Execute the Frontend performance implementation plan: work-aware budget and normalized deposits, followed by independently measured CPU/upload optimizations.
+  - Done when: Tasks 0–6 have recorded correctness and browser results, each optimization has a measured keep/reject decision, and available target-device fixed/adaptive comparisons show the resulting cadence and appearance. Missing target-hardware checks remain explicitly open. No implementation or performance validation has been performed yet.
+- [ ] **GPU prototype (conditional).** Evaluate transform feedback only if the trigger in the conditional prototype plan is met.
+  - Done when: an isolated prototype has shader-executing correctness tests, explicit spawning/accounting/slot-reuse semantics, target-device comparisons against the optimized CPU version, and a documented keep/reject decision. This does not mark a production GPU migration complete. If the trigger is not met, leave this deferred.
 - [ ] **Screenshots.** The README screenshots in `docs/images/` (added on 24 October 2026 in 5d57094) no longer fully show how the river looks now. Replace them with new ones of the current version.
   - Done when: `river1.jpg` to `river4.jpg` show the current page from a real hub, in the format AGENTS.md gives for `docs/images/` (JPEG, 1280 px wide, metadata stripped), and the caption and alt texts under "Screenshots" in `README.md` describe what the new images show.
 

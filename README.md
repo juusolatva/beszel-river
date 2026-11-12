@@ -53,6 +53,15 @@ npm run typecheck      # type-check all workspaces
 npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 ```
 
+For real-shader regression checks, start Vite, open the demo page, and run this in its browser console:
+
+```js
+const { runRendererBrowserChecks } = await import("/test/renderer.browser.ts");
+runRendererBrowserChecks();
+```
+
+This requires WebGL2 and `EXT_color_buffer_float`. It checks faint/full-intensity accumulation at 30/60/120/240 Hz, the forced 8-bit fallback, zero dt and fading to black. It runs shader readbacks synchronously; stop other CPU-heavy checks while it runs. Software WebGL checks correctness, not device performance.
+
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).

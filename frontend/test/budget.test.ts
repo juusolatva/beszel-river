@@ -2,13 +2,133 @@ import { describe, expect, it } from "vitest";
 import { ParticleBudget } from "../src/sim/budget";
 
 /** Feeds `seconds` worth of frames of `interval` s with `live` particles; returns whether any of them changed the limit. */
-function run(budget: ParticleBudget, interval: number, seconds: number, live = 0): boolean {
+function run(budget: ParticleBudget, interval: number, seconds: number, live = 0, workSeconds = 0): boolean {
   let changed = false;
-  for (let t = 0; t < seconds; t += interval) changed = budget.update(interval, live) || changed;
+  for (let t = 0; t < seconds; t += interval) changed = budget.update(interval, live, workSeconds) || changed;
   return changed;
 }
 
 describe("ParticleBudget", () => {
+  it("ignores a transient short interval after learning the display period", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000, 0.008);
+    expect(budget.update(0.0001, 1000, 0)).toBe(false);
+    expect(run(budget, 1 / 60, 30, 1000, 0.008)).toBe(false);
+    expect(budget.limit).toBe(1000);
+  });
+
+  it("can recover after a short-interval timing glitch", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 2.1, 1000, 0.013);
+    expect(budget.limit).toBe(800);
+    budget.update(0.0001, 800, 0);
+    expect(run(budget, 1 / 60, 21, 800, 0.008)).toBe(true);
+    expect(budget.limit).toBe(880);
+  });
+
+  it.each([360, 480])("still detects work overload on a %i Hz display", (hz) => {
+    const budget = new ParticleBudget(1000, false);
+    expect(run(budget, 1 / hz, 2.1, 1000, (1 / hz) * 0.75)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
+  it("confirms a modest refresh-rate increase after earlier calibration", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000, 0.001);
+    // Above 70% of 64 Hz, but below 70% of the previously learned 60 Hz period.
+    expect(run(budget, 1 / 64, 2.2, 1000, 0.0113)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
+  it.each([
+    [60, 0.013],
+    [60, 0.018],
+    [60, 0.022],
+    [120, 0.006],
+    [240, 0.003],
+  ])("drops after sustained callback work at %i Hz with %f s of work", (hz, work) => {
+    const budget = new ParticleBudget(1000, false);
+    expect(run(budget, 1 / hz, 1.9, 1000, work)).toBe(false);
+    expect(run(budget, 1 / hz, 0.2, 1000, work)).toBe(true);
+    expect(budget.limit).toBe(800);
+    expect(budget.intensityScale).toBeCloseTo(Math.sqrt(1000 / 800));
+    expect(run(budget, 1 / hz, 10, 801, work)).toBe(false);
+    expect(run(budget, 1 / hz, 2.1, 800, work)).toBe(true);
+    expect(budget.limit).toBe(640);
+  });
+
+  it.each([
+    [60, 0.008],
+    [30, 0.010],
+    [60, (1 / 60) * 0.7],
+  ])("keeps the full pool at %i Hz with %f s of work", (hz, work) => {
+    const budget = new ParticleBudget(1000, false);
+    expect(run(budget, 1 / hz, 30, 1000, work)).toBe(false);
+    expect(budget.limit).toBe(1000);
+  });
+
+  it("recovers only below 50% work and doubles the recovery wait after a work drop", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 2.1, 1000, 0.013);
+    expect(budget.limit).toBe(800);
+    expect(run(budget, 1 / 60, 30, 800, (1 / 60) * 0.5)).toBe(false);
+    expect(run(budget, 1 / 60, 19, 800, 0.008)).toBe(false);
+    // Moderate work resets, rather than advances, the recovery window.
+    run(budget, 1 / 60, 1, 800, 0.010);
+    expect(run(budget, 1 / 60, 19, 800, 0.008)).toBe(false);
+    expect(run(budget, 1 / 60, 1.1, 800, 0.008)).toBe(true);
+    expect(budget.limit).toBe(880);
+  });
+
+  it("retains the fastest learned period after a refresh or power-mode switch", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 120, 1, 1000, 0.001);
+    // Cheap relative to 30 Hz, overloaded relative to the learned 120 Hz period.
+    run(budget, 1 / 30, 2.1, 1000, 0.006);
+    expect(budget.limit).toBe(800);
+  });
+
+  it.each([NaN, Infinity, -Infinity, -0.001])("ignores invalid work samples (%s) without poisoning calibration", (work) => {
+    const budget = new ParticleBudget(1000, false);
+    expect(run(budget, 1 / 240, 30, 1000, work)).toBe(false);
+    expect(run(budget, 1 / 30, 30, 1000, 0.010)).toBe(false);
+    expect(run(budget, 1 / 30, 2.1, 1000, 0.024)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
+  it("ignores nonfinite intervals without poisoning later overload detection", () => {
+    const budget = new ParticleBudget(1000, false);
+    for (const interval of [NaN, Infinity, -Infinity, 0, -1]) {
+      expect(budget.update(interval, 1000, 0.013)).toBe(false);
+    }
+    expect(run(budget, 1 / 60, 2.1, 1000, 0.013)).toBe(true);
+    expect(budget.limit).toBe(800);
+  });
+
+  it("does not join overload windows across a hidden-tab pause", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1.5, 1000, 0.013);
+    expect(budget.update(60, 1000, 1)).toBe(false);
+    expect(run(budget, 1 / 60, 1.5, 1000, 0.013)).toBe(false);
+    expect(run(budget, 1 / 60, 0.6, 1000, 0.013)).toBe(true);
+  });
+
+  it("does not join recovery windows across a pause", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 2.1, 1000, 0.013);
+    run(budget, 1 / 60, 15, 800, 0.008);
+    budget.update(1, 800, 0);
+    expect(run(budget, 1 / 60, 15, 800, 0.008)).toBe(false);
+    expect(budget.limit).toBe(800);
+  });
+
+  it("keeps a fixed count under callback overload", () => {
+    const budget = new ParticleBudget(1000, true);
+    expect(run(budget, 1 / 240, 30, 1000, 0.020)).toBe(false);
+    expect(budget.limit).toBe(1000);
+    expect(budget.intensityScale).toBe(1);
+  });
+
   it("drops a fifth after 2 s behind the display, then waits twice as long to rise again", () => {
     const budget = new ParticleBudget(1000, false);
     run(budget, 1 / 60, 1);
@@ -93,8 +213,8 @@ describe("ParticleBudget", () => {
 
   it("ignores pauses, non-positive intervals and a fixed count", () => {
     const budget = new ParticleBudget(1000, false);
-    expect(budget.update(0, 0)).toBe(false);
-    expect(budget.update(-1, 0)).toBe(false);
+    expect(budget.update(0, 0, 0)).toBe(false);
+    expect(budget.update(-1, 0, 0)).toBe(false);
     expect(run(budget, 0.3, 30)).toBe(false);
     expect(budget.limit).toBe(1000);
 

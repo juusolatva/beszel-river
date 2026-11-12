@@ -8,6 +8,7 @@ layout(location = 3) in float a_halfWidth; // device px
 
 uniform float u_aspect;
 uniform float u_pixel; // world units per device px
+uniform float u_depositScale; // trail deposit relative to a 60 Hz frame
 
 out vec2 v_local; // along and across, in half-widths
 out float v_length; // segment length, in half-widths
@@ -45,6 +46,6 @@ void main() {
 
   v_local = vec2(along / hw, a_corner.y);
   v_length = len / hw;
-  v_rgb = max(oklchToLinearSrgb(a_color.z, a_color.y, a_color.x), 0.0) * a_color.w;
+  v_rgb = max(oklchToLinearSrgb(a_color.z, a_color.y, a_color.x), 0.0) * a_color.w * u_depositScale;
   gl_Position = vec4(pos.x / u_aspect * 2.0 - 1.0, pos.y * 2.0 - 1.0, 0.0, 1.0);
 }
