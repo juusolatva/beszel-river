@@ -319,7 +319,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - devicePixelRatio is capped at 1.5.
   - The `EventSource` closes while the tab is hidden.
   - `prefers-reduced-motion`: half the particles, half the speed and sideways noise, half-speed braiding, and pulse flashes and spawn waves at a quarter of their strength, rising over 0.6 s instead of 0.3 s.
-  - Adaptive budget (`sim/budget.ts`): after 2 s of frames slower than 1.5× the display period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool, and particles get brighter (up to 2×) so the river keeps its weight. After 10 s of keeping up it rises by a tenth; each drop doubles that wait, up to 2 min, so it settles. A drop only stops spawning, so slow frames count again only once the particles above the new limit have died: frames slowed by those would otherwise cause a second drop. The display period is the fastest frame interval seen, at most 1/30 s, learned while the pool fills on load, so a 30 Hz display or throttled browser is left alone. `?particles=N` fixes the count.
+  - Adaptive budget (`sim/budget.ts`): after 2 s of callback work above 70% of the learned display period, or frames slower than 1.5× that period (and slower than 45 fps), the live particle limit drops by a fifth, down to a quarter of the pool. Callback work includes stream updates, flow-field generation, spawning, simulation and render submission; it does not measure asynchronous GPU execution. Particles get brighter (up to 2×) so the river keeps its weight. Recovery requires work below 50% of the period and frames keeping up for 10 s, then raises the limit by a tenth; each drop doubles that wait, up to 2 min. A drop only stops spawning, so overload counts again only once particles above the new limit have died. The display period is the fastest interval between animation callbacks, at most 1/30 s, learned while the pool fills; the partial interval before the first callback is excluded. Invalid timing samples are ignored, and pauses over 0.25 s reset both timing windows. Switching refresh or power mode retains the fastest learned period, so it can conservatively thin the river. `?particles=N` fixes the count.
   - The simulation and renderer allocate nothing per frame: the band layout sorts into a preallocated list, and the noise function uses plain locals (its output is unchanged).
   - Without WebGL2 the page shows one line of grey text saying the animation needs it.
 - **Naming:** the public page (title, visible text) never mentions Beszel or hostnames.
@@ -328,7 +328,7 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 ## Frontend performance implementation plan
 
-> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. All tasks below are pending; the Frontend section above describes the shipped behaviour until implementation updates it.
+> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. Checkboxes and the implementation record below track progress; the Frontend section above describes implemented behaviour. Unchecked hardware acceptance is not implied by passing unit or software-browser tests.
 
 **Goal:** Degrade smoothly on slower hardware and reduce per-particle CPU work while preserving the river's appearance and lifecycle.
 
@@ -348,6 +348,13 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 - Test recycled particle slots, changing vitality/chroma, DPR resize, empty pools and sparse pools in the instance task. Per-particle width is not a per-stream constant.
 - Browser checks must exercise stream replacement while old particles drain, lane transitions and reduced motion after every visual/layout change.
 
+### Review and implementation record — 2026-11-12
+
+- Review: retain the CPU-first sequence. Tasks 3–5 are measured experiments, and the GPU prototype remains conditional; there is no measured basis for accepting them in this increment. Starting implementation does not satisfy Task 0's target-device baseline.
+- Task 0: production assets built with Node 24.22.1 and npm 11.19.1 before changes (27.07 kB JS, gzip 10.88 kB). X280 AC/battery and real-phone timing runs are unverified. No hardware speedup or 22 ms → 15 ms result is claimed.
+- Task 1: 26 budget tests pass, including synthetic 30/60/120/240 Hz traces. New tests first failed on the old implementation. A real Chrome/SwiftShader startup fixture exposed a partial-first-interval calibration bug: a 1 ms first callback followed by 60 Hz and 8 ms work incorrectly reduced the limit to 16,000. Excluding that initial interval retained 20,000. Pause handling now resets both sustained timing windows; recovery starts fresh after resuming.
+- Validation: `npm run typecheck`, `npm run coverage` and `npm run build` passed. Coverage ran all 204 bridge and 99 frontend tests with the existing thresholds. Target-device cadence, battery throttling and thermal measurements remain pending.
+
 ### Task 0: Establish a repeatable baseline
 
 **Files:** Record results under this section; inspect `frontend/src/main.ts`, `frontend/src/debug/panel.ts` and `frontend/src/render/renderer.ts`. Temporary profiling instrumentation must not allocate in hot loops or ship unintentionally.
@@ -363,10 +370,10 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 **Interface:** Change `ParticleBudget.update` to `update(interval: number, live: number, workSeconds: number): boolean`; all time arguments are seconds. Measure from immediately before stream/field/spawn/step work to immediately after `renderer.render`, then update the budget for the next frame using the current live count. Include the whole simulation and render submission, not only `stats.simMs`.
 
-- [ ] Add failing tests: 60 Hz with 13 ms work drops 1000 → 800 after more than 2 seconds; 60 Hz with 8 ms work remains at 1000; sustained 18–22 ms callback work triggers a drop. At 240 Hz, 3 ms work triggers a drop; at 30 Hz, 10 ms does not.
-- [ ] Add tests for the boundary (70% of period is not overloaded), recovery hysteresis, fixed count, live count above the new limit, floor/ceiling, pause/zero/invalid samples, and cheap callbacks with slow frame intervals. Preserve existing interval-based overload detection as a fallback for GPU pressure.
-- [ ] Run `npm test -w frontend -- test/budget.test.ts` and confirm the new assertions fail before implementation.
-- [ ] Treat work above 70% of the learned display period OR the existing slow-interval condition as overload. Permit recovery only below 50% work utilization AND the existing fast-interval condition. Preserve the 2-second drop window, 20% drops, quarter-pool floor, 10% rises, doubled recovery wait up to 120 seconds, and wait for excess particles to drain. Retain initial fastest-period calibration capped at 1/30 s; reject nonfinite or negative timing inputs and ignore pauses over 0.25 s. Do not let a long pause become measured sustained overload.
+- [x] Add failing tests: 60 Hz with 13 ms work drops 1000 → 800 after more than 2 seconds; 60 Hz with 8 ms work remains at 1000; sustained 18–22 ms callback work triggers a drop. At 240 Hz, 3 ms work triggers a drop; at 30 Hz, 10 ms does not.
+- [x] Add tests for the boundary (70% of period is not overloaded), recovery hysteresis, fixed count, live count above the new limit, floor/ceiling, pause/zero/invalid samples, and cheap callbacks with slow frame intervals. Preserve existing interval-based overload detection as a fallback for GPU pressure.
+- [x] Run `npm test -w frontend -- test/budget.test.ts` and confirm the new assertions fail before implementation.
+- [x] Treat work above 70% of the learned display period OR the existing slow-interval condition as overload. Permit recovery only below 50% work utilization AND the existing fast-interval condition. Preserve the 2-second drop window, 20% drops, quarter-pool floor, 10% rises, doubled recovery wait up to 120 seconds, and wait for excess particles to drain. Retain initial fastest-period calibration capped at 1/30 s, using full intervals between animation callbacks; reject nonfinite or negative timing inputs and reset sustained timing windows on pauses over 0.25 s. Do not let a long pause become measured sustained overload.
 - [ ] Pass the targeted tests, then verify adaptive behaviour at 30/60/120/240 Hz in synthetic traces and on available hardware. Record that switching refresh/power mode mid-session retains the current conservative fastest-period assumption. Keep brightness compensation unchanged.
 
 ### Task 2: Normalize the particle deposit (part 1)
