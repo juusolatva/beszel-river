@@ -7,7 +7,7 @@ describe("readConfig", () => {
   it("applies defaults", () => {
     const config = readConfig("", noMedia);
     expect(config).toMatchObject({
-      particles: 20000,
+      particles: 10000,
       particlesFixed: false,
       motion: 1,
       demo: false,
@@ -21,13 +21,13 @@ describe("readConfig", () => {
 
   it("scales budget and motion for coarse pointers and reduced motion", () => {
     expect(readConfig("", (q) => q === "(pointer: coarse)")).toMatchObject({ particles: 8000, motion: 1 });
-    expect(readConfig("", (q) => q === "(prefers-reduced-motion: reduce)")).toMatchObject({ particles: 10000, motion: 0.5 });
+    expect(readConfig("", (q) => q === "(prefers-reduced-motion: reduce)")).toMatchObject({ particles: 5000, motion: 0.5 });
     expect(readConfig("", () => true)).toMatchObject({ particles: 4000, motion: 0.5 });
   });
 
   it("parses flags, clamps integer parameters, and ignores non-numbers", () => {
     expect(readConfig("?demo&debug&particles=50000&streams=10&interval=5000&seed=123", noMedia)).toEqual({
-      particles: 50000,
+      particles: 10000,
       particlesFixed: true,
       motion: 1,
       demo: true,
@@ -43,16 +43,21 @@ describe("readConfig", () => {
       seed: 0,
     });
     expect(readConfig("?particles=1000000&streams=100&interval=9999999&seed=9999999999", noMedia)).toMatchObject({
-      particles: 200000,
+      particles: 10000,
       demoStreams: 32,
       demoIntervalMs: 600000,
       seed: 2 ** 31,
     });
     expect(readConfig("?particles=abc&streams=def&interval=ghi&seed=jkl", noMedia)).toMatchObject({
-      particles: 20000,
+      particles: 10000,
       particlesFixed: true,
       demoStreams: 4,
       demoIntervalMs: 1000,
     });
+  });
+
+  it.each([10000, 10001, 20000, 200000])("caps explicit particle counts at 10,000 (%i requested)", (requested) => {
+    expect(readConfig(`?particles=${requested}`, noMedia)).toMatchObject({ particles: 10000, particlesFixed: true });
+    expect(readConfig(`?particles=${requested}`, () => true)).toMatchObject({ particles: 10000, particlesFixed: true, motion: 0.5 });
   });
 });

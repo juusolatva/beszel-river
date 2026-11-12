@@ -97,7 +97,7 @@ The page reads frames from `stream` next to itself (`/stream` at the site root).
 | `?debug` | Panel with fps/particle stats. With demo frames: per-stream channel sliders, alive/hold/filaments toggles and add/remove stream buttons. With the bridge: the latest channel values and filaments, read-only. `d` hides it. |
 | `?streams=N` | Number of demo streams (default 4). |
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
-| `?particles=N` | Fixed particle pool size. Without it the pool is 20000 (8000 on touch devices, halved with reduced motion) and thins out on devices that cannot keep up. |
+| `?particles=N` | Fixed particle pool size, clamped to 100–10000. Without it the pool is 10000 (8000 with a coarse pointer), halved with reduced motion, and thins out on devices that cannot keep up. |
 | `?seed=N` | Fixed random seed, for repeatable looks. |
 
 Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/config.ts` (`LOOK`).
