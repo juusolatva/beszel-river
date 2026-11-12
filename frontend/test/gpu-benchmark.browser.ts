@@ -1,5 +1,6 @@
 import { LOOK } from "../src/config";
 import { Renderer } from "../src/render/renderer";
+import { createSubmissionCounter } from "./fixtures/gpu-gl";
 import { CpuReplay, CPU_REFERENCE, REPLAY_CAPACITY, REPLAY_SEED, ReplayTrace, replayFrameIndex,
   validateCpuTrace, type ReplayScenario } from "./fixtures/gpu-replay";
 
@@ -41,35 +42,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   usedCanvases.add(canvas);
   const runId = crypto.randomUUID();
 
-  // Count submission calls, not GPU execution. Bound methods are cached at setup/first use;
-  // the four hot wrappers use fixed arguments so they create no rest-argument arrays.
-  let uploadedBytes = 0, drawCalls = 0, particleDrawCapacity = 0;
-  let lastFramebuffer: WebGLFramebuffer | null = null;
-  const methods = new Map<PropertyKey, unknown>();
-  methods.set("bufferSubData", (target: number, offset: number, data: Float32Array, start = 0, length = 0) => {
-    uploadedBytes += (length || data.length - start) * data.BYTES_PER_ELEMENT;
-    gl.bufferSubData(target, offset, data, start, length);
-  });
-  methods.set("drawArrays", (mode: number, first: number, count: number) => {
-    drawCalls++;
-    gl.drawArrays(mode, first, count);
-  });
-  methods.set("drawArraysInstanced", (mode: number, first: number, count: number, instances: number) => {
-    drawCalls++;
-    particleDrawCapacity += instances;
-    gl.drawArraysInstanced(mode, first, count, instances);
-  });
-  methods.set("createFramebuffer", () => (lastFramebuffer = gl.createFramebuffer()));
-  const countedGl = new Proxy(gl, {
-    get(target, key) {
-      if (methods.has(key)) return methods.get(key);
-      const value = Reflect.get(target, key, target);
-      if (typeof value !== "function") return value;
-      const bound = value.bind(target);
-      methods.set(key, bound);
-      return bound;
-    },
-  });
+  // Instrument submission rather than GPU execution; method wrappers are cached on first use.
+  const { gl: countedGl, counters } = createSubmissionCounter(gl);
   const renderer = new Renderer(countedGl, REPLAY_CAPACITY);
   const cpu = new CpuReplay(motion);
   const trace = new ReplayTrace(traceCapacity);
@@ -114,13 +88,14 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           width = canvas.width = nextWidth;
           height = canvas.height = nextHeight;
           renderer.resize(width, height);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, lastFramebuffer);
+          if (!counters.lastFramebuffer) throw new Error("No render framebuffer: run invalid");
+          gl.bindFramebuffer(gl.FRAMEBUFFER, counters.lastFramebuffer);
           targetFormat = gl.getFramebufferAttachmentParameter(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE) === gl.FLOAT ? "RGBA16F" : "RGBA8";
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
         const isMeasured = seconds >= warmupSeconds;
         trace.append(interval, replayFrameIndex(scenario, seconds), width, height, pixelRatio, motion, false, limit, 1, isMeasured);
-        uploadedBytes = drawCalls = particleDrawCapacity = 0;
+        counters.uploadedBytes = counters.drawCalls = counters.particleDrawCapacity = 0;
         const simBegin = performance.now();
         const count = cpu.step(trace, trace.length - 1);
         if (scenario === "drained" && isMeasured && count !== 0) throw new Error("Drained measurement still has live particles: run invalid");
@@ -132,9 +107,9 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           submission[measured] = end - simEnd;
           intervals[measured++] = interval * 1000;
           missedPeriods += Math.max(0, Math.round(interval * refreshHz) - 1);
-          totalUploads += uploadedBytes;
-          totalDraws += drawCalls;
-          totalDrawCapacity += particleDrawCapacity;
+          totalUploads += counters.uploadedBytes;
+          totalDraws += counters.drawCalls;
+          totalDrawCapacity += counters.particleDrawCapacity;
         }
         raf = requestAnimationFrame(frame);
         if (isMeasured) work[measured - 1] = performance.now() - begin;

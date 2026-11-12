@@ -30,7 +30,7 @@ describe("GPU comparison replay foundation", () => {
     const trace = new ReplayTrace(2);
     trace.append(0, 2, 960, 640, 1.2, 1, false, 1000, 1, false);
     trace.append(3, 4, 640, 960, 1, 0.2, true, 800, 2, true);
-    expect(trace.length).toBe(2);
+    expect(trace).toHaveLength(2);
     expect(trace.dt[1]).toBe(LOOK.maxDt);
     expect(trace.interval[1]).toBe(3);
     expect(trace.frame[1]).toBe(4);
@@ -41,6 +41,17 @@ describe("GPU comparison replay foundation", () => {
     expect(trace.intensity[1]).toBe(2);
     expect(() => trace.append(1 / 60, 2, 1, 1, 1, 1, false, 1, 1, true)).toThrow(/overflow/i);
     expect(trace.valid).toBe(false);
+  });
+
+  it("rejects dimensions that cannot survive storage as positive uint32 values", () => {
+    for (const bad of [0, -1, 0.5, NaN, Infinity, 2 ** 32]) {
+      for (const [width, height] of [[bad, 640], [960, bad]]) {
+        const trace = new ReplayTrace(1);
+        expect(() => trace.append(0.1, 2, width, height, 1, 1, false, 1000, 1, true)).toThrow(/dimensions/);
+        expect(trace.valid).toBe(false);
+        expect(trace).toHaveLength(0);
+      }
+    }
   });
 
   it("reproduces CPU counts and instances from the recorded schedule through resizing and removal", () => {

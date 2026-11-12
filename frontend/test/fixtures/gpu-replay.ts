@@ -67,6 +67,11 @@ export class ReplayTrace {
       this.valid = false;
       throw new Error("Replay trace overflow: run invalid");
     }
+    if (!Number.isInteger(width) || width <= 0 || width > 0xffffffff
+      || !Number.isInteger(height) || height <= 0 || height > 0xffffffff) {
+      this.valid = false;
+      throw new Error("Trace dimensions must be positive uint32 integers");
+    }
     const i = this.length++;
     this.interval[i] = interval;
     this.dt[i] = Math.min(Math.max(0, interval), LOOK.maxDt);
