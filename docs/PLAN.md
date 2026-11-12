@@ -472,7 +472,7 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 ### Conditional GPU prototype plan
 
-Detailed execution plan: [GPU Particle Prototype Implementation Plan](superpowers/plans/2026-11-13-gpu-prototype.md). Implementation and hardware acceptance remain pending.
+Detailed execution plan: [GPU Particle Prototype Implementation Plan](superpowers/plans/2026-11-13-gpu-prototype.md). Implementation has started with the isolated CPU replay/trace harness in `frontend/test/gpu-benchmark.html`; GPU simulation and hardware acceptance remain pending.
 
 **Trigger:** Parts 1 and 2 have measured results, and real target hardware still misses the desired cadence because of CPU simulation/upload work. GPU fill-rate or trail-buffer bandwidth pressure alone is not a reason to port simulation.
 

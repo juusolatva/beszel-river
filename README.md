@@ -71,6 +71,22 @@ await runCpuBenchmark();
 
 It compares analytic braid centres with the cache using fixed synthetic channel snapshots, seed, particle limit and simulated steps. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
 
+The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
+
+```js
+const { runGpuBenchmark } = await import("/test/gpu-benchmark.browser.ts");
+const result = await runGpuBenchmark({
+  backend: "cpu", scenario: "dense", limit: 10000,
+  refreshHz: 60, conditions: "X280, AC, balanced power, idle desktop, cool start",
+});
+console.log(result);
+```
+
+Record your actual refresh rate and power, thermal and other-load conditions. The default is 30 seconds of warmup and 60 seconds of measurement; repeat three times, **reloading the page before each run** to reset GL resources. Compare `limit: 10000`, `8000` and `1000` with the same 10,000-slot allocation. Scenarios are `dense` (flow 0, density 1), `rotation` (1 → 4 → 32 streams, replacement and removal), `draining` (remove streams after 30 seconds), `drained` (the same removal with 60-second warmup; rejects nonzero measured occupancy), and `empty`. Set the canvas CSS dimensions before the run for the usual full-screen viewport; its default is 960×640. DPR is capped as on the public page. `motion: 0.2` runs reduced motion; motion is fixed for each run.
+
+Results retain a run ID, metadata, timing distributions, upload/draw counters, the complete preallocated effective-input trace and exact total/per-slot occupancy from an untimed CPU replay. Slot identity indices map through `result.validation.ids`. Submission timing includes instrumentation and driver work; it is not GPU execution time. Hidden tabs, context loss, trace overflow, GL errors and final replay mismatches invalidate the run. Save metadata and summaries alongside any retained trace; do not interpret short smoke runs as performance evidence. The GPU backend, five-second cross-backend occupancy checks and full hardware comparisons are pending; `backend: "gpu"` currently fails explicitly. See the [execution plan](docs/superpowers/plans/2026-11-13-gpu-prototype.md).
+
+
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
