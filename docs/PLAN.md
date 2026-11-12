@@ -315,6 +315,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
   - Additive blending makes overlapping streams glow.
 - **Streams:**
   - Bands overlap with soft edges and braid over time.
+  - Each stream caches 64 braid-centre samples over y = [-0.02, 1.08], rebuilt after layout easing and on slot claim. Particles interpolate that table; out-of-range callers retain the analytic sine. The tested approximation error is at most 0.001 of the band's half-width, and table storage is allocated once per slot.
   - A new stream eases in; a stream with `alive = false` thins out and desaturates; a removed stream drains out. Spawn rates are shared out so the pool turns over at the same pace however many streams there are, but never as if less than one full stream were present, so the river empties when the last stream goes.
 - **Performance and accessibility:**
   - devicePixelRatio is capped at 1.5.
@@ -367,6 +368,26 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 - The persistent `frontend/test/renderer.browser.ts` regression fixture first failed against the previous renderer (faint half-float red bytes 131/129/126/116). The fix passes: faint red bytes 129/129/129/127 in half-float and 27/27/27/27 in RGBA8; at intensity 0.3 they are 230/230/229/229 and 222/222/222/222. Both formats also reach black after particles leave and add no energy at zero dt. These are actual shader readbacks in Chrome/SwiftShader, not hardware performance results.
 - Correction validation: all 31 budget and 16 renderer tests pass, including a further red→green check for a modest 60→64 Hz refresh increase. Typecheck, coverage (204 bridge / 111 frontend tests, unchanged thresholds), production build and diff checks pass. The initial coverage run overlapped software Chrome and hit the existing 5 s timeouts in `frees a removed stream's particles as they die, so its slot is released` and `drains the river when every stream leaves, and fades a later stream in`; rerunning after closing Chrome passed without changing either test or its timeout. The two-format lifecycle fixture again passed lane changes, all-32-stream rotation, reduced motion, offline/reconnect, aspect/DPR resize and complete draining. Independent review found no actionable issues.
 
+#### X280 battery profile and Task 3
+
+- The supplied 72.845 s Firefox profile runs the `index-CpdGUFPC.js` bundle from PR #114. The user confirmed battery operation without another heavy app; a separate observation concerned video playback on AC. The raw recording includes unrelated browser activity and is not committed.
+- The river's 4,284 complete animation-callback markers have median 10.858 ms, p95 17.378 ms, p99 22.490 ms and maximum 67.941 ms. 272 callbacks exceed one 60 Hz display period. These are elapsed callback timings under profiling, not presented-frame or GPU execution measurements. The recording has no particle-limit telemetry, so it does not establish how far the adaptive limit had fallen.
+- CPU-delta-weighted stack samples attribute about 66% of callback CPU to `ParticleSystem.step`. Its children include braid-centre sine calculations (about 15% of callback CPU) and flow sampling (about 14%). Render submission accounts for about 20%, including `bufferSubData` at about 13%; flow-field generation is another 13%. Child percentages overlap their parents. GC slices reach about 11.4 ms, which can consume remaining display headroom, but the capture does not prove that GC explains each reported 5–15 s hitch. GPU completion time and CPU clock/power transitions remain unmeasured.
+- Task 3 replaces the per-particle braid sine with a preallocated `Float64Array(64)` per slot. Accuracy, table boundaries, zero width, resize, slot reuse and short deterministic plain/filament trajectories are covered. Rebuild on claim also covers pending daily replacement claiming a slot at the end of `StreamSet.update`, before its next layout pass. New cache assertions were observed failing first; an additional reuse regression was caught and fixed before handoff.
+- Paired CPU-only benchmark: this ThinkPad X280/i5-8350U, Linux, isolated headless Firefox 160, **AC connected**. `frontend/test/cpu-benchmark.browser.ts` uses six prebuilt synthetic channel snapshots, seed 42, capacity/limit 20,000, aspect 1.5 and DPR scale 1.5. Each case resets simulation, warms up for 600 simulated frames, then measures 1,200 frames at dt = 1/60 s without rendering. Run order is analytic/cached/cached/analytic/analytic/cached. The analytic reference skips cache rebuilding; cached rebuilding is included. Every run finishes with 16,661 live particles.
+
+  | Run | Analytic mean CPU work (ms/frame) | Cached mean CPU work (ms/frame) |
+  |---|---:|---:|
+  | 1 | 2.448 | 2.139 |
+  | 2 | 2.423 | 2.244 |
+  | 3 | 2.533 | 2.226 |
+  | Mean | 2.468 | 2.203 |
+
+- This is about 10.7% less CPU simulation work; all cached means are below all analytic means. Firefox's 1 ms timer granularity leaves per-frame median/p95 readings unchanged (2/3 ms), so no tail-latency improvement is claimed from this benchmark. Rendering, upload, battery cadence and phone performance are outside it; thermal conditions and other host activity were not controlled to Task 0's standard. Retain the measured CPU optimization, but keep full battery/AC acceptance pending. A new live battery profile is needed to assess the original stutter after deployment.
+- Software-WebGL checks pass for plain/filament transitions, both render-target formats, reduced motion, all-32-stream replacement while draining, offline/reconnect, aspect/DPR resize and complete draining. No allocation was added to simulation hot loops; the deferred `ParticleBudget.update` complexity issue is unchanged.
+- Verification: 32 targeted stream/particle tests pass; typecheck and production build pass, and coverage passes for all 204 bridge and 117 frontend tests with unchanged coverage thresholds and five-second test timeouts. The long empty-river fixture initially timed out under coverage in both the cached and unchanged analytic implementations on this X280. Its helper now skips flow-grid generation only when there are no particles to sample it, while continuing all simulation steps and assertions. Field generation is recomputed from the current time before any particle step that can sample it. Independent review found no correctness issue in the cache or the paired benchmark.
+- PR #115 Gemini experiment: replace `Math.floor`/`Math.min` in interpolation with bitwise truncation and an upper-bound branch, and reuse the first table value in a local. The bounded position makes this semantically safe, but significant speedup is unproven. The same paired Firefox 160/X280/AC CPU fixture produced current means 2.823/2.833/3.124 ms and proposed means 2.843/2.758/2.948 ms (ABBAAB; all 16,661 live). Aggregate means are 2.927 vs 2.849 ms, about 2.6% apart, with overlapping run ranges and variation larger than that difference. Reject the production rewrite under the plan's beyond-noise acceptance rule; retain the existing interpolation. This is a performance suggestion, not a reproduced correctness defect.
+
 ### Task 0: Establish a repeatable baseline
 
 **Files:** Record results under this section; inspect `frontend/src/main.ts`, `frontend/src/debug/panel.ts` and `frontend/src/render/renderer.ts`. Temporary profiling instrumentation must not allocate in hot loops or ship unintentionally.
@@ -401,14 +422,14 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 ### Task 3: Cache braid centres (part 2)
 
-**Files:** `frontend/src/sim/streams.ts`, `frontend/test/streams.test.ts`, `frontend/test/particles.test.ts`.
+**Files:** `frontend/src/sim/streams.ts`, `frontend/test/streams.test.ts`, `frontend/test/particles.test.ts`, `frontend/test/cpu-benchmark.browser.ts`, `frontend/test/benchmark.html`.
 
 **Interface:** Keep `StreamSlot.centerAt(y: number): number`; add a preallocated 64-entry centre table per slot and a `rebuildCenters(): void` method called after layout easing and derivation in `StreamSet.update`.
 
-- [ ] Add failing tests comparing interpolated centres with the analytic sine across phases, widths and y in [-0.02, 1.08]. Require absolute error at most `0.001 * half` plus floating-point tolerance. Include exact endpoints, zero width, slot reuse and resize.
-- [ ] Run `npm test -w frontend -- test/streams.test.ts test/particles.test.ts` and confirm the approximation/cache assertions fail.
-- [ ] Fill the table once per used stream per frame over [-0.02, 1.08], then interpolate in `centerAt`. Use the original analytic expression outside that interval so callers do not silently acquire clamping semantics. No array creation during rebuild or sampling.
-- [ ] Pass tests, inspect fixed-seed filament and plain-band runs in a browser, and measure the change alone. This is an approximation, not bit-identical motion; retain it only if its measured benefit exceeds noise.
+- [x] Add failing tests comparing interpolated centres with the analytic sine across phases, widths and y in [-0.02, 1.08]. Require absolute error at most `0.001 * half` plus floating-point tolerance. Include exact endpoints, zero width, slot reuse and resize.
+- [x] Run `npm test -w frontend -- test/streams.test.ts test/particles.test.ts` and confirm the approximation/cache assertions fail.
+- [x] Fill the table once per used stream per frame over [-0.02, 1.08], then interpolate in `centerAt`. Rebuild on claim as well, so pending slot reuse cannot sample the old stream's phase. Use the original analytic expression outside that interval so callers do not silently acquire clamping semantics. No array creation during rebuild or sampling.
+- [x] Pass tests, inspect fixed-seed filament and plain-band runs in a browser, and measure the change alone. Accepted from the paired Firefox CPU benchmark above; full battery/AC cadence acceptance remains pending. This is an approximation, not bit-identical motion.
 
 ### Task 4: Inline interleaved flow sampling (part 2)
 
