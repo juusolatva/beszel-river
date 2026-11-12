@@ -485,7 +485,30 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 ### Measurement ledger
 
-No implementation measurements have been made for this plan yet. Add device/build/workload identifiers, baseline and changed median/p95 values, variance, visual results and keep/reject decisions here as tasks run.
+Earlier cache comparisons and supplied-profile findings are recorded above. The following is a controlled battery replay of the 10,000-particle change.
+
+#### X280 battery confirmation — 2026-11-12
+
+- Runtime code: commit `6980d5a` (PR #116), imported locally through Vite; this is not a deployed production-bundle recording. Device: ThinkPad X280/i5-8350U, Fedora kernel `7.3.3-200.fc44.x86_64`, Firefox 160 in a separate visible GUI profile. AC was disconnected and BAT0 reported `Discharging` at every five-second monitor sample. CPU governor was `powersave`, energy preference `balance_power`, with turbo allowed. No agent build, coverage or software-WebGL jobs ran concurrently.
+- CPU-only paired comparison uses the same six synthetic snapshots/seed 42/aspect 1.5/DPR scale 1.5 as the earlier cache benchmark, with cached centres in both variants. Each case resets state, warms up for 600 simulated frames and measures 1,200 more at dt = 1/60. The 20,000-particle case is an internal reference workload, not a bypass of the page's public ceiling. Run order: 20k/10k/10k/20k/20k/10k.
+
+  | Pool ceiling | Mean CPU ms/frame, three runs | Combined mean | Final live count |
+  |---|---|---:|---:|
+  | 20,000 reference | 2.904 / 2.903 / 2.903 | 2.903 | 16,661 |
+  | 10,000 | 1.552 / 1.533 / 1.563 | 1.549 | 8,295 |
+
+- This is 46.6% less CPU simulation work in the tight-loop comparison. Per-frame medians/p95s are quantized by Firefox's 1 ms timer. CPU package samples were 47–60 °C. A continuously busy loop can exercise power management differently from animation callbacks; do not substitute these throughput numbers for real frame work.
+- Rendering replay uses four synthetic streams with alternating plain/filament snapshots, seed 42, normal motion, a 960×640 CSS canvas, DPR 1.2 and 1152×768 framebuffers. Firefox reported an Intel renderer, used RGBA16F, and the isolated process had active i915 GPU render counters; no software-renderer flags were used. GPU completion time was not measured. The adaptive budget was enabled with a 10,000 ceiling. Each of three runs had a **30 s wall-clock warmup followed by 60 s of measurement**.
+
+  | Run | CPU work mean / median / p95 / p99 / max (ms) | Simulation p95 (ms) | Render-submission p95 (ms) |
+  |---|---|---:|---:|
+  | 1 | 7.401 / 7 / 10 / 11 / 27 | 8 | 2 |
+  | 2 | 7.402 / 7 / 10 / 11 / 14 | 8 | 2 |
+  | 3 | 7.204 / 7 / 9 / 11 / 14 | 8 | 2 |
+
+- All 10,809 measured callbacks kept the budget at 10,000 without a drop or rise; average live counts were 8,459–8,463, with peaks 8,686–8,694. Thus this is normal populated-scene coverage, not a fully occupied 10,000-live-particle stress case. One callback's CPU work exceeded 16.67 ms. All contexts stayed visible, WebGL reported no error, and all 56 power samples remained on battery; CPU package samples were 46–64 °C.
+- Animation timestamps are not actual callback-start or presentation timestamps. A separate 10 s warmup/30 s measurement checked actual callback-entry spacing: 1,802 callbacks, mean 16.653 ms, p95/p99 18 ms and maximum 19 ms, with no interval above 25 ms. CPU work p95 was 9 ms, the budget stayed at 10,000, and all power samples again showed battery operation. This does not measure compositor presentation or prove zero dropped display frames.
+- Decision: keep the 10,000 ceiling for the next deployed check. It provides CPU headroom in this battery replay, but the live SSE sequence, usual full-screen viewport, fully saturated pool, video-on-AC case, phone and GPU prototype remain unverified. No production code changed during this measurement step.
 
 ## Deployment
 
