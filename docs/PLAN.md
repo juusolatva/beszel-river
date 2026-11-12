@@ -294,7 +294,7 @@ Draft v1, implemented in M1. Each SSE event's `data` is one JSON object holding 
 - **Smoothing:** each channel eases exponentially toward its latest value (time constant 1–5 s), so 60 s and 1 s updates both look continuous.
 - **Simulation:**
   - The particle pool is fixed-size, held in `Float32Array`s and updated on the CPU.
-  - Budget: 20 000 particles on desktop, 8 000 when `(pointer: coarse)` matches.
+  - Budget: 10 000 particles on desktop, 8 000 when `(pointer: coarse)` matches. Reduced-motion defaults are 5 000 and 4 000 respectively. Explicit `?particles=N` counts are clamped to 100–10 000 and keep the existing fixed-budget behaviour. The adaptive floor remains a quarter of the chosen pool (2 500 for the normal desktop default).
   - Consider a WebGL2 transform-feedback prototype only if CPU simulation remains a measured bottleneck after the planned CPU optimizations below; it is not required for the current implementation.
 - **Motion:**
   - Particles spawn along the bottom edge inside their stream's band.
@@ -388,6 +388,14 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 - Verification: 32 targeted stream/particle tests pass; typecheck and production build pass, and coverage passes for all 204 bridge and 117 frontend tests with unchanged coverage thresholds and five-second test timeouts. The long empty-river fixture initially timed out under coverage in both the cached and unchanged analytic implementations on this X280. Its helper now skips flow-grid generation only when there are no particles to sample it, while continuing all simulation steps and assertions. Field generation is recomputed from the current time before any particle step that can sample it. Independent review found no correctness issue in the cache or the paired benchmark.
 - PR #115 Gemini experiment: replace `Math.floor`/`Math.min` in interpolation with bitwise truncation and an upper-bound branch, and reuse the first table value in a local. The bounded position makes this semantically safe, but significant speedup is unproven. The same paired Firefox 160/X280/AC CPU fixture produced current means 2.823/2.833/3.124 ms and proposed means 2.843/2.758/2.948 ms (ABBAAB; all 16,661 live). Aggregate means are 2.927 vs 2.849 ms, about 2.6% apart, with overlapping run ranges and variation larger than that difference. Reject the production rewrite under the plan's beyond-noise acceptance rule; retain the existing interpolation. This is a performance suggestion, not a reproduced correctness defect.
 
+#### Second X280 profile and the 10,000-particle ceiling
+
+- The second supplied recording spans 77.898 s and contains sampled `rebuildCenters` calls, confirming the cache implementation is running. Its 4,418 complete animation callbacks have median 11.623 ms, p95 18.960 ms and p99 22.145 ms; 457 callbacks exceed a 60 Hz period. These are separate live captures with uncontrolled load/power conditions, so their difference does not measure a cache regression or improvement. The recording stays local and untracked.
+- CPU-delta-weighted samples still attribute about 67% of callback CPU to particle stepping, including flow sampling at about 15% and cached centre sampling at about 7%. Render submission is about 20%, including buffer uploads at about 12%; flow-field generation is about 12%. These sampled CPU attributions include child work and do not measure GPU execution. There is also a 159 ms gap between callback starts following a 13 ms callback; reducing particle work cannot be assumed to explain or eliminate every visible pause.
+- At the user's request, reduce the desktop default from 20,000 to 10,000 and make 10,000 the public page's hard upper bound, including explicit URL counts. Preserve the coarse-pointer default of 8,000, half-count reduced-motion defaults, fixed-count flag, minimum of 100 and quarter-pool adaptive floor. No changes to the deferred `ParticleBudget.update` complexity issue or to rendering intensity are included. The existing 20,000-particle CPU benchmark remains a diagnostic reference workload, separate from the page's configuration limit.
+- Verification: new default/override assertions first failed, then all seven configuration tests passed. Typecheck, coverage (204 bridge / 121 frontend tests with unchanged thresholds/timeouts), production build and diff checks pass. The seeded demo browser smoke check reports the actual 10,000-particle desktop limit with no JavaScript errors; this correctness check does not establish battery performance. Independent review found no correctness issue in the limit, allocation bounds or preserved media/fixed-count semantics.
+- Verify the lower ceiling on the deployed page before judging battery smoothness. The profiles justify continued CPU/upload investigation and assessment of an isolated GPU prototype if 10,000 still misses cadence. A transform-feedback prototype remains a separate experiment with the CPU reference, lifecycle/accounting tests and real-hardware measurements described below; this change does not switch simulation implementations or claim that the stutter is fixed.
+
 ### Task 0: Establish a repeatable baseline
 
 **Files:** Record results under this section; inspect `frontend/src/main.ts`, `frontend/src/debug/panel.ts` and `frontend/src/render/renderer.ts`. Temporary profiling instrumentation must not allocate in hot loops or ship unintentionally.
@@ -477,7 +485,30 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 ### Measurement ledger
 
-No implementation measurements have been made for this plan yet. Add device/build/workload identifiers, baseline and changed median/p95 values, variance, visual results and keep/reject decisions here as tasks run.
+Earlier cache comparisons and supplied-profile findings are recorded above. The following is a controlled battery replay of the 10,000-particle change.
+
+#### X280 battery confirmation — 2026-11-12
+
+- Runtime code: commit `6980d5a` (PR #116), imported locally through Vite; this is not a deployed production-bundle recording. Device: ThinkPad X280/i5-8350U, Fedora kernel `7.3.3-200.fc44.x86_64`, Firefox 160 in a separate visible GUI profile. AC was disconnected and BAT0 reported `Discharging` at every five-second monitor sample. CPU governor was `powersave`, energy preference `balance_power`, with turbo allowed. No agent build, coverage or software-WebGL jobs ran concurrently.
+- CPU-only paired comparison uses the same six synthetic snapshots/seed 42/aspect 1.5/DPR scale 1.5 as the earlier cache benchmark, with cached centres in both variants. Each case resets state, warms up for 600 simulated frames and measures 1,200 more at dt = 1/60. The 20,000-particle case is an internal reference workload, not a bypass of the page's public ceiling. Run order: 20k/10k/10k/20k/20k/10k.
+
+  | Pool ceiling | Mean CPU ms/frame, three runs | Combined mean | Final live count |
+  |---|---|---:|---:|
+  | 20,000 reference | 2.904 / 2.903 / 2.903 | 2.903 | 16,661 |
+  | 10,000 | 1.552 / 1.533 / 1.563 | 1.549 | 8,295 |
+
+- This is 46.6% less CPU simulation work in the tight-loop comparison. Per-frame medians/p95s are quantized by Firefox's 1 ms timer. CPU package samples were 47–60 °C. A continuously busy loop can exercise power management differently from animation callbacks; do not substitute these throughput numbers for real frame work.
+- Rendering replay uses four synthetic streams with alternating plain/filament snapshots, seed 42, normal motion, a 960×640 CSS canvas, DPR 1.2 and 1152×768 framebuffers. Firefox reported an Intel renderer, used RGBA16F, and the isolated process had active i915 GPU render counters; no software-renderer flags were used. GPU completion time was not measured. The adaptive budget was enabled with a 10,000 ceiling. Each of three runs had a **30 s wall-clock warmup followed by 60 s of measurement**.
+
+  | Run | CPU work mean / median / p95 / p99 / max (ms) | Simulation p95 (ms) | Render-submission p95 (ms) |
+  |---|---|---:|---:|
+  | 1 | 7.401 / 7 / 10 / 11 / 27 | 8 | 2 |
+  | 2 | 7.402 / 7 / 10 / 11 / 14 | 8 | 2 |
+  | 3 | 7.204 / 7 / 9 / 11 / 14 | 8 | 2 |
+
+- All 10,809 measured callbacks kept the budget at 10,000 without a drop or rise; average live counts were 8,459–8,463, with peaks 8,686–8,694. Thus this is normal populated-scene coverage, not a fully occupied 10,000-live-particle stress case. One callback's CPU work exceeded 16.67 ms. All contexts stayed visible, WebGL reported no error, and all 56 power samples remained on battery; CPU package samples were 46–64 °C.
+- Animation timestamps are not actual callback-start or presentation timestamps. A separate 10 s warmup/30 s measurement checked actual callback-entry spacing: 1,802 callbacks, mean 16.653 ms, p95/p99 18 ms and maximum 19 ms, with no interval above 25 ms. CPU work p95 was 9 ms, the budget stayed at 10,000, and all power samples again showed battery operation. This does not measure compositor presentation or prove zero dropped display frames.
+- Decision: keep the 10,000 ceiling for the next deployed check. It provides CPU headroom in this battery replay, but the live SSE sequence, usual full-screen viewport, fully saturated pool, video-on-AC case, phone and GPU prototype remain unverified. No production code changed during this measurement step.
 
 ## Deployment
 

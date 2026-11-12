@@ -1,4 +1,5 @@
 // World units: the canvas is 1 unit tall and `aspect` units wide, y pointing up.
+const MAX_PARTICLES = 10000;
 
 /** Tunables for the look. */
 export const LOOK = {
@@ -115,10 +116,10 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
   };
 
   const reducedMotion = matches("(prefers-reduced-motion: reduce)");
-  const budget = matches("(pointer: coarse)") ? 8000 : 20000;
+  const budget = matches("(pointer: coarse)") ? 8000 : MAX_PARTICLES;
 
   return {
-    particles: int("particles", reducedMotion ? budget / 2 : budget, 100, 200000),
+    particles: int("particles", reducedMotion ? Math.floor(budget / 2) : budget, 100, MAX_PARTICLES),
     particlesFixed: params.has("particles"),
     motion: reducedMotion ? 0.5 : 1,
     demo: params.has("demo"),
