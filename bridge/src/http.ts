@@ -1,5 +1,5 @@
-import type { AddressInfo } from "node:net";
-import type { IncomingMessage, Server } from "node:http";
+import type { AddressInfo, Socket } from "node:net";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 
 /**
  * The request-target's path before `?`, exactly as sent. Not a URL parser's: a parser throws on some
@@ -18,13 +18,36 @@ export function listen(server: Server, port: number, host: string): Promise<numb
   });
 }
 
+/** How long shutdown lets responses already in progress finish before cutting their connections. */
+const CLOSE_GRACE_MS = 5000;
+
 /**
- * Stops `server` and resolves once it has closed. close() alone waits for every connection without a
- * request in progress to end on its own, including one a browser opened speculatively and never used,
- * which would hold up shutdown until the client gave up on it.
+ * Returns a function that stops `server` and resolves once it has closed; set it up right after
+ * creating the server. server.close() alone waits for every connection without a request in progress
+ * to end on its own, including one a browser opened speculatively and never used, and closes idle
+ * keep-alive connections only once, so one whose response finishes later stays open. This closes
+ * unused connections at once, lets responses in progress finish and then closes their connections,
+ * and cuts off any still unfinished after `graceMs`.
  */
-export function close(server: Server): Promise<void> {
-  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
-  server.closeAllConnections();
-  return closed;
+export function closer(server: Server, graceMs = CLOSE_GRACE_MS): () => Promise<void> {
+  const unused = new Set<Socket>();
+  let closing = false;
+  server.on("connection", (socket: Socket) => {
+    unused.add(socket);
+    socket.once("close", () => unused.delete(socket));
+  });
+  server.on("request", (request: IncomingMessage, response: ServerResponse) => {
+    unused.delete(request.socket);
+    // The connection only counts as idle once the response has detached from it.
+    response.once("finish", () => {
+      if (closing) setImmediate(() => server.closeIdleConnections());
+    });
+  });
+  return () => {
+    closing = true;
+    const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+    for (const socket of unused) socket.destroy();
+    const timer = setTimeout(() => server.closeAllConnections(), graceMs);
+    return closed.finally(() => clearTimeout(timer));
+  };
 }
