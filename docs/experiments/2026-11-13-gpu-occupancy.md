@@ -79,7 +79,7 @@ remove this effect: adjacent counts share the same surviving particles and are
 strongly correlated. The different-seed CPU control independently demonstrates
 that the fixed bound can reject the unchanged CPU implementation against itself.
 
-## Unresolved spawn-calculation difference
+## Spawn-calculation difference (explained in the 2026-11-14 follow-up)
 
 The first active-state mismatch in the matched plain control occurs at simulated
 6.5000000969 s, particle index 674, on a birth. CPU spawn x is
@@ -120,12 +120,20 @@ On its own that needs an absolute error of about 3.5e-5 in `cos(2πv)` or
 6e-8. GLSL ES 3.00 §4.5.1 bounds `log()` on [0.5, 2.0] to an absolute error
 below 2⁻²¹ (4.8e-7), holds `sqrt()` to a few ULP, and leaves trigonometric
 functions with undefined precision. The remaining explanation is the GPU's
-`cos()`. This is an inference, not yet a measurement on the recording GPU:
-Firefox reported the masked renderer "Intel(R) HD Graphics 400, or similar".
-`frontend/test/gpu-spawn.browser.ts` evaluates the shader's own expression and
-its parts for this birth and predicts the resulting x (README, "Local GPU
-comparison"); `birth.explainsRecordedX` must be true on the recording device to
-confirm it.
+`cos()`.
+
+Measured on the recording laptop the same day (Firefox 159, the same masked
+renderer "Intel(R) HD Graphics 400, or similar"; retained as
+`2026-11-14-gpu-spawn.json`): `frontend/test/gpu-spawn.browser.ts` evaluated the
+shader's own `gaussian()` expression and its parts. `cos(2πv)` erred by
+−3.527e-5 and `log(u)` by −2.4e-8; the resulting gaussian predicts a GPU x of
+−0.10000330210 against the recorded −0.10000331700, 1.5e-8 apart (about two
+Float32 steps; the rest is the shader's own rounding or fused operations),
+where the CPU/GPU gap was 2.1e-5. Across a 65,536-point v sweep this GPU's
+`cos()` erred by up to 6.07e-5; `log()` stayed within 7.3e-8 on [0.5, 1]. The
+plain-spawn discrepancy is explained: implementation-defined `cos()` precision
+moved the birth across the strict −0.1 death boundary. No simulation or
+tolerance was changed.
 
 A headless Chromium 140 run on SwiftShader (ANGLE/Vulkan, software) checked the
 harness, not the X280: there `cos()` erred by +6.0e-5 at this v and by up to
@@ -166,9 +174,9 @@ These results narrow the investigation; they do not establish distribution
 equivalence across seeds, browsers or hardware, or make a performance claim.
 
 Before resuming Task 4, isolate the plain spawn discrepancy by comparing draw
-values and intermediate spawn calculations for identical birth keys (done in
-Node on 2026-11-14 except the on-device `cos()` measurement; see the follow-up
-above). Then
+values and intermediate spawn calculations for identical birth keys (done on
+2026-11-14: the GPU's `cos()` precision, measured on the recording device; see
+the follow-up above). Then
 revise the validation plan explicitly: retain exact
 allocation/ownership checks and common-input motion/death checks, and specify a
 separate multi-seed distribution comparison calibrated against CPU-vs-CPU
