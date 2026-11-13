@@ -1,0 +1,48 @@
+{
+ "source": "runGpuSpawnPrecisionCheck() from frontend/test/gpu-spawn.browser.ts, bundled into a private claude.ai page and run in Firefox on the laptop that recorded 2026-11-13-gpu-occupancy.json; browser output unchanged",
+ "savedAt": "2026-11-13T23:20:32.192Z",
+ "birth": {
+  "errors": {
+   "cos": -3.526511868701121e-05,
+   "gaussian": -3.841532013915128e-05,
+   "log": -2.3611983812621418e-08,
+   "root": 3.214875565760167e-08
+  },
+  "exact": {
+   "cos": -0.914013168185146,
+   "gaussian": -0.99386891710021,
+   "log": -0.591184950104752,
+   "root": 1.0873683369537224
+  },
+  "explainsRecordedX": true,
+  "gpu": {
+   "cos": -0.914048433303833,
+   "gaussian": -0.9939073324203491,
+   "log": -0.5911849737167358,
+   "root": 1.087368369102478
+  },
+  "predictedX": -0.10000330209732056,
+  "recordedCpuX": -0.09998229146003723,
+  "recordedGpuX": -0.10000331699848175,
+  "u": 0.5536708235740662,
+  "v": 0.43351656198501587
+ },
+ "metadata": {
+  "renderer": "Intel(R) HD Graphics 400, or similar",
+  "sweep": 65536,
+  "unmaskedRenderer": "Intel(R) HD Graphics 400, or similar",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0"
+ },
+ "sweeps": {
+  "logBoundInside": 4.76837158203125e-07,
+  "maxCosError": 6.067458285285987e-05,
+  "maxGaussianError": 0.00016634104414148254,
+  "maxLogErrorInside": 7.272404412006495e-08,
+  "maxLogUlpBelow": 1.2803569212555885,
+  "worstCosV": 0.503814697265625,
+  "worstGaussianAt": [
+   1.52587890625e-05,
+   0.43351656198501587
+  ]
+ }
+}

@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { Frame, FrameEvent } from "@beszel-river/shared";
 import { sendHealth } from "./health.js";
-import { listen, requestPath } from "./http.js";
+import { closer, listen, requestPath } from "./http.js";
 import { SECURITY_HEADERS, sendStatic, type StaticFiles } from "./static.js";
 
 export interface StreamServerOptions {
@@ -38,12 +38,14 @@ function event(name: FrameEvent, frame: Frame): string {
 export class StreamServer {
   private readonly clients = new Set<Client>();
   private readonly server: Server;
+  private readonly closeServer: () => Promise<void>;
   private pingTimer: NodeJS.Timeout | undefined;
   /** Shared by blocked clients rather than retaining a separate frame queue for each. */
   private latestUpdate = "";
 
   constructor(private readonly options: StreamServerOptions) {
     this.server = createServer((request, response) => this.handle(request, response));
+    this.closeServer = closer(this.server);
   }
 
   get clientCount(): number {
@@ -67,7 +69,7 @@ export class StreamServer {
   close(): Promise<void> {
     clearInterval(this.pingTimer);
     for (const client of this.clients) this.drop(client);
-    return new Promise((resolve) => this.server.close(() => resolve()));
+    return this.closeServer();
   }
 
   private remove(client: Client): void {

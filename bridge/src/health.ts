@@ -1,5 +1,5 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
-import { listen, requestPath } from "./http.js";
+import { closer, listen, requestPath } from "./http.js";
 
 /** `/healthz`: 200 while the hub subscription is live, 503 otherwise. */
 export function sendHealth(response: ServerResponse, ok: boolean, headers: Readonly<Record<string, string>> = {}): void {
@@ -21,6 +21,7 @@ export interface HealthServerOptions {
  */
 export class HealthServer {
   private readonly server: Server;
+  private readonly closeServer: () => Promise<void>;
 
   constructor(private readonly options: HealthServerOptions) {
     this.server = createServer((request, response) => {
@@ -28,6 +29,7 @@ export class HealthServer {
       else if (requestPath(request) === "/healthz") sendHealth(response, this.options.healthy());
       else response.writeHead(404).end();
     });
+    this.closeServer = closer(this.server);
   }
 
   /** Starts listening; resolves with the bound port (useful with port 0). */
@@ -36,6 +38,6 @@ export class HealthServer {
   }
 
   close(): Promise<void> {
-    return new Promise((resolve) => this.server.close(() => resolve()));
+    return this.closeServer();
   }
 }

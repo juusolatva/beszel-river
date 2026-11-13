@@ -79,7 +79,7 @@ remove this effect: adjacent counts share the same surviving particles and are
 strongly correlated. The different-seed CPU control independently demonstrates
 that the fixed bound can reject the unchanged CPU implementation against itself.
 
-## Unresolved spawn-calculation difference
+## Spawn-calculation difference (explained in the 2026-11-14 follow-up)
 
 The first active-state mismatch in the matched plain control occurs at simulated
 6.5000000969 s, particle index 674, on a birth. CPU spawn x is
@@ -100,6 +100,73 @@ states do not cover independently calculated spawn positions. Exact lifetime
 and boundary rules should remain tested with injected state; matching separate
 spawn calculations bit-for-bit is a different requirement.
 
+## Follow-up — 2026-11-14: spawn inputs and transcendental precision
+
+`frontend/test/gpu-spawn.test.ts` replays the matched plain control in Node to
+the recorded birth and reproduces the retained CPU x, y, lifetime and speed
+jitter bit for bit. The GPU's y and lifetime equal the CPU's, and they come from
+later draws of the same PCG key, so both backends received the same Box–Muller
+inputs: u = 1 − 0.44632917642593384 = 0.5536708235740662 and
+v = 0.43351656198501587. The band centre comes from the same cached table on
+both (the GPU reads it as Float32 texels), its half-width is 0.645, and a
+Float32 model of the shader's `centerAt(0.0) + gaussian() * band.y * u_birth.z`
+with the exact gaussian reproduces the CPU x within 1e-7. Draw-path
+disagreement, the centre cache and final-store rounding are therefore ruled
+out.
+
+The recorded GPU x requires a gaussian 3.84e-5 below the exact −0.99386892.
+On its own that needs an absolute error of about 3.5e-5 in `cos(2πv)` or
+4.6e-5 in `log(u)`; Float32 rounding of the cosine argument accounts for only
+6e-8. GLSL ES 3.00 §4.5.1 bounds `log()` on [0.5, 2.0] to an absolute error
+below 2⁻²¹ (4.8e-7), holds `sqrt()` to a few ULP, and leaves trigonometric
+functions with undefined precision. The remaining explanation is the GPU's
+`cos()`.
+
+Measured on the recording laptop the same day (Firefox 159, the same masked
+renderer "Intel(R) HD Graphics 400, or similar"; retained as
+`2026-11-14-gpu-spawn.json`): `frontend/test/gpu-spawn.browser.ts` evaluated the
+shader's own `gaussian()` expression and its parts. `cos(2πv)` erred by
+−3.527e-5 and `log(u)` by −2.4e-8; the resulting gaussian predicts a GPU x of
+−0.10000330210 against the recorded −0.10000331700, 1.5e-8 apart (about two
+Float32 steps; the rest is the shader's own rounding or fused operations),
+where the CPU/GPU gap was 2.1e-5. Across a 65,536-point v sweep this GPU's
+`cos()` erred by up to 6.07e-5; `log()` stayed within 7.3e-8 on [0.5, 1]. The
+plain-spawn discrepancy is explained: implementation-defined `cos()` precision
+moved the birth across the strict −0.1 death boundary. No simulation or
+tolerance was changed.
+
+A headless Chromium 140 run on SwiftShader (ANGLE/Vulkan, software) checked the
+harness, not the X280: there `cos()` erred by +6.0e-5 at this v and by up to
+1.9e-4 across a 65,536-point v sweep, while `log()` stayed within 1.7e-7 of
+the bound's 4.8e-7. With that opposite error the birth moves away from the
+boundary, and `explainsRecordedX` is false, as expected on another GPU. The same
+browser reran the occupancy investigation after `cpuControl` moved to
+`test/fixtures/cpu-control.ts`: all 330 CPU-control windows equal the retained
+ones exactly. The GPU columns differ from the X280's, as expected:
+
+| SwiftShader run | Plain | Filaments |
+|---|---:|---:|
+| Matched-control count mismatches | 0 / 600 | 469 / 600 |
+| First identity difference | none | 2.7 s, index 2136, in motion |
+
+| Failures vs reference (330) | X280 (retained) | SwiftShader |
+|---|---:|---:|
+| GPU | 43 | 45 |
+| CPU, seed 43 | 49 | 49 |
+| CPU, PCG keys only | 45 | 45 |
+| GPU vs matched CPU | 0 | 0 |
+
+On SwiftShader the first matched divergence is a live filament particle whose
+x had drifted 3.7e-5 from the CPU's before the CPU crossed −0.1; on the X280 it
+was a birth. Which particle flips first depends on the device's transcendental
+precision, but on both a strict boundary turns an implementation-defined
+difference into a different free-slot history. Particle-for-particle identity
+across backends is therefore not an achievable acceptance criterion without
+changing the simulation's arithmetic; the occupancy gate's failures track the
+random source (PCG keys alone fail 45/330 on the CPU) rather than the GPU. These
+SwiftShader results are not hardware evidence and are not retained as an
+artifact.
+
 ## Next decision
 
 No production or prototype behavior was changed, and no tolerance was relaxed.
@@ -107,7 +174,9 @@ These results narrow the investigation; they do not establish distribution
 equivalence across seeds, browsers or hardware, or make a performance claim.
 
 Before resuming Task 4, isolate the plain spawn discrepancy by comparing draw
-values and intermediate spawn calculations for identical birth keys. Then
+values and intermediate spawn calculations for identical birth keys (done on
+2026-11-14: the GPU's `cos()` precision, measured on the recording device; see
+the follow-up above). Then
 revise the validation plan explicitly: retain exact
 allocation/ownership checks and common-input motion/death checks, and specify a
 separate multi-seed distribution comparison calibrated against CPU-vs-CPU
