@@ -2,49 +2,12 @@ import type { Frame } from "@beszel-river/shared";
 import { LOOK } from "../src/config";
 import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
-import { ParticleSystem } from "../src/sim/particles";
 import { MIN_SHARE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
+import { cpuControl } from "./fixtures/cpu-control";
 import { replayFrames } from "./fixtures/gpu-replay";
 
 function assert(ok: boolean, message: string): void { if (!ok) throw new Error(message); }
-
-// Test-only access: change the CPU control's free order/random source, never production policy.
-interface Storage {
-  free: Int32Array; freeTop: number; active: Uint8Array; slot: Uint8Array;
-  x: Float32Array; y: Float32Array; vx: Float32Array; vy: Float32Array;
-  age: Float32Array; life: Float32Array; speedJitter: Float32Array;
-}
-
-function cpuControl(capacity: number, seed: number, pcg: boolean, ascending: boolean) {
-  let storage: Storage, lastIndex = -1, state = 0;
-  const counters = new Uint32Array(capacity);
-  const random = pcg ? () => {
-    // spawn() pops the index immediately before its first random draw.
-    const index = storage.free[storage.freeTop];
-    if (index !== lastIndex) {
-      lastIndex = index;
-      // Expansion only: no releases or reclaims, so every GPU generation is 1.
-      state = (seed ^ Math.imul(index, 0x9e3779b9) ^ 0x85ebca6b ^ Math.imul(++counters[index], 0xc2b2ae35)) >>> 0;
-    }
-    state = (Math.imul(state, 747796405) + 2891336453) >>> 0;
-    const word = Math.imul((state >>> ((state >>> 28) + 4)) ^ state, 277803737) >>> 0;
-    return (((word >>> 22) ^ word) >>> 8) / 16777216;
-  } : mulberry32(seed);
-  const particles = new ParticleSystem(capacity, random);
-  storage = particles as unknown as Storage;
-  const streams = new StreamSet(1);
-  return { particles, streams, storage, spawn(dt: number) {
-    lastIndex = -1;
-    if (ascending) {
-      // Pop the lowest inactive index, as the GPU prefix scan does.
-      let n = 0;
-      for (let i = capacity - 1; i >= 0; i--) if (!storage.active[i]) storage.free[n++] = i;
-      assert(n === storage.freeTop, "CPU free-list accounting changed");
-    }
-    particles.spawn(dt, streams);
-  } };
-}
 
 /** Causal controls for the rejected occupancy candidate; readback-heavy, never a benchmark. */
 export async function runGpuOccupancyInvestigation() {
