@@ -567,7 +567,7 @@ Commands and steps are in README, "Deployment".
     - `river-limits.conf` defines the shared connection key: the full IPv4 address or the first eight binary IPv6 bytes (`/64`), including NUL/newline bytes. `limit_conn` allows 8 per key (each HTTP/2 request counts), answered with 429. It prevents one IPv6 `/64` from taking the bridge's 500 slots by rotating addresses; many prefixes can still exhaust the global cap. The include belongs once in the http block, whichever config is used. Changing an existing zone key requires an nginx restart.
   - `/healthz` is not proxied.
   - Caching: `index.html` gets `Cache-Control: no-cache`; `assets/` (content-hashed names) a far-future `max-age`.
-  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (one year, this host only).
+  - Headers: `Content-Security-Policy` (`default-src 'self'`, inline styles allowed for `index.html` and the debug panel, no framing), `X-Content-Type-Options`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy: same-origin` (as the bridge sends), `Strict-Transport-Security` (one year, this host only).
   - `deploy/nginx/river-path.conf` holds the same locations under `/river/` for an existing server block. It sets no headers of its own, so the page gets that block's; its comment lists the ones to add there. `deploy/test/nginx.py` runs nginx in Docker to check actual binary keys and held-request limits for both paths, and for the container configs' two; CI runs it after the syntax checks.
 
 ## Milestones
