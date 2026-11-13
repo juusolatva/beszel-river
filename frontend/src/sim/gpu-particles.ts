@@ -24,7 +24,7 @@ export class GpuParticles {
   private feedback: WebGLTransformFeedback | null = null;
   private program: Program | null = null;
   private scan: GpuFreeScan | null = null;
-  private uniforms!: Record<"flow" | "stream" | "dt" | "bounds" | "cell" | "physics" | "braid" |
+  private readonly uniforms!: Record<"flow" | "stream" | "dt" | "bounds" | "cell" | "physics" | "braid" |
     "command" | "prefix" | "width" | "capacity" | "limit" | "enabled" | "seed" | "birth" | "lifeSize" | "filament" | "span", WebGLUniformLocation | null>;
   private readonly streamData = new Float32Array(24 * MAX_STREAMS * 4);
   private flowData = new Float32Array(0);
@@ -55,31 +55,8 @@ export class GpuParticles {
       };
       this.feedback = gl.createTransformFeedback();
       if (!this.feedback) throw new Error("GPU resource allocation failed");
-      for (let i = 0; i < 2; i++) {
-        const buffer = this.own(this.buffers, gl.createBuffer());
-        const vao = this.own(this.vaos, gl.createVertexArray());
-        gl.bindVertexArray(vao);
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, capacity * GPU_STATE_STRIDE_BYTES, gl.DYNAMIC_COPY);
-        for (let j = 0; j < 3; j++) {
-          gl.enableVertexAttribArray(j);
-          const offset = j === 0 ? GPU_MOTION_OFFSET_BYTES : j === 1 ? GPU_LIFETIME_OFFSET_BYTES : GPU_SPAWN_OFFSET_BYTES;
-          gl.vertexAttribPointer(j, 4, gl.FLOAT, false, GPU_STATE_STRIDE_BYTES, offset);
-        }
-        gl.enableVertexAttribArray(3);
-        gl.vertexAttribIPointer(3, 4, gl.UNSIGNED_INT, GPU_STATE_STRIDE_BYTES, GPU_IDENTITY_OFFSET_BYTES);
-      }
-      for (let i = 0; i < 3; i++) {
-        const texture = this.own(this.textures, gl.createTexture());
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        if (i === 1) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 24, MAX_STREAMS, 0, gl.RGBA, gl.FLOAT, null);
-        if (i === 2) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32UI, 1, MAX_STREAMS, 0, gl.RGBA_INTEGER, gl.UNSIGNED_INT, null);
-      }
+      this.createStateBuffers();
+      this.createDataTextures();
       this.scan = new GpuFreeScan(gl, capacity);
     } catch (error) {
       this.dispose();
@@ -153,6 +130,39 @@ export class GpuParticles {
     this.vaos.length = this.buffers.length = this.textures.length = 0;
     this.feedback = null;
     this.program = null;
+  }
+
+  private createStateBuffers(): void {
+    const gl = this.gl;
+    const offsets = [GPU_MOTION_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES, GPU_SPAWN_OFFSET_BYTES];
+    for (let i = 0; i < 2; i++) {
+      const buffer = this.own(this.buffers, gl.createBuffer());
+      const vao = this.own(this.vaos, gl.createVertexArray());
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, this.capacity * GPU_STATE_STRIDE_BYTES, gl.DYNAMIC_COPY);
+      for (let j = 0; j < offsets.length; j++) {
+        gl.enableVertexAttribArray(j);
+        gl.vertexAttribPointer(j, 4, gl.FLOAT, false, GPU_STATE_STRIDE_BYTES, offsets[j]);
+      }
+      gl.enableVertexAttribArray(3);
+      gl.vertexAttribIPointer(3, 4, gl.UNSIGNED_INT, GPU_STATE_STRIDE_BYTES, GPU_IDENTITY_OFFSET_BYTES);
+    }
+  }
+
+  private createDataTextures(): void {
+    const gl = this.gl;
+    for (let i = 0; i < 3; i++) {
+      const texture = this.own(this.textures, gl.createTexture());
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      if (i === 1) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 24, MAX_STREAMS, 0, gl.RGBA, gl.FLOAT, null);
+      if (i === 2) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32UI, 1, MAX_STREAMS, 0, gl.RGBA_INTEGER, gl.UNSIGNED_INT, null);
+    }
   }
 
   private own<T>(resources: T[], value: T | null): T {

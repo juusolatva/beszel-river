@@ -19,6 +19,42 @@ function advance(life: GpuLifecycle, seconds: number): void {
 }
 
 describe("GPU request and retention policy", () => {
+  for (const prepareWhileUnused of [false, true]) {
+    it(`resets a released same-ID claim even with ${prepareWhileUnused ? "an" : "no"} unused-slot prepare`, () => {
+      const life = new GpuLifecycle(100), streams = new StreamSet(1, life.canRelease);
+      const frame = replayFrames[0];
+      streams.apply(frame); streams.update(0, 1);
+      const slot = streams.slots[0];
+      slot.shareWeight = slot.spawnWeight = 1;
+      life.prepare(0.0625, streams, 70); // 0.625 requests: no whole birth yet.
+      expect(life.commands[3]).toBe(0);
+      streams.apply({ v: 1, t: 0, streams: [] }); slot.presence = 0;
+      advance(life, 14.2); streams.update(0, 1);
+      expect(slot.used).toBe(false);
+      if (prepareWhileUnused) life.prepare(0.0625, streams, 70);
+      streams.apply(frame); streams.update(0, 1);
+      expect(life.canRelease(slot, 0)).toBe(false); // Old ownership proof cannot authorize a new claim.
+      expect(slot.spawnCarry).toBe(0);
+      slot.shareWeight = slot.spawnWeight = 1;
+      life.prepare(0.0625, streams, 70);
+      expect([...life.commands.slice(0, 4)]).toEqual([2, 1, 0, 0]);
+      expect(life.canRelease(slot, 0)).toBe(false);
+    });
+  }
+
+  it("preserves fractional requests when the same ID returns before release", () => {
+    const life = new GpuLifecycle(100), streams = new StreamSet(1, life.canRelease);
+    streams.apply(replayFrames[0]); streams.update(0, 1);
+    const slot = streams.slots[0]; slot.shareWeight = slot.spawnWeight = 1;
+    life.prepare(0.0625, streams, 70);
+    streams.apply({ v: 1, t: 0, streams: [] }); slot.presence = 0.009;
+    life.prepare(0.0625, streams, 70);
+    streams.apply(replayFrames[0]); streams.update(0, 1);
+    slot.shareWeight = slot.spawnWeight = 1;
+    life.prepare(0.0625, streams, 70);
+    expect([...life.commands.slice(0, 4)]).toEqual([1, 1, 0, 1]);
+  });
+
   it("keeps fractional requests and stable slot priority while discarding whole excess", () => {
     const { life, streams } = setup();
     for (const s of streams.slots) { s.shareWeight = 0; s.spawnWeight = 0; }

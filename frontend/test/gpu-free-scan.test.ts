@@ -57,4 +57,13 @@ describe("GPU integer free scan", () => {
     }
     scan.dispose();
   });
+
+  it("releases the first program when linking the second program fails", () => {
+    let linked = 0;
+    const { gl, calls } = createFakeGl({ overrides: { getProgramParameter: () => ++linked === 1 } });
+    expect(() => new GpuFreeScan(gl, 31)).toThrow("Program link failed");
+    const firstProgram = callsTo(calls, "attachShader")[0][0];
+    expect(callsTo(calls, "deleteProgram")).toContainEqual([firstProgram]);
+    expect(callsTo(calls, "deleteProgram")).toHaveLength(2);
+  });
 });

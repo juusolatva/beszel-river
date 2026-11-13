@@ -23,6 +23,8 @@ export function laneCenter(j: number): number {
 
 /** One stream's eased state, layout and the motion parameters derived from them. */
 export class StreamSlot {
+  /** Changes on every fresh claim, including a released ID returning between GPU steps. */
+  claimVersion = 0;
   used = false;
   id = "";
   /** Present in the latest frame; otherwise the stream is draining. */
@@ -212,6 +214,7 @@ export class StreamSet {
   }
 
   private claim(slot: StreamSlot, stream: Stream): void {
+    slot.claimVersion++;
     slot.used = true;
     slot.id = stream.id;
     this.byId.set(stream.id, slot);

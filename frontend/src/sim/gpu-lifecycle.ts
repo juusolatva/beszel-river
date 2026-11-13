@@ -1,5 +1,5 @@
 import { LOOK } from "../config";
-import { MAX_STREAMS, MIN_SHARE, type StreamReleasePolicy, type StreamSet } from "./streams";
+import { MAX_STREAMS, MIN_SHARE, type StreamReleasePolicy, type StreamSet, type StreamSlot } from "./streams";
 
 /** Supported schedule keeps accumulated Float32 age error below one birth step. */
 export function effectiveGpuStep(dt: number): number {
@@ -16,11 +16,12 @@ export class GpuLifecycle {
   private readonly generations = new Uint32Array(MAX_STREAMS);
   private readonly carry = new Float64Array(MAX_STREAMS);
   private readonly lastPossibleSpawn = new Float64Array(MAX_STREAMS);
-  private readonly ids: string[] = Array(MAX_STREAMS).fill("");
+  private readonly claims = new Float64Array(MAX_STREAMS);
+  private readonly ids: string[] = new Array(MAX_STREAMS).fill("");
   private time = 0;
 
   readonly canRelease: StreamReleasePolicy = (slot, index) =>
-    this.ids[index] === slot.id && this.ids[index] !== "" &&
+    this.ids[index] === slot.id && this.ids[index] !== "" && this.claims[index] === slot.claimVersion &&
     this.time > this.lastPossibleSpawn[index] + LOOK.lifeRange[1] + Math.fround(LOOK.maxDt);
 
   constructor(private readonly capacity: number) {
@@ -49,25 +50,32 @@ export class GpuLifecycle {
     let total = 0;
     for (let i = 0; i < MAX_STREAMS; i++) {
       const s = streams.slots[i], o = i * 4;
-      if (s.used && this.ids[i] !== s.id) {
-        if (this.generations[i] === 0xffffffff) throw new Error("GPU generation overflow");
-        this.generations[i]++;
-        this.ids[i] = s.id;
-        this.carry[i] = 0;
-        this.lastPossibleSpawn[i] = this.time;
-      }
+      this.synchronizeClaim(s, i);
       this.commands[o] = this.generations[i];
       this.commands[o + 1] = s.used ? 1 : 0;
       this.commands[o + 2] = total;
-      if (s.used && (s.inFrame || s.presence >= 0.01)) {
-        this.lastPossibleSpawn[i] = this.time;
-        this.carry[i] += rate * s.spawnWeight * dt;
-        const n = Math.floor(this.carry[i]);
-        this.carry[i] -= n;
-        total += n;
-        if (!Number.isSafeInteger(total) || total > 0xffffffff) throw new Error("GPU request overflow");
-      }
+      total += this.requestCount(s, i, rate, dt);
+      if (!Number.isSafeInteger(total) || total > 0xffffffff) throw new Error("GPU request overflow");
       this.commands[o + 3] = total;
     }
+  }
+
+  private synchronizeClaim(slot: StreamSlot, index: number): void {
+    if (!slot.used || (this.ids[index] === slot.id && this.claims[index] === slot.claimVersion)) return;
+    if (this.generations[index] === 0xffffffff) throw new Error("GPU generation overflow");
+    this.generations[index]++;
+    this.ids[index] = slot.id;
+    this.claims[index] = slot.claimVersion;
+    this.carry[index] = 0;
+    this.lastPossibleSpawn[index] = this.time;
+  }
+
+  private requestCount(slot: StreamSlot, index: number, rate: number, dt: number): number {
+    if (!slot.used || !(slot.inFrame || slot.presence >= 0.01)) return 0;
+    this.lastPossibleSpawn[index] = this.time;
+    this.carry[index] += rate * slot.spawnWeight * dt;
+    const n = Math.floor(this.carry[index]);
+    this.carry[index] -= n;
+    return n;
   }
 }

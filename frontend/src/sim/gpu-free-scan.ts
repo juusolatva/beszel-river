@@ -15,7 +15,7 @@ export class GpuFreeScan {
   private readonly programs: Program[] = [];
   private readonly zero = new Uint32Array(4);
   private current = 0;
-  private uniforms!: Record<"flagWidth" | "flagHeight" | "source" | "width" | "capacity" | "offset", WebGLUniformLocation | null>;
+  private readonly uniforms!: Record<"flagWidth" | "flagHeight" | "source" | "width" | "capacity" | "offset", WebGLUniformLocation | null>;
 
   constructor(private readonly gl: WebGL2RenderingContext, private readonly capacity: number) {
     if (!Number.isSafeInteger(capacity) || capacity <= 0) throw new Error("Invalid GPU scan capacity");
@@ -24,6 +24,7 @@ export class GpuFreeScan {
     const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     if (this.width > max || this.height > max) throw new Error("GPU scan exceeds texture size");
     try {
+      // Register each program before the next creation can throw, so dispose owns it.
       this.programs.push(createProgram(gl, flagsVertex, flagsFragment));
       this.programs.push(createProgram(gl, fullscreenVertex, scanFragment));
       this.uniforms = {

@@ -149,6 +149,38 @@ export function runGpuAllocationBrowserChecks(): { cases: number } {
       cases++;
     } finally { gpu.dispose(); }
   }
+  // A fully released ID is a fresh claim, including when no GPU prepare saw it unused.
+  {
+    const gpu = new GpuParticles(gl, 100, 42);
+    gpu.limit = 70; gpu.spawningEnabled = true;
+    const streams = new StreamSet(1, gpu.lifecycle.canRelease);
+    streams.apply(replayFrames[0]); streams.update(0, 1);
+    const slot = streams.slots[0], field = new FlowField(() => 0.5); field.update(0, 1);
+    const read = new Uint32Array(1600);
+    const getCount = () => {
+      gl.bindBuffer(gl.ARRAY_BUFFER, gpu.stateBuffer); gl.getBufferSubData(gl.ARRAY_BUFFER, 0, read); gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      let count = 0;
+      for (let i = 0; i < 100; i++) count += read[i * 16 + 14];
+      return count;
+    };
+    const step = () => {
+      gpu.lifecycle.advanceTime(0.0625);
+      slot.shareWeight = slot.spawnWeight = 1; slot.center = 0.5; slot.half = 0.01; slot.rebuildCenters();
+      gpu.step(0.0625, streams, field, 1);
+    };
+    try {
+      step(); assert(getCount() === 0, "Initial fractional request birthed too early");
+      streams.apply({ v: 1, t: 0, streams: [] }); slot.presence = 0;
+      // No particles exist, so advancing only the lifecycle clock cannot leave an old owner.
+      for (let i = 0; i < 227; i++) gpu.lifecycle.advanceTime(0.0625);
+      streams.update(0, 1); assert(!slot.used, "Empty slot did not release");
+      streams.apply(replayFrames[0]); streams.update(0, 1);
+      step(); assert(getCount() === 0, "Same-ID claim inherited old fractional requests");
+      step(); assert(getCount() === 1 && read[13] === 2, "Fresh claim did not spawn with new generation");
+      assert(gl.getError() === gl.NO_ERROR, "Same-ID reclaim WebGL error");
+      cases++;
+    } finally { gpu.dispose(); }
+  }
   // Exercise the numerical ownership proof near its fastest supported schedule.
   {
     const gpu = new GpuParticles(gl, 1, 42);
