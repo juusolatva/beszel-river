@@ -9,7 +9,7 @@
 
 A web page that turns live metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: milestones M0–M7 done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). M8, the standalone container image, is published as `ghcr.io/juusolatva/beszel-river` (v1.0.0) and awaits its end-to-end check. Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: milestones M0–M7 done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). M8, the standalone container image, is published as `ghcr.io/juusolatva/beszel-river` (releases since v1.0.0) and awaits its end-to-end check. Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Screenshots
 
@@ -342,7 +342,7 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
 - **nginx configs from before `river-stream.conf`:** the current `river.conf` and `river-path.conf` include `/etc/nginx/snippets/river-stream.conf` instead of listing the stream settings themselves. Install it (`sudo install -m 644 deploy/nginx/river-stream.conf /etc/nginx/snippets/`) before copying the updated config, or `nginx -t` fails. Nothing else changes.
 - **Releases** (maintainers): CI publishes the image only from commits that passed every check in the same run. `edge` comes from `main`, rebuilt when a file that goes into the image changed since the commit the published `edge` was built from; a `vX.Y.Z` tag on a commit on `main` publishes `X.Y.Z` and moves `X.Y`, `X` and `latest` unless a newer release already holds them. A tag such as `v1.1.0-rc.1` publishes only its own tag. Releases publish one at a time; push one tag and let its publish job start before the next, since GitHub cancels an older waiting run when a third arrives (re-run it if that happens). To release, tag `main` and push the tag:
   ```sh
-  git checkout main && git pull && git tag -a v1.0.1 -m "v1.0.1" && git push origin v1.0.1   # the next version
+  git checkout main && git pull && git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z   # the next version, after the newest in git tag --sort=-v:refname
   ```
   The package inherits the repository's public visibility. If it ever shows as private, change it in the package settings (Danger Zone → Change visibility). A change to the `publish` job itself rebuilds nothing until the next image change; run the CI workflow on `main` by hand (Actions → CI → Run workflow) to rebuild `edge`.
 - **From v1.0.0** (port 8095): the container now listens on 8787, the bridge's usual port, because 8095 clashed with other services. After `docker compose pull && docker compose up -d` the page is at `http://127.0.0.1:8787`. A proxy config copied from v1.0.0 still points at 8095: change it to 8787 (or `river:8787` on a shared network), or set `RIVER_PORT=8095` in `deploy/.env` to keep the old host port. Under `compose.host-network.yml` the default `RIVER_PORT` moves the same way.
