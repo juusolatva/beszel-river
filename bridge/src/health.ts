@@ -1,5 +1,5 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
-import { listen, requestPath } from "./http.js";
+import { close, listen, requestPath } from "./http.js";
 
 /** `/healthz`: 200 while the hub subscription is live, 503 otherwise. */
 export function sendHealth(response: ServerResponse, ok: boolean, headers: Readonly<Record<string, string>> = {}): void {
@@ -36,6 +36,6 @@ export class HealthServer {
   }
 
   close(): Promise<void> {
-    return new Promise((resolve) => this.server.close(() => resolve()));
+    return close(this.server);
   }
 }

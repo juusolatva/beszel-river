@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { Frame, FrameEvent } from "@beszel-river/shared";
 import { sendHealth } from "./health.js";
-import { listen, requestPath } from "./http.js";
+import { close, listen, requestPath } from "./http.js";
 import { SECURITY_HEADERS, sendStatic, type StaticFiles } from "./static.js";
 
 export interface StreamServerOptions {
@@ -67,7 +67,7 @@ export class StreamServer {
   close(): Promise<void> {
     clearInterval(this.pingTimer);
     for (const client of this.clients) this.drop(client);
-    return new Promise((resolve) => this.server.close(() => resolve()));
+    return close(this.server);
   }
 
   private remove(client: Client): void {

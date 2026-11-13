@@ -17,3 +17,14 @@ export function listen(server: Server, port: number, host: string): Promise<numb
     server.listen(port, host, () => resolve((server.address() as AddressInfo).port));
   });
 }
+
+/**
+ * Stops `server` and resolves once it has closed. close() alone waits for every connection without a
+ * request in progress to end on its own, including one a browser opened speculatively and never used,
+ * which would hold up shutdown until the client gave up on it.
+ */
+export function close(server: Server): Promise<void> {
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+  server.closeAllConnections();
+  return closed;
+}

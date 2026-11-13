@@ -2,6 +2,7 @@ import { request } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { HealthServer } from "../src/health.js";
 import { StreamServer } from "../src/server.js";
+import { preconnect, within } from "./sockets.js";
 
 let health: HealthServer | undefined;
 let stream: StreamServer | undefined;
@@ -57,6 +58,15 @@ describe("HealthServer", () => {
     const response = await fetch(`${base}/stream`);
     expect(response.status).toBe(200);
     await response.body!.cancel();
+  });
+
+  it("closes connections that never sent a request, so shutdown does not wait for the client", async () => {
+    const base = await start(() => true);
+    const socket = await preconnect(base);
+    const closed = new Promise((resolve) => socket.once("close", resolve));
+    await within(health!.close(), 1000);
+    health = undefined;
+    await within(closed, 1000);
   });
 
   it("rejects listen when the port is taken", async () => {

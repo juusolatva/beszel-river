@@ -2,6 +2,7 @@ import { request, ServerResponse } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Frame } from "@beszel-river/shared";
 import { StreamServer, type StreamServerOptions } from "../src/server.js";
+import { preconnect, within } from "./sockets.js";
 
 const frame = (t: number): Frame => ({ v: 1, t, streams: [] });
 
@@ -90,6 +91,15 @@ describe("StreamServer", () => {
     await Promise.all([read(first, /snapshot/), read(second, /snapshot/)]);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(counts).toEqual([1, 2, 1, 0]);
+  });
+
+  it("closes connections that never sent a request, so shutdown does not wait for the client", async () => {
+    const base = await start();
+    const socket = await preconnect(base);
+    const closed = new Promise((resolve) => socket.once("close", resolve));
+    await within(server!.close(), 1000);
+    server = undefined;
+    await within(closed, 1000);
   });
 
   it("caps concurrent clients", async () => {
