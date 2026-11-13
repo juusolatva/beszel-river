@@ -123,6 +123,22 @@ copy(JSON.stringify(spawn));
 
 It replays the matched CPU control to the recorded birth (also checked in Node by `test/gpu-spawn.test.ts`), evaluates simulate.vert's `gaussian()` expression and its `log`/`cos`/`sqrt` parts with real shaders for that birth and for 65,536-point sweeps over u and v, and predicts the GPU's spawn x from the readback. `birth.explainsRecordedX: true` means the GPU's own `gaussian()` reproduces the recorded x within 1e-6, far inside the 2.1e-5 gap; on a different GPU it is expected to be false. The recording laptop's result is in `docs/experiments/2026-11-14-gpu-spawn.json` (true). Firefox may mask the renderer name, so record the device separately.
 
+The approved occupancy gate (GPU plan, "Revised occupancy gate") runs 20 seeded runs per group for both scenarios in one session: CPU seeds 1–20, CPU calibration seeds 21–40, the PCG-keyed CPU control and the GPU with seeds 1001–1020. Run it on the target device, on the same page:
+
+```js
+const { runGpuOccupancyGate } = await import("/test/gpu-occupancy-gate.browser.ts");
+const gate = await runGpuOccupancyGate({ onProgress: (done, total, label) => console.log(`${done}/${total} ${label}`) });
+copy(JSON.stringify(gate));
+```
+
+Save the copied JSON as `/tmp/gpu-occupancy-gate.json` and apply the gate from the repository root:
+
+```sh
+python3 frontend/test/summarize_gpu_occupancy_gate.py /tmp/gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
+```
+
+It exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, the median 90 % detectable difference and the comparisons closest to their bounds. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
+
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
 The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
