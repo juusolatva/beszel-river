@@ -88,8 +88,8 @@ jobs:
       # cannot be undone.
       - name: Test image cleanup
         run: python3 -m unittest discover -s .github/scripts
-      # The processors that turn GPU prototype browser exports into acceptance verdicts.
-      - name: Test GPU evidence processors
+      # The processor that summarizes the GPU occupancy investigation's browser export.
+      - name: Test GPU investigation processor
         run: python3 -m unittest discover -s frontend/test -p '*_test.py'
       # Deployment directories hold .env and mix.json next to the compose files, inside the checkout.
       - name: Check that secrets are ignored

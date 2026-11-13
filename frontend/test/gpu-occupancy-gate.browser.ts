@@ -2,15 +2,9 @@ import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
 import { StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
+import { runGate } from "./fixtures/occupancy-gate";
 import { runCpuOccupancy, type OccupancyRun } from "./fixtures/occupancy-runs";
-import { OCCUPANCY, OCCUPANCY_SCENARIOS, occupancyFrames, phaseAt, WindowMeans, type OccupancyScenario } from "./fixtures/occupancy-scenario";
-
-const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-
-/** Seeds fixed by the approved gate (docs/superpowers/plans/2026-11-13-gpu-prototype.md). */
-export const GATE_SEEDS: Readonly<Record<OccupancyRun["group"], readonly number[]>> = {
-  cpu: range(1, 20), calibration: range(21, 40), pcg: range(1001, 1020), gpu: range(1001, 1020),
-};
+import { OCCUPANCY, occupancyFrames, phaseAt, WindowMeans, type OccupancyScenario } from "./fixtures/occupancy-scenario";
 
 const yieldToBrowser = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -42,8 +36,10 @@ async function runGpuOccupancy(gl: WebGL2RenderingContext, scenario: OccupancySc
       counts.fill(0);
       let live = 0;
       for (let i = 0; i < capacity; i++) {
-        const o = i * 16;
-        if (words[o + 14]) { counts[words[o + 12]]++; live++; }
+        const o = i * 16, active = words[o + 14], slot = words[o + 12];
+        // A bad marker or slot would drop out of the per-stream series yet still count in the total.
+        if (active > 1 || (active && slot >= 32)) throw new Error(`Invalid particle ${i} in ${scenario} seed ${seed} at step ${step}`);
+        if (active) { counts[slot]++; live++; }
       }
       windows.add(time, dt, live, (s) => counts[s]);
       if (step % 20 === 0) await yieldToBrowser();
@@ -55,12 +51,13 @@ async function runGpuOccupancy(gl: WebGL2RenderingContext, scenario: OccupancySc
 }
 
 /**
- * Runs every group of the approved occupancy gate in this browser session and returns each run's window
- * means for `summarize_gpu_occupancy_gate.py`, which applies the statistic. Readback-heavy and untimed:
- * run it apart from benchmarks and coverage. `runsPerGroup` below 20 is a smoke run the processor rejects.
+ * Runs the approved occupancy gate in this browser session: every CPU group of both scenarios, then
+ * calibration, then the GPU groups only if calibration passed. Returns each run's window means for
+ * `summarize-gpu-occupancy-gate.ts`, which gives the verdict. Readback-heavy and untimed: run it apart
+ * from benchmarks and coverage. `runsPerGroup` below 20 is a smoke run: calibration is not enforced
+ * and the processor rejects it.
  */
 export async function runGpuOccupancyGate(options: { runsPerGroup?: number; onProgress?: (done: number, total: number, label: string) => void } = {}) {
-  const runsPerGroup = options.runsPerGroup ?? 20;
   const canvas = document.createElement("canvas");
   const gl = canvas.getContext("webgl2");
   if (!gl) throw new Error("The occupancy gate requires WebGL2");
@@ -68,23 +65,12 @@ export async function runGpuOccupancyGate(options: { runsPerGroup?: number; onPr
   const startedAt = new Date().toISOString(), start = performance.now();
   const metadata = { userAgent: navigator.userAgent, renderer: gl.getParameter(gl.RENDERER) as string,
     unmaskedRenderer: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) as string : null,
-    ...OCCUPANCY, runsPerGroup, startedAt };
-  const groups = Object.keys(GATE_SEEDS) as OccupancyRun["group"][];
-  const total = OCCUPANCY_SCENARIOS.length * groups.length * runsPerGroup;
-  const runs: OccupancyRun[] = [];
+    ...OCCUPANCY, runsPerGroup: options.runsPerGroup ?? 20, startedAt };
   try {
-    for (const scenario of OCCUPANCY_SCENARIOS) {
-      for (const group of groups) {
-        for (const seed of GATE_SEEDS[group].slice(0, runsPerGroup)) {
-          const run = group === "gpu" ? await runGpuOccupancy(gl, scenario, seed) : runCpuOccupancy(scenario, seed, group === "pcg");
-          runs.push({ ...run, group });
-          options.onProgress?.(runs.length, total, `${scenario} ${group} seed ${seed}`);
-          await yieldToBrowser();
-        }
-      }
-    }
+    const result = await runGate(runCpuOccupancy, (scenario, seed) => runGpuOccupancy(gl, scenario, seed),
+      { ...options, yieldEach: yieldToBrowser });
+    return { metadata: { ...metadata, finishedAt: new Date().toISOString(), seconds: (performance.now() - start) / 1000 }, ...result };
   } finally {
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
-  return { metadata: { ...metadata, finishedAt: new Date().toISOString(), seconds: (performance.now() - start) / 1000 }, runs };
 }

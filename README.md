@@ -127,7 +127,7 @@ The approved occupancy gate (GPU plan, "Revised occupancy gate") runs 20 seeded 
 
 1. From a checkout of `main`: `npm ci`, then `npm run dev:frontend`.
 2. Open `http://localhost:5173/test/gpu-benchmark.html` in the browser under test and its developer console. Note the browser version, the device and whether it runs on mains or battery: Firefox may mask the renderer name.
-3. Keep the tab in the foreground until the run finishes. Background tabs slow its timers, and other heavy work on the device slows it too. It makes 160 runs, 40 of them on the GPU with a full readback every step, so expect several minutes; the progress lines show where it is.
+3. Keep the tab in the foreground until the run finishes. Background tabs slow its timers, and other heavy work on the device slows it too. It makes the 120 CPU runs first and checks calibration in the browser; only if that passes does it make the 40 GPU runs, each with a full readback every step. Expect several minutes; the progress lines show where it is.
 
 ```js
 const { runGpuOccupancyGate } = await import("/test/gpu-occupancy-gate.browser.ts");
@@ -135,13 +135,13 @@ const gate = await runGpuOccupancyGate({ onProgress: (done, total, label) => con
 copy(JSON.stringify(gate));
 ```
 
-Save the copied JSON as `/tmp/gpu-occupancy-gate.json` and apply the gate from the repository root (Python 3.10 or newer, standard library only):
+Save the copied JSON as `/tmp/gpu-occupancy-gate.json` and apply the gate from the repository root:
 
 ```sh
-python3 frontend/test/summarize_gpu_occupancy_gate.py /tmp/gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
+npx tsx frontend/test/summarize-gpu-occupancy-gate.ts /tmp/gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
 ```
 
-It exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, the median 90 % detectable difference and the comparisons closest to their bounds. If `summary.calibrationPassed` is false, the gate itself needs revising before the GPU result means anything (GPU plan); do not rerun with other seeds either way. Keep the `--output` file, which contains the browser export unchanged, as `docs/experiments/<date>-gpu-occupancy-gate.json`, and record the device notes from step 2 with the result. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
+It uses the same statistic as the browser's calibration check (`test/fixtures/occupancy-gate.ts`) and exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, each control's median 90 % detectable difference and the comparisons closest to their bounds. If the browser returned `gpuSkipped: true`, or `summary.calibration.passed` is false, the gate itself needs revising before any GPU run (GPU plan); keep that export too, and do not rerun with other seeds either way. Keep the `--output` file, which contains the browser export unchanged, as `docs/experiments/<date>-gpu-occupancy-gate.json`, and record the device notes from step 2 with the result. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
 
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
