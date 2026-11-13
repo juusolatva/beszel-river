@@ -63,10 +63,11 @@ describe("HealthServer", () => {
   it("closes connections that never sent a request, so shutdown does not wait for the client", async () => {
     const base = await start(() => true);
     const socket = await preconnect(base);
-    const closed = new Promise((resolve) => socket.once("close", resolve));
-    await within(health!.close(), 1000);
+    // The socket's close event reports whether it closed with an error.
+    const closed = new Promise<boolean>((resolve) => socket.once("close", resolve));
+    await expect(within(health!.close(), 1000)).resolves.toBeUndefined();
     health = undefined;
-    await within(closed, 1000);
+    await expect(within(closed, 1000)).resolves.toBe(false);
   });
 
   it("rejects listen when the port is taken", async () => {

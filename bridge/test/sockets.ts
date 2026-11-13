@@ -8,7 +8,8 @@ import { connect, type Socket } from "node:net";
 export async function preconnect(base: string): Promise<Socket> {
   const { hostname, port } = new URL(base);
   const socket = await new Promise<Socket>((resolve, reject) => {
-    const opened = connect(Number(port), hostname, () => resolve(opened)).on("error", reject);
+    const opened = connect(Number(port), hostname);
+    opened.once("connect", () => resolve(opened)).once("error", reject);
   });
   await new Promise<void>((resolve, reject) => {
     request(base, { path: "/", agent: false, headers: { Connection: "close" } }, (response) => {
