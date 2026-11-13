@@ -102,6 +102,8 @@ export class Renderer {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.useProgram(this.present.program);
+    // Frames without an accumulate pass would otherwise bind to whichever unit was left active.
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, targets[0].texture);
     gl.uniform1i(this.present.uniform("u_image"), 0);
     gl.uniform1f(this.present.uniform("u_exposure"), LOOK.exposure);

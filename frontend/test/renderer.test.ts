@@ -93,6 +93,21 @@ describe("Renderer", () => {
     expect(callsTo(calls, "drawArrays")).toHaveLength(1);
   });
 
+  it.each([0, 1 / 240, 1 / 120])("presents the 8-bit trail from texture unit 0 when dt %f skips accumulation", (dt) => {
+    const { gl, calls } = createFakeGl();
+    const renderer = new Renderer(gl, 1);
+    renderer.resize(100, 100);
+    // Another user of the context, such as a GPU simulation pass, may leave a different unit active.
+    gl.activeTexture(gl.TEXTURE1);
+    calls.length = 0;
+    renderer.render(new Float32Array(INSTANCE_FLOATS), 1, dt, 1);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
+    const present = calls.findIndex(([name, , texture]) => name === "bindTexture" && texture !== null);
+    const select = calls.findLastIndex(([name, unit]) => name === "activeTexture" && unit === gl.TEXTURE0);
+    expect(select).toBeGreaterThanOrEqual(0);
+    expect(select).toBeLessThan(present);
+  });
+
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     new Renderer(gl, 1000);
