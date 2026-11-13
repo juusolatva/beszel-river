@@ -26,6 +26,23 @@ export function createFakeGl(options: FakeGlOptions = {}): { gl: WebGL2Rendering
   const attachments = new Map<unknown, unknown>();
   let boundFramebuffer: unknown;
 
+  let activeUnit: unknown = "TEXTURE0";
+  const textureUnits = new Map<unknown, unknown>();
+  let arrayBuffer: unknown;
+  let vao: unknown;
+  const attributes = new Map<unknown, Map<unknown, unknown>>();
+  const outputs = new Map<unknown, unknown>();
+  const assertInputs = (): void => {
+    for (const buffer of attributes.get(vao)?.values() ?? []) {
+      if (buffer && [...outputs.values()].includes(buffer)) throw new Error("Attribute buffer is also feedback output");
+    }
+  };
+  const bindAttribute = (index: unknown): void => {
+    if (!attributes.has(vao)) attributes.set(vao, new Map());
+    attributes.get(vao)!.set(index, arrayBuffer);
+    assertInputs();
+  };
+
   const methods: Record<string, (...args: unknown[]) => unknown> = {
     getExtension: (name) => (name === "EXT_color_buffer_float" && options.halfFloat ? {} : null),
     getShaderParameter: () => options.compileLog == null,
@@ -33,7 +50,15 @@ export function createFakeGl(options: FakeGlOptions = {}): { gl: WebGL2Rendering
     getProgramParameter: () => options.linkLog == null,
     getProgramInfoLog: () => options.linkLog ?? "",
     getUniformLocation: (_program, name) => ({ uniform: name }),
-    bindTexture: (_target, texture) => (boundTexture = texture),
+    getParameter: () => 4096,
+    activeTexture: (unit) => { activeUnit = unit; boundTexture = textureUnits.get(unit); },
+    bindTexture: (_target, texture) => { boundTexture = texture; textureUnits.set(activeUnit, texture); },
+    bindBuffer: (target, buffer) => { if (target === "ARRAY_BUFFER") arrayBuffer = buffer; },
+    bindVertexArray: (value) => { vao = value; assertInputs(); },
+    vertexAttribPointer: bindAttribute,
+    vertexAttribIPointer: bindAttribute,
+    bindBufferBase: (_target, index, buffer) => { outputs.set(index, buffer); assertInputs(); },
+    drawArrays: assertInputs,
     texImage2D: (_target, _level, format) => {
       boundFormat = String(format);
       textureFormats.set(boundTexture, boundFormat);

@@ -31,7 +31,7 @@ describe("GPU comparison replay foundation", () => {
     trace.append(0, 2, 960, 640, 1.2, 1, false, 1000, 1, false);
     trace.append(3, 4, 640, 960, 1, 0.2, true, 800, 2, true);
     expect(trace).toHaveLength(2);
-    expect(trace.dt[1]).toBe(LOOK.maxDt);
+    expect(trace.dt[1]).toBe(Math.fround(LOOK.maxDt));
     expect(trace.interval[1]).toBe(3);
     expect(trace.frame[1]).toBe(4);
     expect(trace.motion[1]).toBe(0.2);
@@ -41,6 +41,15 @@ describe("GPU comparison replay foundation", () => {
     expect(trace.intensity[1]).toBe(2);
     expect(() => trace.append(1 / 60, 2, 1, 1, 1, 1, false, 1, 1, true)).toThrow(/overflow/i);
     expect(trace.valid).toBe(false);
+  });
+
+  it("records identical Float32-effective dt for both backends while retaining callback intervals", () => {
+    const trace = new ReplayTrace(1);
+    const interval = 0.07793116454949989;
+    trace.append(interval, 2, 960, 640, 1, 1, false, 1000, 1, true);
+    expect(trace.interval[0]).toBe(interval);
+    expect(trace.dt[0]).toBe(Math.fround(interval));
+    expect(trace.dt[0]).not.toBe(interval);
   });
 
   it("rejects dimensions that cannot survive storage as positive uint32 values", () => {

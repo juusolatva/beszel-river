@@ -133,6 +133,18 @@ export class FlowField {
     }
   }
 
+  get gridCols(): number { return this.cols; }
+  get gridRows(): number { return this.rows; }
+  get gridCell(): number { return this.cell; }
+
+  /** Copies exact cell velocities into caller-owned interleaved storage. */
+  writeVelocityGrid(out: Float32Array): void {
+    for (let i = 0; i < this.vx.length; i++) {
+      out[i * 2] = this.vx[i];
+      out[i * 2 + 1] = this.vy[i];
+    }
+  }
+
   /** Bilinear sample at world position (x, y); writes `sx`, `sy`. */
   sample(x: number, y: number): void {
     const { cols, rows, cell, vx, vy } = this;

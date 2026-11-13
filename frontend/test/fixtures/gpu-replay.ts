@@ -35,7 +35,7 @@ export class ReplayTrace {
   length = 0;
   valid = true;
   readonly interval: Float64Array;
-  readonly dt: Float64Array;
+  readonly dt: Float32Array;
   readonly frame: Uint8Array;
   readonly width: Uint32Array;
   readonly height: Uint32Array;
@@ -49,7 +49,7 @@ export class ReplayTrace {
   constructor(readonly capacity: number) {
     if (!Number.isInteger(capacity) || capacity < 0) throw new Error("Trace capacity must be a nonnegative integer");
     this.interval = new Float64Array(capacity);
-    this.dt = new Float64Array(capacity);
+    this.dt = new Float32Array(capacity);
     this.frame = new Uint8Array(capacity);
     this.width = new Uint32Array(capacity);
     this.height = new Uint32Array(capacity);
@@ -74,6 +74,7 @@ export class ReplayTrace {
     }
     const i = this.length++;
     this.interval[i] = interval;
+    // Canonicalize the effective step once; both backends consume this same Float32 value.
     this.dt[i] = Math.min(Math.max(0, interval), LOOK.maxDt);
     this.frame[i] = frame;
     this.width[i] = width;

@@ -128,7 +128,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL error: run invalid");
   return {
     runId,
-    metadata: { cpuReference: CPU_REFERENCE, backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY, limit,
+    metadata: { cpuReference: CPU_REFERENCE, effectiveStep: "Float32(clamp(interval, 0, LOOK.maxDt))", backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY, limit,
       motion, refreshHz, conditions, userAgent: navigator.userAgent, renderer: rendererName, targetFormat,
       width, height, pixelRatio: trace.pixelRatio[trace.length - 1], warmupSeconds, measureSeconds },
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
