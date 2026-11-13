@@ -474,6 +474,8 @@ The bridge rejects hub URLs with unsupported schemes or embedded credentials wit
 
 Detailed execution plan: [GPU Particle Prototype Implementation Plan](superpowers/plans/2026-11-13-gpu-prototype.md). The isolated CPU replay harness, GPU motion, spawning and ownership checks are implemented. Task 3 failed the fixed per-stream occupancy gate; this candidate stops before drawing integration and performance acceptance.
 
+**Resume note — 2026-11-13:** Work is paused at the user's request after merging PR #120. Task 4 remains blocked: the original occupancy gate still fails 43/330 comparisons, and the plain-spawn discrepancy remains unexplained. Resume with the [handoff checklist](superpowers/plans/2026-11-13-gpu-prototype.md#resume-checklist--2026-11-13), before drawing integration. Merging the investigation did not clear the gate.
+
 **Trigger:** Parts 1 and 2 have measured results, and real target hardware still misses the desired cadence because of CPU simulation/upload work. GPU fill-rate or trail-buffer bandwidth pressure alone is not a reason to port simulation.
 
 **Explicit experiment exception — 2026-11-13:** The user authorized going straight to the isolated GPU prototype without waiting for the remaining CPU experiments and dropped the fixed 30 Hz/interpolated-rendering alternative. This permits prototype implementation only; it does not mark Parts 1–2 complete or establish the trigger from existing measurements. Freeze the current CPU reference and collect paired baseline/candidate runs, including full-screen X280 AC/battery and a real lower-end phone. Missing hardware permits correctness work but leaves performance acceptance unverified. Production migration still needs a separate proposal and measured benefit.

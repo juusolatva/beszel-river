@@ -215,6 +215,19 @@ Follow-up local verification passed 204 bridge + 164 frontend tests, typecheck, 
 
 **Post-merge investigation:** [Controlled occupancy experiments](../../experiments/2026-11-13-gpu-occupancy.md) reproduce the original window means exactly and verify all 12 million allocation decisions. Matching the GPU random keys and ascending free order in a test-only CPU control passes all 330 diagnostic comparisons; changing free order alone leaves CPU counts identical. The filament control matches every active identity; the plain control diverges on 485/600 callbacks after an unresolved spawn-calculation difference crosses the strict left death boundary. Its passing means do not establish randomness as the sole or dominant cause. The summary processor is committed; the spawn discrepancy needs further isolation. No runtime code or acceptance criteria changed. Task 4 remains stopped pending an explicit validation-plan revision and fresh acceptance evidence.
 
+### Resume checklist — 2026-11-13
+
+The user paused work after merging PR #120. **Task 4 is still blocked.** The
+original gate fails 43/330 comparisons; passing diagnostic means do not clear it.
+
+1. Read the [investigation and retained evidence](../../experiments/2026-11-13-gpu-occupancy.md). The filament control matches exactly, but the plain control diverges on 485/600 callbacks. Do not treat randomness as its established sole or dominant cause.
+2. Isolate the plain birth at simulated 6.5000000969 s, particle 674: CPU x = -0.09998229146, GPU x = -0.10000331700. It crosses the -0.1 death boundary before motion. Compare identical birth keys, random draws and intermediate spawn calculations; ordinary final-store rounding is not an established explanation.
+3. Use the browser diagnostic and committed summary processor documented in README to reproduce the evidence. Preserve the original results and distinguish measured output from derived summaries.
+4. Before Task 4, resolve the spawn investigation, explicitly document any validation-plan revision and collect fresh acceptance evidence. Keep exact allocation/ownership and common-input motion/death checks; define any multi-seed distribution criteria before collecting new results. Do not waive the failed gate because PR #120 merged.
+
+No drawing integration, new acceptance runs or production GPU migration is
+authorized by this handoff note. Wait for the user to resume work.
+
 ## Task 4: Draw directly from GPU state
 
 **Files:** Create `frontend/src/render/gpu-particle-drawer.ts`, `frontend/src/render/shaders/particle-gpu.vert`, `frontend/test/gpu-particle-drawer.test.ts`; extend `frontend/src/render/renderer.ts`, `frontend/test/renderer.test.ts`, `frontend/test/renderer.browser.ts`, and GPU browser tests.
