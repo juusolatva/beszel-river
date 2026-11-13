@@ -1,9 +1,10 @@
 # GPU occupancy investigation — 2026-11-13
 
-The rejected Task 3 result is reproducible. Its dominant cause is comparing
-different random realizations in a saturated, stream-prioritized pool. The
-investigation found no request, free-rank allocation or live-ownership error in
-these fixtures. A separate spawn-rounding boundary difference remains observable.
+The rejected Task 3 result is reproducible. The controls demonstrate sensitivity
+to random sequence and free-slot ordering in a saturated pool. The investigation
+found no request, free-rank allocation or live-ownership error in these fixtures.
+The plain-run control also diverges in its spawn calculation, so it does not
+isolate randomness as the sole or dominant cause of that failed comparison.
 **The original acceptance gate still fails; Task 4 remains stopped.**
 
 ## Method
@@ -27,7 +28,7 @@ For every callback, an independent request/carry calculation is checked against
 the GPU commands. Every particle's previous active flag, free rank, birth counter
 and new owner are then checked against the expected accepted request interval.
 Existing live owners must remain unchanged. Births are counted even if they die
-in that callback. The full raw results are in
+in that callback. Browser results with a derived summary are retained in
 [`2026-11-13-gpu-occupancy.json`](2026-11-13-gpu-occupancy.json).
 
 ## Results
@@ -53,9 +54,12 @@ Changing free-slot order alone leaves every per-stream CPU count identical on
 every callback. With the CPU's sequential random source, particle storage index
 does not choose the random draws. The GPU's random key includes the storage index
 and birth counter, so its free order changes which draws each accepted birth gets.
-Matching both choices removes all window failures. The filament control matches
-every active identity and per-stream count on all 600 callbacks. In the plain
-control the largest window-mean difference is 3.44 particles.
+With both choices matched, all five-second means pass the diagnostic bound.
+The filament control matches every active identity and per-stream count on all
+600 callbacks, isolating the random sequence and slot mapping in that scenario.
+The plain control differs on 485/600 callbacks and 50,594 particle identity
+comparisons; its largest window-mean difference is 3.44 particles. Passing means
+do not make that control an exact reconstruction or establish a sole cause.
 
 ## Why saturation makes the differences large
 
@@ -75,16 +79,18 @@ remove this effect: adjacent counts share the same surviving particles and are
 strongly correlated. The different-seed CPU control independently demonstrates
 that the fixed bound can reject the unchanged CPU implementation against itself.
 
-## Remaining rounding difference
+## Unresolved spawn-calculation difference
 
 The first active-state mismatch in the matched plain control occurs at simulated
 6.5000000969 s, particle index 674, on a birth. CPU spawn x is
 −0.09998229146; GPU spawn x is −0.10000331700, a difference of about 0.0000210.
 The GPU immediately kills the birth at the −0.1 boundary; the CPU keeps it. Both
-lifetimes are 8.5031852722 s. This is a Float32 shader spawn calculation versus
-CPU double calculation crossing a strict death boundary, before motion runs.
-The trace identifies the boundary effect, not a particular driver's individual
-transcendental operation as its cause.
+lifetimes are 8.5031852722 s. This establishes a spawn-calculation discrepancy
+crossing a strict death boundary before motion runs. It does not identify why
+the calculations differ. The gap is about 2,800 Float32 ulps at magnitude 0.1;
+attributing it to ordinary rounding at the final x store is unsupported.
+Intermediate arithmetic, transcendental precision and draw-path agreement need
+separate checks. The recorded values alone cannot distinguish those causes.
 
 That one discrepancy changes subsequent free-slot reuse and random keys. The
 paired control is consequently no longer a particle-for-particle trajectory
@@ -97,10 +103,12 @@ spawn calculations bit-for-bit is a different requirement.
 ## Next decision
 
 No production or prototype behavior was changed, and no tolerance was relaxed.
-These results explain this failed candidate; they do not establish distribution
+These results narrow the investigation; they do not establish distribution
 equivalence across seeds, browsers or hardware, or make a performance claim.
 
-Before resuming Task 4, revise the validation plan explicitly: retain exact
+Before resuming Task 4, isolate the plain spawn discrepancy by comparing draw
+values and intermediate spawn calculations for identical birth keys. Then
+revise the validation plan explicitly: retain exact
 allocation/ownership checks and common-input motion/death checks, and specify a
 separate multi-seed distribution comparison calibrated against CPU-vs-CPU
 variation. Fix its seed set, windows, statistics and rejection criteria before
@@ -110,9 +118,23 @@ speedup. Changing allocation fairness would alter the CPU reference's behavior
 and needs its own design decision; it is not a repair demonstrated by this
 investigation.
 
-Verification: headless Firefox 160 executed the diagnostic; a separate comparison
-of its raw output with the historical artifact confirmed exact reproduction of
-all original means. Typecheck, build and 368 unit tests with coverage passed;
+## Reproduction and provenance
+
+The browser function returns only measured `metadata` and `results`. Export it
+as JSON, then run the committed `frontend/test/summarize_gpu_occupancy.py` processor
+as described in README. The processor compares the complete historical window
+key set and all original CPU/GPU/seed-43 means, calculates the table totals and
+adds `summary`. It exits unsuccessfully if reproduction differs and rejects
+missing, extra, duplicate or nonfinite windows. The metadata, including renderer,
+is copied verbatim from the browser; it is neither hard-coded nor hardware
+performance evidence. Earlier manually appended date/source labels have been
+removed from the retained artifact. The artifact is processed evidence, not
+unmodified browser output.
+
+Verification: headless Firefox 160 executed the diagnostic. The committed
+processor was run on that retained browser export and confirmed exact
+reproduction of all original means; its four unit tests also pass. Typecheck,
+build and 368 unit tests with coverage passed;
 frontend coverage used the established local 15 s timeout for the CPU drain
 tests, with all thresholds unchanged. The production asset remains
 `index-wbx5Usbf.js`. Local review checked the control's PRNG, free-list mutation,

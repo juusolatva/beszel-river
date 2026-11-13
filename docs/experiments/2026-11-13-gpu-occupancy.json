@@ -7,11 +7,7 @@
     "aspect": 1.5,
     "stepsPerScenario": 600,
     "renderer": "Intel(R) HD Graphics 400, or similar",
-    "purpose": "Untimed causal investigation; original acceptance gate unchanged",
-    "date": "2026-11-13",
-    "sourceBase": "3e5ac62",
-    "fixture": "frontend/test/gpu-occupancy.browser.ts",
-    "originalArtifact": "2026-11-13-gpu-lifecycle.json"
+    "purpose": "Untimed causal investigation; original acceptance gate unchanged"
   },
   "results": [
     {

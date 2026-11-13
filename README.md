@@ -98,9 +98,19 @@ To reproduce the separate occupancy investigation, run this on the same test pag
 const { runGpuOccupancyInvestigation } = await import("/test/gpu-occupancy.browser.ts");
 const investigation = await runGpuOccupancyInvestigation();
 console.log(investigation);
+copy(JSON.stringify(investigation));
 ```
 
-This checks every allocation and compares CPU controls with different random sources and free-slot orders. It uses synchronous readbacks and test-only CPU state access, so it must run separately from performance measurements and coverage. The [investigation](docs/experiments/2026-11-13-gpu-occupancy.md) explains the mismatch; its matched-randomness control does not replace or waive the failed acceptance gate.
+Save the copied browser JSON as `/tmp/gpu-occupancy-browser.json`, then generate the summary and check exact reproduction of the historical window means from the repository root:
+
+```sh
+python3 frontend/test/summarize_gpu_occupancy.py /tmp/gpu-occupancy-browser.json --output /tmp/gpu-occupancy-summary.json
+python3 -m unittest discover -s frontend/test -p '*_test.py'
+```
+
+The browser output contains measured metadata and results; the processor adds the derived `summary` and returns a failure status if historical means differ. It rejects missing, extra, duplicate or nonfinite windows. Its default reference is the retained lifecycle JSON; `--reference PATH` selects another reference.
+
+This checks every allocation and compares CPU controls with different random sources and free-slot orders. It uses synchronous readbacks and test-only CPU state access, so it must run separately from performance measurements and coverage. The [investigation](docs/experiments/2026-11-13-gpu-occupancy.md) records sensitivity to random inputs and an unresolved plain-spawn discrepancy; its matched-randomness control does not replace or waive the failed acceptance gate.
 
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
