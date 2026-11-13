@@ -110,7 +110,18 @@ python3 -m unittest discover -s frontend/test -p '*_test.py'
 
 The browser output contains measured metadata and results; the processor adds the derived `summary` and returns a failure status if historical means differ. It rejects missing, extra, duplicate or nonfinite windows. Its default reference is the retained lifecycle JSON; `--reference PATH` selects another reference.
 
-This checks every allocation and compares CPU controls with different random sources and free-slot orders. It uses synchronous readbacks and test-only CPU state access, so it must run separately from performance measurements and coverage. The [investigation](docs/experiments/2026-11-13-gpu-occupancy.md) records sensitivity to random inputs and an unresolved plain-spawn discrepancy; its matched-randomness control does not replace or waive the failed acceptance gate.
+This checks every allocation and compares CPU controls with different random sources and free-slot orders. It uses synchronous readbacks and test-only CPU state access, so it must run separately from performance measurements and coverage. The [investigation](docs/experiments/2026-11-13-gpu-occupancy.md) records sensitivity to random inputs and a plain-spawn discrepancy; its matched-randomness control does not replace or waive the failed acceptance gate.
+
+To check whether the shader's `cos()` precision explains that spawn discrepancy, run this on the same page, on the GPU that recorded it:
+
+```js
+const { runGpuSpawnPrecisionCheck } = await import("/test/gpu-spawn.browser.ts");
+const spawn = runGpuSpawnPrecisionCheck();
+console.log(spawn);
+copy(JSON.stringify(spawn));
+```
+
+It replays the matched CPU control to the recorded birth (also checked in Node by `test/gpu-spawn.test.ts`), evaluates simulate.vert's `gaussian()` expression and its `log`/`cos`/`sqrt` parts with real shaders for that birth and for 65,536-point sweeps over u and v, and predicts the GPU's spawn x from the readback. `birth.explainsRecordedX: true` means the GPU's own `gaussian()` reproduces the recorded x within 1e-6, far inside the 2.1e-5 gap; on a different GPU it is expected to be false. Firefox may mask the renderer name, so record the device separately.
 
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
