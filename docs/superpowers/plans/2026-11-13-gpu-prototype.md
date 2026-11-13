@@ -215,6 +215,32 @@ Follow-up local verification passed 204 bridge + 164 frontend tests, typecheck, 
 
 **Post-merge investigation:** [Controlled occupancy experiments](../../experiments/2026-11-13-gpu-occupancy.md) reproduce the original window means exactly and verify all 12 million allocation decisions. Matching the GPU random keys and ascending free order in a test-only CPU control passes all 330 diagnostic comparisons; changing free order alone leaves CPU counts identical. The filament control matches every active identity; the plain control diverges on 485/600 callbacks after an unresolved spawn-calculation difference crosses the strict left death boundary. Its passing means do not establish randomness as the sole or dominant cause. The summary processor is committed; the spawn discrepancy needs further isolation. No runtime code or acceptance criteria changed. Task 4 remains stopped pending an explicit validation-plan revision and fresh acceptance evidence.
 
+### Revised occupancy gate — approved 2026-11-14
+
+**Status: approved by the user on 2026-11-14, with the relative floor and the 90 % detection wording below.** It applies once the harness under "Implementation needed first" exists; no acceptance run used it before approval.
+
+**Purpose:** the river is a graphical demo (later with music). A GPU version must look the same as the CPU version, not match it particle for particle, so this gate asks whether per-stream occupancy agrees as closely as two CPU runs with different seeds do, and still rejects a bias large enough to show.
+
+It replaces only the fixed per-window bound `max(5 particles, 5% of CPU mean)` from Task 3, which the investigation showed rejects the CPU against itself (seed 43: 49/330; the GPU's PCG keys alone: 45/330). Why particle-for-particle comparison is not possible either: [spawn follow-up](../../experiments/2026-11-13-gpu-occupancy.md#follow-up--2026-11-14-spawn-inputs-and-transcendental-precision).
+
+**Still required, unchanged:** exact allocation, ownership, expiry and same-ID reclaim checks (`gpu-allocation.browser.ts`); motion and death from injected identical states at the existing tolerances (`gpu-particles.browser.ts`); the birth-identity assertions of every callback; the rotation, pending-claim and release-deadline checks. The matched-control comparison stays as a diagnostic and is not a gate.
+
+**Fixture, unchanged:** the Task 3 occupancy scenarios, plain and filament: 10,000 slots, 600 steps of `Math.fround(0.1)`, aspect 1.5, 1 → 4 → 32 streams at 15 and 30 s, five steady five-second windows per scenario, starting at 10 s (one stream), 25 s (four) and 45, 50 and 55 s (32), and per window the total plus all 32 slots: 2 × 5 × 33 = 330 comparisons.
+
+**Runs, fixed now:** 20 per backend and scenario. CPU runs use seeds 1–20 for the particle system's `mulberry32` and the flow field; GPU runs use seeds 1001–1020 for `GpuParticles` and the flow field. CPU and GPU runs execute in the same browser session on the same device: JavaScript engines do not guarantee `Math.sin`, `Math.cos` or `Math.log` results either. Record every run's window means, not only summaries.
+
+**Statistic:** for each comparison, take each run's window mean; let a and b be the means over the CPU and GPU runs, s_a and s_b their sample standard deviations (n = 20). It passes if
+
+    |a − b| ≤ 4.71 · sqrt(s_a²/20 + s_b²/20) + max(1 particle, 0.5 % of a)
+
+4.71 is the two-sided Student t quantile at α = 0.05/330 (Bonferroni over all comparisons) with 19 degrees of freedom (4.7127: `scipy.stats.t.ppf(1 − 0.05/660, 19)`, confirmed by solving the regularized incomplete beta form with mpmath), the fewest Welch's approximation can give for two samples of 20, so the bound stays conservative whatever the variance ratio. The floor covers series with little or no variance: unused slots, where both backends must read zero, and totals while the pool is saturated, which barely vary between runs. There the GPU's deliberate differences (conservative slot release and the suppressed residual spawn tail; Task 3's totals differed by up to 3 particles) would otherwise fail a bound near one particle without changing the look; 0.5 % of a 10,000-particle total is 50 particles. With the per-run spread seen so far (about 8.5 particles for a busy slot, estimated from the retained seed-42/43 pair) the bound is about 4.71 · 2.69 + 2.1 ≈ 15 particles, 3.6 % of a 416-particle median slot mean.
+
+**Calibration, before any GPU run:** apply the same statistic to CPU seeds 1–20 against CPU seeds 21–40, and to CPU seeds 1–20 against the PCG-keyed, ascending-order CPU control with keys 1001–1020. Both must pass all 330 comparisons. Also report, per used series, the true difference the gate detects 90 % of the time, (4.71 + 1.28) · sqrt(s_a²/20 + s_b²/20) plus the floor (a difference equal to the bound is caught only about half the time); the median over slots with a mean above 20 particles must not exceed 5 % of their mean. With the estimated spread it is about 18 particles, 4.4 %. If calibration fails either way, revise this section and get the user's approval again before any GPU run; record the failed calibration.
+
+**Decision:** the GPU candidate passes the occupancy gate only if all 330 comparisons pass. A failure rejects the candidate; do not rerun with other seeds or windows. Retain the browser output and the processed summary as in the original investigation, and extend `summarize_gpu_occupancy.py` (with unit tests) to compute the statistic, the calibration results and the detectable differences.
+
+**Implementation needed first:** a seed parameter for the lifecycle harness (seed 42 is fixed today), a runner that executes, per scenario, the 20 CPU and 20 GPU runs and the 40 CPU calibration runs, and the processor change. These are test-only; production code stays unchanged. Performance runs stay separate.
+
 ### Resume checklist — 2026-11-13
 
 The user paused work after merging PR #120. **Task 4 is still blocked.** The
