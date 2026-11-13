@@ -16,6 +16,23 @@ function inputs() {
 }
 
 describe("GPU motion orchestration", () => {
+  it("prepares commands and scans before feedback only when spawning is enabled", () => {
+    const { gl, calls } = createFakeGl();
+    const gpu = new GpuParticles(gl, 33, 42);
+    const { streams, field } = inputs();
+    gpu.spawningEnabled = true;
+    gpu.lifecycle.advanceTime(Math.fround(0.1));
+    gpu.step(0.1, streams, field, 1);
+    const draws = callsTo(calls, "drawArrays");
+    expect(draws).toHaveLength(8); // flag + 6 scan + feedback
+    expect(draws.at(-1)).toEqual(["POINTS", 0, 33]);
+    const uploads = callsTo(calls, "texSubImage2D");
+    expect(uploads.at(-1)!.slice(4, 8)).toEqual([1, 32, "RGBA_INTEGER", "UNSIGNED_INT"]);
+    expect(uploads.at(-1)![8]).toBe(gpu.lifecycle.commands);
+    expect(callsTo(calls, "getBufferSubData")).toHaveLength(0);
+    expect(callsTo(calls, "finish")).toHaveLength(0);
+    gpu.dispose();
+  });
   it("allocates two fixed buffers and binds the integer identity without conversion", () => {
     const { gl, calls } = createFakeGl();
     const gpu = new GpuParticles(gl, 8, 42);
@@ -31,10 +48,10 @@ describe("GPU motion orchestration", () => {
     ]);
     gpu.dispose();
     expect(callsTo(calls, "deleteBuffer")).toHaveLength(2);
-    expect(callsTo(calls, "deleteTexture")).toHaveLength(3);
-    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(2);
+    expect(callsTo(calls, "deleteTexture")).toHaveLength(5);
+    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(4);
     expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
-    expect(callsTo(calls, "deleteProgram")).toHaveLength(1);
+    expect(callsTo(calls, "deleteProgram")).toHaveLength(3);
   });
 
   it("swaps distinct buffers, uploads cached textures and reallocates only a resized flow grid", () => {
@@ -43,6 +60,7 @@ describe("GPU motion orchestration", () => {
     const { streams, field } = inputs();
     const first = gpu.stateBuffer;
     gpu.step(0, streams, field, 1);
+    gpu.step(-1, streams, field, 1);
     expect(gpu.stateBuffer).toBe(first);
     expect(gpu.globalHue).toBe(0);
     expect(callsTo(calls, "drawArrays")).toHaveLength(0);
@@ -50,14 +68,15 @@ describe("GPU motion orchestration", () => {
     expect(gpu.stateBuffer).not.toBe(first);
     expect(gpu.globalHue).toBeCloseTo(LOOK.hueRotate / 60);
     // CPU compares Float32 positions against double-precision world bounds.
-    expect(callsTo(calls, "uniform4f")[0].slice(1)).toEqual([Math.fround(-0.1), Math.fround(1.08), Math.fround(1.1), 1]);
+    expect(callsTo(calls, "uniform4f").find(args => (args[0] as { uniform: string }).uniform === "u_bounds")!.slice(1)).toEqual([Math.fround(-0.1), Math.fround(1.08), Math.fround(1.1), 1]);
     const images = callsTo(calls, "texImage2D").length;
     const queries = callsTo(calls, "getParameter").length;
+    const uniformQueries = callsTo(calls, "getUniformLocation").length;
     gpu.step(1 / 60, streams, field, 1);
     expect(gpu.stateBuffer).toBe(first);
     expect(callsTo(calls, "texImage2D")).toHaveLength(images);
     expect(callsTo(calls, "getParameter")).toHaveLength(queries);
-    expect(callsTo(calls, "getUniformLocation")).toHaveLength(7);
+    expect(callsTo(calls, "getUniformLocation")).toHaveLength(uniformQueries);
     expect(callsTo(calls, "texSubImage2D")).toHaveLength(4);
     expect(callsTo(calls, "texSubImage2D")[1][8]).toBeInstanceOf(Float32Array);
     const streamData = callsTo(calls, "texSubImage2D")[1][8] as Float32Array;
@@ -136,6 +155,8 @@ describe("GPU motion orchestration", () => {
       expect(() => new GpuParticles(gl, 1, 1)).toThrow("GPU motion unsupported");
     }
     const gpu = new GpuParticles(createFakeGl().gl, 1, 1);
+    const ready = inputs();
+    for (const dt of [NaN, Infinity, 1 / 360, 0.2]) expect(() => gpu.step(dt, ready.streams, ready.field, 1)).toThrow("GPU step");
     expect(() => gpu.step(0.1, new StreamSet(1), new FlowField(() => 0.5), 1)).toThrow("flow grid");
     gpu.dispose();
   });

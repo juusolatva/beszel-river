@@ -80,6 +80,20 @@ runGpuMotionBrowserChecks();
 
 It preloads identical CPU/GPU states with spawning disabled, checks lifetime and boundary deaths, and compares motion after one and 120 steps, including a resized flow grid and a variable-step lifetime regression. The prototype records a Float32-effective step after clamping, feeds it to both backends, and retains the original callback interval separately. Production CPU timing is unchanged. Readbacks belong to this untimed test only. Run browser checks separately from coverage; software WebGL checks correctness, not target-device performance.
 
+Spawning and stream ownership have separate untimed checks:
+
+```js
+const { runGpuAllocationBrowserChecks } = await import("/test/gpu-allocation.browser.ts");
+runGpuAllocationBrowserChecks();
+const { runGpuLifecycleBrowserChecks } = await import("/test/gpu-lifecycle.browser.ts");
+const lifecycle = await runGpuLifecycleBrowserChecks();
+console.log(lifecycle.parityPassed, lifecycle.failedWindows, lifecycle.transitions);
+```
+
+Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed per-stream occupancy parity, so this candidate stops before drawing integration. See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
+
+GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
+
 The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
 
 ```js
