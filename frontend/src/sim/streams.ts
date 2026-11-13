@@ -8,6 +8,9 @@ export const MAX_STREAMS = 32;
 export const FILAMENTS = 6;
 /** Share of a fully present stream of width 0; bands and spawn shares grow from it with width. */
 export const MIN_SHARE = 0.6;
+/** Backend-specific proof that a draining slot has no remaining owners. */
+export type StreamReleasePolicy = (slot: StreamSlot, index: number) => boolean;
+const cpuCanRelease: StreamReleasePolicy = slot => slot.particles === 0;
 const CENTER_MIN_Y = -0.02;
 const CENTER_MAX_Y = 1.08;
 const CENTER_SAMPLES = 64;
@@ -112,7 +115,7 @@ export class StreamSet {
   /** No live connection for a while: every stream thins out and greys as if its host were down. */
   offline = false;
 
-  constructor(private readonly motion: number) {}
+  constructor(private readonly motion: number, private readonly canRelease: StreamReleasePolicy = cpuCanRelease) {}
 
   apply(frame: Frame): void {
     this.pending = null;
@@ -137,14 +140,15 @@ export class StreamSet {
   update(dt: number, aspect: number): void {
     this.layout(aspect);
     let released = false;
-    for (const slot of this.slots) {
+    for (let index = 0; index < MAX_STREAMS; index++) {
+      const slot = this.slots[index];
       if (!slot.used || !slot.latest) continue;
       this.easeChannels(slot, slot.latest, dt);
       this.easeLanes(slot, slot.latest.filaments, dt);
       this.easeLayout(slot, dt);
       this.derive(slot);
       slot.rebuildCenters();
-      if (!slot.inFrame && slot.presence < 0.01 && slot.particles === 0) {
+      if (!slot.inFrame && slot.presence < 0.01 && this.canRelease(slot, index)) {
         this.release(slot);
         released = true;
       }
