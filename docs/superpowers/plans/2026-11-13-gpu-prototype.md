@@ -213,6 +213,8 @@ Verification passed `npm test` (204 bridge + 160 frontend), typecheck, both work
 
 Follow-up local verification passed 204 bridge + 164 frontend tests, typecheck, coverage (frontend's established local 15 s timeout) and build. Firefox passed 24 allocation/reclaim checks and 24 motion checks at unchanged tolerances. The 2,650-step replay produced exactly the retained occupancy windows and per-callback rotation curves: 43 of 330 comparisons still fail. The original synthetic result JSON remains historical evidence; this correction does not alter its fixtures' outcome.
 
+**Post-merge investigation:** [Controlled occupancy experiments](../../experiments/2026-11-13-gpu-occupancy.md) reproduce the original window means exactly and verify all 12 million allocation decisions. Matching the GPU random keys and ascending free order in a test-only CPU control passes all 330 diagnostic comparisons; changing free order alone leaves CPU counts identical. Saturation and stable stream priority amplify independent random death histories, especially for late streams. A plain birth also exposes Float32-vs-double spawn rounding across the strict left death boundary; the trace and consequences are retained. No runtime code or acceptance criteria changed. Task 4 remains stopped pending an explicit validation-plan revision and fresh acceptance evidence.
+
 ## Task 4: Draw directly from GPU state
 
 **Files:** Create `frontend/src/render/gpu-particle-drawer.ts`, `frontend/src/render/shaders/particle-gpu.vert`, `frontend/test/gpu-particle-drawer.test.ts`; extend `frontend/src/render/renderer.ts`, `frontend/test/renderer.test.ts`, `frontend/test/renderer.browser.ts`, and GPU browser tests.

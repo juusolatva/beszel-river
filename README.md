@@ -92,6 +92,16 @@ console.log(lifecycle.parityPassed, lifecycle.failedWindows, lifecycle.transitio
 
 Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed per-stream occupancy parity, so this candidate stops before drawing integration. See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
 
+To reproduce the separate occupancy investigation, run this on the same test page:
+
+```js
+const { runGpuOccupancyInvestigation } = await import("/test/gpu-occupancy.browser.ts");
+const investigation = await runGpuOccupancyInvestigation();
+console.log(investigation);
+```
+
+This checks every allocation and compares CPU controls with different random sources and free-slot orders. It uses synchronous readbacks and test-only CPU state access, so it must run separately from performance measurements and coverage. The [investigation](docs/experiments/2026-11-13-gpu-occupancy.md) explains the mismatch; its matched-randomness control does not replace or waive the failed acceptance gate.
+
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
 The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
