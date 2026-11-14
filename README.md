@@ -93,7 +93,7 @@ const lifecycle = await runGpuLifecycleBrowserChecks();
 console.log(lifecycle.parityPassed, lifecycle.failedWindows, lifecycle.transitions);
 ```
 
-Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed per-stream occupancy parity, so this candidate stops before drawing integration. See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
+Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed that fixed per-stream bound; the [revised occupancy gate](#gpu-occupancy-gate) replaced it and passed, which unblocked [drawing](#gpu-drawing). See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
 
 To reproduce the separate occupancy investigation, run this on the same test page:
 
@@ -158,6 +158,19 @@ npx tsx frontend/test/summarize-gpu-occupancy-gate.ts ~/Downloads/gpu-occupancy-
 It uses the same statistic as the browser's calibration check (`test/fixtures/occupancy-gate.ts`) and exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, each control's median 90 % detectable difference and the comparisons closest to their bounds. If the browser returned `gpuSkipped: true`, or `summary.calibration.passed` is false, the gate itself needs revising before any GPU run (GPU plan); keep that export too, and do not rerun with other seeds either way. Keep the `--output` file, which contains the browser export unchanged, as `docs/experiments/<date>-gpu-occupancy-gate.json`, and record the device notes from step 2 with the result. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
 
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
+
+#### GPU drawing
+
+The prototype draws particles straight from the GPU simulation's state buffer (`GpuParticleDrawer`, through `Renderer.renderGpu`), with no per-frame instance upload. Two checks run on `http://localhost:5173/test/gpu-benchmark.html`:
+
+```js
+const { runGpuDrawBrowserChecks, captureGpuRiverComparison } = await import("/test/renderer.browser.ts");
+runGpuDrawBrowserChecks();
+window.river = captureGpuRiverComparison();
+console.log(window.river.pairs);
+```
+
+`runGpuDrawBrowserChecks` steps the same preloaded particles with the CPU reference and the GPU simulation, renders both, and requires the frames to match within 1 byte per channel in RGBA16F and forced RGBA8 at 30/60/120/240 Hz. It also checks that zero dt, inactive slots and stale stream generations deposit nothing, and that an empty pool fades to black. `captureGpuRiverComparison` replays seeded 10,000-slot rivers (four filament bands, 32 dense bands, and 32 bands draining after an empty frame) through both backends in lockstep at 60 Hz. It returns PNG data URLs (`captures[].image`), mean colours and the correlation of their column brightness profiles. The two spawn different particles, so compare those images by eye and the profiles by number, not pixel for pixel. It takes a few minutes in software WebGL. Both checks read pixels synchronously and are not performance runs.
 
 #### GPU performance benchmark
 
