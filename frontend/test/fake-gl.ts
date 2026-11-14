@@ -59,6 +59,7 @@ export function createFakeGl(options: FakeGlOptions = {}): { gl: WebGL2Rendering
     vertexAttribIPointer: bindAttribute,
     bindBufferBase: (_target, index, buffer) => { outputs.set(index, buffer); assertInputs(); },
     drawArrays: assertInputs,
+    drawArraysInstanced: assertInputs,
     texImage2D: (_target, _level, format) => {
       boundFormat = String(format);
       textureFormats.set(boundTexture, boundFormat);

@@ -54,7 +54,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 
 ### Browser checks
 
-Each console snippet below is a separate check for one piece of work; run only the one you need, with `npm run dev:frontend` running. Results appear in the console (or download), not on the page: only `runGpuBenchmark` draws the river. The GPU prototype's acceptance check is the [GPU occupancy gate](#gpu-occupancy-gate); the others are its earlier correctness checks and investigations, the renderer's regression checks and the performance benchmarks.
+Each console snippet below is a separate check for one piece of work; run only the one you need, with `npm run dev:frontend` running. Results appear in the console (or download), not on the page: only `runGpuBenchmark` draws the river there. `captureGpuRiverComparison` also renders full rivers, offscreen, and takes minutes in software WebGL. The GPU prototype's acceptance check is the [GPU occupancy gate](#gpu-occupancy-gate); the others are its earlier correctness checks and investigations, the renderer's regression checks and the performance benchmarks.
 
 For real-shader regression checks, start Vite, open the demo page, and run this in its browser console:
 
@@ -93,7 +93,7 @@ const lifecycle = await runGpuLifecycleBrowserChecks();
 console.log(lifecycle.parityPassed, lifecycle.failedWindows, lifecycle.transitions);
 ```
 
-Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed per-stream occupancy parity, so this candidate stops before drawing integration. See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
+Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed that fixed per-stream bound; the [revised occupancy gate](#gpu-occupancy-gate) replaced it and passed, which unblocked [drawing](#gpu-drawing). See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
 
 To reproduce the separate occupancy investigation, run this on the same test page:
 
@@ -159,9 +159,22 @@ It uses the same statistic as the browser's calibration check (`test/fixtures/oc
 
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
+#### GPU drawing
+
+The prototype draws particles straight from the GPU simulation's state buffer (`GpuParticleDrawer`, through `Renderer.renderGpu`), with no per-frame instance upload. Two checks run on `http://localhost:5173/test/gpu-benchmark.html`:
+
+```js
+const { runGpuDrawBrowserChecks, captureGpuRiverComparison } = await import("/test/renderer.browser.ts");
+runGpuDrawBrowserChecks();
+window.river = captureGpuRiverComparison();
+console.log(window.river.pairs);
+```
+
+`runGpuDrawBrowserChecks` steps the same preloaded particles with the CPU reference and the GPU simulation, renders both, and requires the frames to match within 1 byte per channel in RGBA16F and forced RGBA8 at 30/60/120/240 Hz. It also checks that zero dt, inactive slots and stale stream generations deposit nothing, and that an empty pool fades to black. `captureGpuRiverComparison` replays seeded 10,000-slot rivers (four filament bands, 32 dense bands, and 32 bands draining after an empty frame) through both backends in lockstep at 60 Hz. It returns PNG data URLs (`captures[].image`), mean colours and the correlation of their column brightness profiles. The two spawn different particles, so compare those images by eye and the profiles by number, not pixel for pixel. It takes a few minutes in software WebGL. Both checks read pixels synchronously and are not performance runs.
+
 #### GPU performance benchmark
 
-This is the separate performance experiment, not part of the occupancy gate, and the only check that draws the river. The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
+This is the separate performance experiment, not part of the occupancy gate, and the only check that draws the river on the page. The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
 
 ```js
 const { runGpuBenchmark } = await import("/test/gpu-benchmark.browser.ts");

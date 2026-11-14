@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { Renderer } from "../src/render/renderer";
+import { Renderer, type GpuDrawSource } from "../src/render/renderer";
 import { INSTANCE_FLOATS } from "../src/sim/particles";
 import { callsTo, createFakeGl, type Call } from "./fake-gl";
 
@@ -9,6 +9,18 @@ function passes(calls: Call[]): { read: unknown; wrote: unknown } {
   const binds = callsTo(calls, "bindFramebuffer").filter(([, framebuffer]) => framebuffer !== null);
   const textures = callsTo(calls, "bindTexture").filter(([, texture]) => texture !== null);
   return { wrote: binds.at(-1)?.[1], read: textures.at(-1)?.[1] };
+}
+
+/** Records every deposit pass; may leave another texture unit active, as a GPU pass could. */
+function recordingSource(gl?: WebGL2RenderingContext): GpuDrawSource & { draws: number[][] } {
+  const draws: number[][] = [];
+  return {
+    draws,
+    draw(...args) {
+      draws.push(args);
+      gl?.activeTexture(gl.TEXTURE1);
+    },
+  };
 }
 
 describe("Renderer", () => {
@@ -140,6 +152,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 10);
     renderer.resize(800, 600);
     expect(callsTo(calls, "texImage2D").map(([, , format]) => format)).toEqual(["RGBA16F", "RGBA16F"]);
+    expect(renderer.halfFloat).toBe(true);
 
     calls.length = 0;
     renderer.resize(800, 600);
@@ -158,6 +171,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 10);
     renderer.resize(800, 600);
     expect(callsTo(calls, "texImage2D").map(([, , format]) => format)).toEqual(["RGBA16F", "RGBA16F", "RGBA8", "RGBA8"]);
+    expect(renderer.halfFloat).toBe(false);
 
     calls.length = 0;
     renderer.resize(400, 300);
@@ -218,5 +232,125 @@ describe("Renderer", () => {
     expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
     expect(callsTo(calls, "bufferSubData")).toEqual([]);
     expect(callsTo(calls, "drawArrays")).toHaveLength(2);
+  });
+
+  describe("GPU draw source", () => {
+    it("draws nothing before the first resize", () => {
+      const { gl, calls } = createFakeGl();
+      const source = recordingSource();
+      new Renderer(gl, 10).renderGpu(source, 1 / 60, 1, 1, 0, 1);
+      expect(source.draws).toEqual([]);
+      expect(callsTo(calls, "drawArrays")).toEqual([]);
+    });
+
+    it("passes the frame's parameters to one half-float deposit per callback, between blend state changes", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(800, 600);
+      const source = recordingSource(gl);
+      calls.length = 0;
+      renderer.renderGpu(source, 0.02, 4 / 3, 1.5, 0.25, 0.6);
+      const depositScale = -Math.expm1(-0.02 / LOOK.trailTau) / -Math.expm1(-(1 / 60) / LOOK.trailTau);
+      expect(source.draws).toHaveLength(1);
+      expect(source.draws[0].slice(0, 4)).toEqual([4 / 3, 1.5, 0.25, 0.6]);
+      expect(source.draws[0][4]).toBeCloseTo(depositScale, 12);
+      expect(source.draws[0][5]).toBe(1 / 600);
+      expect(callsTo(calls, "blendFunc")).toEqual([["ONE", "ONE"]]);
+      expect(callsTo(calls, "enable")).toEqual([["BLEND"]]);
+      expect(callsTo(calls, "disable").at(-1)).toEqual(["BLEND"]);
+      // The source draws itself; no instance upload, fade and present still run.
+      expect(callsTo(calls, "bufferSubData")).toEqual([]);
+      expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
+      expect(callsTo(calls, "drawArrays")).toHaveLength(2);
+      expect(callsTo(calls, "bindFramebuffer").at(-1)).toEqual(["FRAMEBUFFER", null]);
+    });
+
+    it("draws even when the pool may be empty, since the live count stays on the GPU", () => {
+      const { gl } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      const source = recordingSource();
+      renderer.renderGpu(source, LOOK.maxDt, 1, 1, 0, 1);
+      expect(source.draws).toHaveLength(1);
+    });
+
+    it("adds no energy at zero dt in either format", () => {
+      for (const halfFloat of [true, false]) {
+        const { gl } = createFakeGl({ halfFloat });
+        const renderer = new Renderer(gl, 10);
+        renderer.resize(100, 100);
+        const source = recordingSource();
+        renderer.renderGpu(source, 0, 1, 1, 0, 1);
+        expect(source.draws.map((args) => args[4])).toEqual(halfFloat ? [0] : []);
+      }
+    });
+
+    it.each([30, 60, 120, 240])("repeats the same 8-bit deposit from one simulated state at %i Hz", (hz) => {
+      const { gl, calls } = createFakeGl();
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      calls.length = 0;
+      const source = recordingSource();
+      const perCallback: number[] = [];
+      for (let i = 0; i < hz; i++) {
+        const before = source.draws.length;
+        // Hue and intensity identify the callback's simulated state.
+        renderer.renderGpu(source, 1 / hz, 1, 1, i / hz, 0.5);
+        perCallback.push(source.draws.length - before);
+        for (const args of source.draws.slice(before)) expect(args).toEqual([1, 1, i / hz, 0.5, 1, 1 / 100]);
+      }
+      expect(source.draws).toHaveLength(60);
+      expect(Math.max(...perCallback)).toBe(Math.max(1, Math.round(60 / hz)));
+      expect(callsTo(calls, "drawArrays")).toHaveLength(hz + 60);
+    });
+
+    it.each([0, 1 / 240, 1 / 120])("presents from texture unit 0 after a source leaves unit 1 active (dt %f)", (dt) => {
+      for (const halfFloat of [true, false]) {
+        const { gl, calls } = createFakeGl({ halfFloat });
+        const renderer = new Renderer(gl, 1);
+        renderer.resize(100, 100);
+        // Also start from unit 1, as the GPU simulation step could leave it.
+        renderer.renderGpu(recordingSource(gl), 1 / 60, 1, 1, 0, 1);
+        gl.activeTexture(gl.TEXTURE1);
+        calls.length = 0;
+        renderer.renderGpu(recordingSource(gl), dt, 1, 1, 0, 1);
+        const present = calls.findLastIndex(([name, , texture]) => name === "bindTexture" && texture !== null);
+        const select = calls.findLastIndex(([name]) => name === "activeTexture");
+        expect(calls[select]).toEqual(["activeTexture", "TEXTURE0"]);
+        expect(select).toBeLessThan(present);
+        expect(calls.findLastIndex(([name]) => name === "useProgram")).toBeLessThan(present);
+      }
+    });
+
+    it("restores blending and the default framebuffer when a source fails, and renders again afterwards", () => {
+      for (const halfFloat of [true, false]) {
+        const { gl, calls } = createFakeGl({ halfFloat });
+        const renderer = new Renderer(gl, 10);
+        renderer.resize(100, 100);
+        calls.length = 0;
+        const failing: GpuDrawSource = { draw: () => { throw new Error("draw failed"); } };
+        expect(() => renderer.renderGpu(failing, 1 / 60, 1, 1, 0, 1)).toThrow("draw failed");
+        expect(callsTo(calls, "disable").at(-1)).toEqual(["BLEND"]);
+        expect(callsTo(calls, "bindFramebuffer").at(-1)).toEqual(["FRAMEBUFFER", null]);
+        expect(callsTo(calls, "drawArrays")).toHaveLength(1); // the fade, but no present
+        calls.length = 0;
+        const source = recordingSource();
+        renderer.renderGpu(source, 1 / 60, 1, 1, 0, 1);
+        expect(source.draws).toHaveLength(1);
+        expect(callsTo(calls, "drawArrays")).toHaveLength(2);
+      }
+    });
+
+    it("leaves the CPU path unchanged after GPU frames", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      renderer.renderGpu(recordingSource(), 1 / 60, 1, 1, 0, 1);
+      calls.length = 0;
+      const instances = new Float32Array(10 * INSTANCE_FLOATS);
+      renderer.render(instances, 3, 1 / 60, 1);
+      expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, instances, 0, 3 * INSTANCE_FLOATS]]);
+      expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 3]]);
+    });
   });
 });
