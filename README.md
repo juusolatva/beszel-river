@@ -123,6 +123,26 @@ copy(JSON.stringify(spawn));
 
 It replays the matched CPU control to the recorded birth (also checked in Node by `test/gpu-spawn.test.ts`), evaluates simulate.vert's `gaussian()` expression and its `log`/`cos`/`sqrt` parts with real shaders for that birth and for 65,536-point sweeps over u and v, and predicts the GPU's spawn x from the readback. `birth.explainsRecordedX: true` means the GPU's own `gaussian()` reproduces the recorded x within 1e-6, far inside the 2.1e-5 gap; on a different GPU it is expected to be false. The recording laptop's result is in `docs/experiments/2026-11-14-gpu-spawn.json` (true). Firefox may mask the renderer name, so record the device separately.
 
+The approved occupancy gate (GPU plan, "Revised occupancy gate") runs 20 seeded runs per group for both scenarios in one session: CPU seeds 1–20, CPU calibration seeds 21–40, the PCG-keyed CPU control and the GPU with seeds 1001–1020. Run it on the target device:
+
+1. From a checkout of `main`: `npm ci`, then `npm run dev:frontend`.
+2. Open `http://localhost:5173/test/gpu-benchmark.html` in the browser under test and its developer console. Note the browser version, the device and whether it runs on mains or battery: Firefox may mask the renderer name.
+3. Keep the tab in the foreground until the run finishes. Background tabs slow its timers, and other heavy work on the device slows it too. It makes the 120 CPU runs first and checks calibration in the browser; only if that passes does it make the 40 GPU runs, each with a full readback every step. Expect several minutes; the progress lines show where it is.
+
+```js
+const { runGpuOccupancyGate } = await import("/test/gpu-occupancy-gate.browser.ts");
+const gate = await runGpuOccupancyGate({ onProgress: (done, total, label) => console.log(`${done}/${total} ${label}`) });
+copy(JSON.stringify(gate));
+```
+
+Save the copied JSON as `/tmp/gpu-occupancy-gate.json` and apply the gate from the repository root:
+
+```sh
+npx tsx frontend/test/summarize-gpu-occupancy-gate.ts /tmp/gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
+```
+
+It uses the same statistic as the browser's calibration check (`test/fixtures/occupancy-gate.ts`) and exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, each control's median 90 % detectable difference and the comparisons closest to their bounds. If the browser returned `gpuSkipped: true`, or `summary.calibration.passed` is false, the gate itself needs revising before any GPU run (GPU plan); keep that export too, and do not rerun with other seeds either way. Keep the `--output` file, which contains the browser export unchanged, as `docs/experiments/<date>-gpu-occupancy-gate.json`, and record the device notes from step 2 with the result. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
+
 GPU correctness accepts zero steps or positive Float32-effective steps from 1/256 s through `Math.fround(LOOK.maxDt)`; smaller positive steps explicitly fail the experiment. This bound makes Float32 particle age safe against the conservative release clock, including a larger final callback. The simulation clock also fails at 2³¹ s to bound clock-rounding error. Feed the same effective dt to `gpu.lifecycle.advanceTime(dt)` **before** `streams.update`, then advance the field and call `gpu.step`; construct `StreamSet` with `gpu.lifecycle.canRelease`. The public CPU page has neither restriction.
 
 The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
