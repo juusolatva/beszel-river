@@ -68,7 +68,8 @@ export function validateRuns(runs: readonly OccupancyRun[], groups: readonly Gat
   for (const run of runs) {
     const label = `${run.scenario}/${run.group} seed ${run.seed}`;
     if (!OCCUPANCY_SCENARIOS.includes(run.scenario) || !groups.includes(run.group)) throw new Error(`Unexpected run: ${label}`);
-    if (run.starts.length !== WINDOWS || run.starts.some((start, i) => Math.abs(start - WINDOW_STARTS[i]) > 1e-4)) {
+    // JSON may hold anything: a string start would make the difference NaN and the comparison false.
+    if (run.starts.length !== WINDOWS || run.starts.some((start, i) => typeof start !== "number" || !(Math.abs(start - WINDOW_STARTS[i]) <= 1e-4))) {
       throw new Error(`Windows differ from the approved starts: ${label}`);
     }
     const { means } = run;
@@ -183,6 +184,10 @@ export async function runGate(
   options: { runsPerGroup?: number; onProgress?: (done: number, total: number, label: string) => void; yieldEach?: () => Promise<unknown> } = {},
 ) {
   const runsPerGroup = options.runsPerGroup ?? GATE.runsPerGroup;
+  // Each group has 20 seeds; a smoke run needs at least two for a spread.
+  if (!Number.isInteger(runsPerGroup) || runsPerGroup < 2 || runsPerGroup > GATE.runsPerGroup) {
+    throw new Error(`runsPerGroup must be a whole number from 2 to ${GATE.runsPerGroup}`);
+  }
   const total = OCCUPANCY_SCENARIOS.length * (CPU_GROUPS.length + 1) * runsPerGroup;
   const runs: OccupancyRun[] = [];
   const record = async (run: Omit<OccupancyRun, "group">, group: GateGroup) => {

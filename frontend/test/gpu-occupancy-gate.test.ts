@@ -144,6 +144,9 @@ describe("occupancy gate statistic", () => {
       ["slots not adding up", (runs) => { runs[0].means[0] += 5; }],
       ["shifted windows in every run", (runs) => { for (const run of runs) run.starts = run.starts.map((t) => t + 1); }],
       ["missing window", (runs) => { runs[0].starts.pop(); }],
+      ["text window start", (runs) => { for (const run of runs) (run.starts as unknown[])[2] = "NaN"; }],
+      ["nonfinite window start", (runs) => { for (const run of runs) run.starts[2] = Number.NaN; }],
+      ["text mean", (runs) => { (runs[0].means as unknown[])[30] = "0"; }],
     ];
     for (const [name, corrupt] of cases) {
       const runs = syntheticRuns();
@@ -183,6 +186,13 @@ describe("occupancy gate runner", () => {
     expect(result.gpuSkipped).toBe(true);
     expect(order).not.toContain("gpu");
     expect(result.runs).toHaveLength(120);
+  });
+
+  it.each([0, 1, 1.5, 21, Number.NaN])("rejects %s runs per group before running anything", async (runsPerGroup) => {
+    let ran = 0;
+    const count = () => { ran++; return syntheticRun("occupancy", "cpu", 1); };
+    await expect(runGate(count, async () => count(), { runsPerGroup })).rejects.toThrow(/whole number from 2 to 20/);
+    expect(ran).toBe(0);
   });
 
   it("still exercises the GPU in a smoke run, whose calibration is not enforced", async () => {
