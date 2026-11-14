@@ -104,6 +104,8 @@ export class CpuReplay {
 
   step(trace: ReplayTrace, i: number): number {
     if (trace.motion[i] !== this.motion) throw new Error("Motion changes require a new replay run");
+    // A malformed trace fails here rather than skipping or mis-stepping a callback.
+    if (!replayableStep(trace.dt[i])) throw new Error(`Unreplayable step ${trace.dt[i]} at callback ${i}: trace invalid`);
     const frame = trace.frame[i];
     if (frame !== this.frame) {
       this.streams.apply(replayFrames[frame]);
@@ -155,6 +157,8 @@ export class GpuReplay {
 
   step(trace: ReplayTrace, i: number): void {
     if (trace.motion[i] !== this.motion) throw new Error("Motion changes require a new replay run");
+    // A malformed trace fails here rather than skipping or mis-stepping a callback.
+    if (!replayableStep(trace.dt[i])) throw new Error(`Unreplayable step ${trace.dt[i]} at callback ${i}: trace invalid`);
     const frame = trace.frame[i];
     if (frame !== this.frame) {
       this.streams.apply(replayFrames[frame]);

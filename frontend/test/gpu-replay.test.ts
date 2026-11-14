@@ -148,16 +148,21 @@ describe("GPU comparison replay foundation", () => {
     expect(replayableStep(Math.fround(LOOK.maxDt))).toBe(true);
   });
 
-  it("refuses unreplayable steps in the GPU replay itself, not only in the harness", () => {
+  it("refuses unreplayable steps in both replays and their validations, not only in the harness", () => {
     const { gl } = createFakeGl();
-    for (const dt of [1 / 300, LOOK.maxDt * 2, Infinity, NaN]) {
+    for (const dt of [-1 / 60, 1 / 300, LOOK.maxDt * 2, Infinity, NaN]) {
       const trace = shortTrace(2);
       // Bypass ReplayTrace.append's clamp, as a future trace source might.
       trace.dt[1] = dt;
       const gpu = new GpuReplay(gl);
       gpu.step(trace, 0);
-      expect(() => gpu.step(trace, 1)).toThrow(/GPU step/);
+      expect(() => gpu.step(trace, 1)).toThrow(/Unreplayable step/);
       gpu.dispose();
+      const cpu = new CpuReplay();
+      cpu.step(trace, 0);
+      expect(() => cpu.step(trace, 1)).toThrow(/Unreplayable step/);
+      expect(() => validateGpuTrace(gl, trace)).toThrow(/Unreplayable step/);
+      expect(() => validateCpuTrace(trace)).toThrow(/Unreplayable step/);
     }
   });
 
