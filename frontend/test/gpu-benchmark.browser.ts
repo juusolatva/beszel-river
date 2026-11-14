@@ -1,8 +1,9 @@
 import { LOOK } from "../src/config";
 import { Renderer } from "../src/render/renderer";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
-import { CpuReplay, CPU_REFERENCE, REPLAY_CAPACITY, REPLAY_SEED, ReplayTrace, replayFrameIndex,
-  validateCpuTrace, type ReplayScenario } from "./fixtures/gpu-replay";
+import { compareGpuStates, CpuReplay, CPU_REFERENCE, fiveSecondWindows, GpuReplay, readGpuState, REPLAY_CAPACITY,
+  REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, validateCpuTrace, validateGpuTrace,
+  type ReplayScenario } from "./fixtures/gpu-replay";
 
 interface BenchmarkOptions {
   backend?: "cpu" | "gpu";
@@ -14,6 +15,8 @@ interface BenchmarkOptions {
   motion?: number;
   refreshHz: number;
   conditions: string;
+  /** Also replay the trace through the other backend, untimed (default true). */
+  crossValidate?: boolean;
 }
 
 const usedCanvases = new WeakSet<HTMLCanvasElement>();
@@ -24,11 +27,29 @@ function distribution(values: Float64Array, length: number) {
   return { median: sorted[Math.floor(length * 0.5)], p95: sorted[Math.floor(length * 0.95)], p99: sorted[Math.floor(length * 0.99)] };
 }
 
-/** Separate local harness, never imported by the public page. GPU selection fails until Task 4. */
+/**
+ * Run the untimed GPU validation replay, or say why the GPU could not provide one. GL errors raised
+ * during it belong to it, not to the timed run, whose errors are checked before validation.
+ */
+function gpuValidation(gl: WebGL2RenderingContext, trace: ReplayTrace) {
+  try {
+    const result = validateGpuTrace(gl, trace);
+    const error = gl.getError();
+    if (error !== gl.NO_ERROR) throw new Error(`WebGL error ${error} during GPU validation`);
+    return result;
+  } catch (error) {
+    return { unavailable: String(error) };
+  }
+}
+
+/**
+ * Separate local harness, never imported by the public page. `backend` is fixed for the whole run:
+ * a GPU failure fails the run rather than switching to the CPU, and a CPU restart is a new run.
+ */
 export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { backend = "cpu", scenario = "dense", limit = 10000, warmupSeconds = scenario === "drained" ? 60 : 30,
-    measureSeconds = 60, traceCapacity = 120000, motion = 1, refreshHz, conditions } = options;
-  if (backend !== "cpu") throw new Error("GPU backend not implemented; CPU reference only");
+    measureSeconds = 60, traceCapacity = 120000, motion = 1, refreshHz, conditions, crossValidate = true } = options;
+  if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
   if (!Number.isInteger(traceCapacity) || traceCapacity <= 0) throw new Error("Trace capacity must be a positive integer");
@@ -45,13 +66,25 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   // Instrument submission rather than GPU execution; method wrappers are cached on first use.
   const { gl: countedGl, counters } = createSubmissionCounter(gl);
   const renderer = new Renderer(countedGl, REPLAY_CAPACITY);
-  const cpu = new CpuReplay(motion);
+  const cpu = backend === "cpu" ? new CpuReplay(motion) : null;
+  let gpu: GpuReplay | null = null;
+  if (backend === "gpu") {
+    try {
+      gpu = new GpuReplay(countedGl, motion);
+      // All drawer setup happens here, so its shader fails before timing and no measured callback sets anything up.
+      gpu.drawer.prepare();
+    } catch (error) {
+      gpu?.dispose();
+      // Unsupported limits, failed allocation or a shader that does not compile: no fallback.
+      throw new Error(`GPU backend failed: ${String(error)}: run invalid`);
+    }
+  }
   const trace = new ReplayTrace(traceCapacity);
   const work = new Float64Array(traceCapacity);
   const simulation = new Float64Array(traceCapacity);
   const submission = new Float64Array(traceCapacity);
   const intervals = new Float64Array(traceCapacity);
-  let measured = 0, missedPeriods = 0, totalUploads = 0, totalDraws = 0, totalDrawCapacity = 0;
+  let measured = 0, missedPeriods = 0, totalUploads = 0, totalTextureUploads = 0, totalDraws = 0, totalDrawCapacity = 0;
   let last: number | undefined, start: number | undefined;
   let width = 0, height = 0, raf = 0;
   let targetFormat = "unknown";
@@ -59,7 +92,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const debug = gl.getExtension("WEBGL_debug_renderer_info");
   const rendererName = gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
 
-  await new Promise<void>((resolve, reject) => {
+  // A failed run releases the GPU replay's resources; the page still needs a reload before the next run.
+  const timed = new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", visibility);
@@ -95,12 +129,24 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
         }
         const isMeasured = seconds >= warmupSeconds;
         trace.append(interval, replayFrameIndex(scenario, seconds), width, height, pixelRatio, motion, false, limit, 1, isMeasured);
-        counters.uploadedBytes = counters.drawCalls = counters.particleDrawCapacity = 0;
+        const i = trace.length - 1, dt = trace.dt[i];
+        // Both backends must be able to replay every trace; the GPU rejects tiny positive steps.
+        if (!replayableStep(dt)) {
+          trace.valid = false;
+          throw new Error("Callback interval below 1/256 s: run invalid (GPU step contract)");
+        }
+        counters.uploadedBytes = counters.textureUploadBytes = counters.drawCalls = counters.particleDrawCapacity = 0;
         const simBegin = performance.now();
-        const count = cpu.step(trace, trace.length - 1);
-        if (scenario === "drained" && isMeasured && count !== 0) throw new Error("Drained measurement still has live particles: run invalid");
+        let count = 0;
+        if (cpu) {
+          count = cpu.step(trace, i);
+          if (scenario === "drained" && isMeasured && count !== 0) throw new Error("Drained measurement still has live particles: run invalid");
+        } else gpu!.step(trace, i);
         const simEnd = performance.now();
-        if (trace.dt[trace.length - 1] > 0) renderer.render(cpu.particles.instances, count, trace.dt[trace.length - 1], width / height);
+        if (dt > 0) {
+          if (cpu) renderer.render(cpu.particles.instances, count, dt, width / height);
+          else renderer.renderGpu(gpu!.drawer, dt, width / height, pixelRatio, gpu!.particles.globalHue, gpu!.intensity);
+        }
         const end = performance.now();
         if (isMeasured) {
           simulation[measured] = simEnd - simBegin;
@@ -108,6 +154,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           intervals[measured++] = interval * 1000;
           missedPeriods += Math.max(0, Math.round(interval * refreshHz) - 1);
           totalUploads += counters.uploadedBytes;
+          totalTextureUploads += counters.textureUploadBytes;
           totalDraws += counters.drawCalls;
           totalDrawCapacity += counters.particleDrawCapacity;
         }
@@ -117,15 +164,47 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     };
     raf = requestAnimationFrame(frame);
   });
+  try {
+    await timed;
+  } catch (error) {
+    gpu?.dispose();
+    throw error;
+  }
 
-  // No performance warmup overlaps this validation. Compare the complete final CPU instance
-  // buffer and per-slot counts; GPU active/identity readbacks are added with that backend.
-  const validation = validateCpuTrace(trace);
-  const sameFinalState = cpu.particles.count === validation.cpu.particles.count
-    && cpu.particles.instances.every((value, i) => Object.is(value, validation.cpu.particles.instances[i]))
-    && cpu.streams.slots.every((slot, i) => slot.id === validation.cpu.streams.slots[i].id && slot.particles === validation.cpu.streams.slots[i].particles);
-  if (!sameFinalState) throw new Error("Final CPU replay state mismatch: occupancy invalid");
+  // No performance warmup overlaps validation, and no readback happened while timing. The timed
+  // run's final state is checked against an untimed replay of its own backend; the other backend
+  // replays the same trace for cross-backend occupancy.
+  let timedGpuState: ArrayBuffer | null = null;
+  if (gpu) {
+    timedGpuState = new ArrayBuffer(REPLAY_CAPACITY * 64);
+    try {
+      readGpuState(gl, gpu.particles, timedGpuState);
+    } finally {
+      gpu.dispose();
+    }
+  }
   if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL error: run invalid");
+  // crossValidate: false keeps only the run's own backend's replay.
+  const cpuCheck = cpu || crossValidate ? validateCpuTrace(trace) : null;
+  const gpuCheck = gpu || crossValidate ? gpuValidation(gl, trace) : null;
+  if (gl.isContextLost()) throw new Error("WebGL context lost during validation: run invalid");
+  let finalState: { matches: boolean; maxFloatDifference?: number };
+  if (cpu && cpuCheck) {
+    finalState = { matches: cpu.particles.count === cpuCheck.cpu.particles.count
+      && cpu.particles.instances.every((value, k) => Object.is(value, cpuCheck.cpu.particles.instances[k]))
+      && cpu.streams.slots.every((slot, k) => slot.id === cpuCheck.cpu.streams.slots[k].id && slot.particles === cpuCheck.cpu.streams.slots[k].particles) };
+    if (!finalState.matches) throw new Error("Final CPU replay state mismatch: occupancy invalid");
+  } else {
+    if (!gpuCheck || "unavailable" in gpuCheck) throw new Error(`GPU validation failed: ${gpuCheck?.unavailable}: run invalid`);
+    const compared = compareGpuStates(timedGpuState!, gpuCheck.finalState);
+    finalState = { matches: compared.identityMatches, maxFloatDifference: compared.maxFloatDifference };
+    if (!finalState.matches) throw new Error("Final GPU active/slot/generation state differs from its validation replay: occupancy invalid");
+    if (scenario === "drained" && gpuCheck.counts.some((n, k) => trace.measured[k] && n !== 0)) throw new Error("Drained measurement still has live particles: run invalid");
+  }
+  const occupancy = (check: { counts: Uint32Array; perSlot: Uint32Array; perSlotIdentity: Uint16Array; occupancy: ReturnType<typeof validateCpuTrace>["occupancy"] }) => ({
+    occupancy: check.occupancy, counts: check.counts, perSlot: check.perSlot, perSlotIdentity: check.perSlotIdentity,
+    windows: fiveSecondWindows(trace, check.counts, check.perSlot),
+  });
   return {
     runId,
     metadata: { cpuReference: CPU_REFERENCE, effectiveStep: "Float32(clamp(interval, 0, LOOK.maxDt))", backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY, limit,
@@ -133,11 +212,14 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
       width, height, pixelRatio: trace.pixelRatio[trace.length - 1], warmupSeconds, measureSeconds },
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
       submissionMs: distribution(submission, measured), intervalMs: distribution(intervals, measured), missedPeriods,
-      uploadedBytes: totalUploads, drawCalls: totalDraws, summedParticleDrawCapacity: totalDrawCapacity,
-      simulatedSlotsPerPositiveStep: REPLAY_CAPACITY, gpuTime: "not measured" },
-    validation: { source: "untimed CPU replay", finalStateMatches: sameFinalState, occupancy: validation.occupancy,
-      counts: validation.counts, perSlot: validation.perSlot, ids: validation.ids, perSlotIdentity: validation.perSlotIdentity },
+      uploadedBytes: totalUploads, textureUploadBytes: totalTextureUploads, drawCalls: totalDraws, summedParticleDrawCapacity: totalDrawCapacity,
+      simulatedSlotsPerPositiveStep: REPLAY_CAPACITY, drawCapacity: backend === "gpu" ? REPLAY_CAPACITY : "live count",
+      gpuTime: "not measured" },
+    validation: { source: `untimed ${backend.toUpperCase()} replay of this trace`, finalStateMatches: finalState.matches,
+      finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: replayIds,
+      cpu: cpuCheck === null ? { unavailable: "crossValidate: false" } : occupancy(cpuCheck),
+      gpu: gpuCheck === null ? { unavailable: "crossValidate: false" } : "unavailable" in gpuCheck ? gpuCheck : occupancy(gpuCheck) },
     trace,
-    acceptance: "Foundation only: cross-backend five-second occupancy windows and target-device measurements pending",
+    acceptance: "Correctness harness: timing from one backend, exact occupancy from untimed replays of the same trace through both. Paired target-device runs and the parity decision are Task 6.",
   };
 }

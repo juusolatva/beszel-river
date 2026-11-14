@@ -25,3 +25,15 @@ it("counts typed uploads in elements and raw buffers in bytes while preserving G
     ["bufferSubData", gl.ARRAY_BUFFER, 59, floats, 0, 3],
   ]);
 });
+
+it("counts texture uploads separately, including a source offset, and forwards every argument", () => {
+  const { gl, calls } = createFakeGl();
+  const { gl: counted, counters } = createSubmissionCounter(gl);
+  const floats = new Float32Array(24 * 32 * 4);
+  const words = new Uint32Array(32 * 4);
+  counted.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 24, 32, gl.RGBA, gl.FLOAT, floats);
+  counted.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 32, gl.RGBA_INTEGER, gl.UNSIGNED_INT, words, 64);
+  expect(counters.textureUploadBytes).toBe(floats.byteLength + words.byteLength - 64 * 4);
+  expect(counters.uploadedBytes).toBe(0);
+  expect(calls.filter(([name]) => name === "texSubImage2D").map((call) => call.length)).toEqual([10, 11]);
+});

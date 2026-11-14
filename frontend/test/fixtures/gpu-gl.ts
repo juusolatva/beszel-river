@@ -1,7 +1,7 @@
 /** Count submission work without allocating argument arrays inside GL calls. */
 export function createSubmissionCounter(gl: WebGL2RenderingContext) {
   const counters = {
-    uploadedBytes: 0, drawCalls: 0, particleDrawCapacity: 0,
+    uploadedBytes: 0, textureUploadBytes: 0, drawCalls: 0, particleDrawCapacity: 0,
     lastFramebuffer: null as WebGLFramebuffer | null,
   };
   const methods = new Map<PropertyKey, unknown>();
@@ -15,6 +15,15 @@ export function createSubmissionCounter(gl: WebGL2RenderingContext) {
       counters.uploadedBytes += data.byteLength;
       gl.bufferSubData(target, offset, data);
     }
+  });
+  // Texture uploads, such as the GPU prototype's flow, stream and command data, counted separately.
+  // Fixed parameters, not rest arguments, so a timed step allocates nothing here either.
+  methods.set("texSubImage2D", (target: GLenum, level: GLint, x: GLint, y: GLint, width: GLsizei, height: GLsizei,
+    format: GLenum, type: GLenum, pixels: ArrayBufferView, srcOffset?: number) => {
+    const elementBytes = "BYTES_PER_ELEMENT" in pixels ? Number(pixels.BYTES_PER_ELEMENT) : 1;
+    counters.textureUploadBytes += pixels.byteLength - (srcOffset ?? 0) * elementBytes;
+    if (srcOffset === undefined) gl.texSubImage2D(target, level, x, y, width, height, format, type, pixels);
+    else gl.texSubImage2D(target, level, x, y, width, height, format, type, pixels, srcOffset);
   });
   methods.set("drawArrays", (mode: number, first: number, count: number) => {
     counters.drawCalls++;

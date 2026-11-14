@@ -32,6 +32,20 @@ export class GpuParticleDrawer implements GpuDrawSource {
     return this.particles.capacity;
   }
 
+  /**
+   * Compile the program and set up both state buffers' vertex arrays now, without drawing, so a
+   * harness can fail fast and keep all setup out of timing. Optional: draws do the same lazily.
+   */
+  prepare(): void {
+    const { gl } = this;
+    try {
+      for (const buffer of this.particles.stateBuffers) this.vertexArrayFor(buffer);
+    } finally {
+      gl.bindVertexArray(null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+  }
+
   draw(aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number, depositScale: number, pixel: number): void {
     const { gl, particles } = this;
     try {
