@@ -35,6 +35,29 @@ describe("GpuParticleDrawer", () => {
     expect(drawer.drawCapacity).toBe(12);
   });
 
+  it("prepares its program and vertex array without drawing, and does not repeat that on the first draw", () => {
+    const { calls, drawer } = setup();
+    drawer.prepare();
+    expect(callsTo(calls, "linkProgram")).toHaveLength(1);
+    expect(callsTo(calls, "createVertexArray")).toHaveLength(1);
+    expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
+    expect(callsTo(calls, "bindVertexArray").at(-1)).toEqual([null]);
+    expect(callsTo(calls, "bindBuffer").at(-1)).toEqual(["ARRAY_BUFFER", null]);
+    calls.length = 0;
+    drawer.draw(1, 1, 0, 1, 1, 0.01);
+    expect(callsTo(calls, "linkProgram")).toEqual([]);
+    expect(callsTo(calls, "createVertexArray")).toEqual([]);
+  });
+
+  it("reports a failed preparation and releases the partial setup", () => {
+    let fail = false;
+    const { calls, drawer } = setup({ overrides: { getProgramParameter: () => !fail, getProgramInfoLog: () => "bad link" } });
+    fail = true;
+    expect(() => drawer.prepare()).toThrow("Program link failed");
+    expect(callsTo(calls, "deleteProgram")).toHaveLength(1);
+    expect(callsTo(calls, "bindVertexArray").at(-1)).toEqual([null]);
+  });
+
   it("draws full capacity straight from the latest state buffer with integer identities", () => {
     const { calls, particles, drawer } = setup();
     drawer.draw(1.5, 1.25, 0.3, 0.5, 0.75, 1 / 600);

@@ -50,7 +50,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { backend = "cpu", scenario = "dense", limit = 10000, warmupSeconds = scenario === "drained" ? 60 : 30,
     measureSeconds = 60, traceCapacity = 120000, motion = 1, refreshHz, conditions, crossValidate = true } = options;
   if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
-  // The drawer compiles on its first draw, which must fall in warmup.
+  // The drawer's second vertex array is made on its first draw after a buffer swap, in warmup.
   if (backend === "gpu" && !(warmupSeconds >= 1)) throw new Error("GPU runs need at least 1 s of warmup");
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
@@ -73,7 +73,10 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (backend === "gpu") {
     try {
       gpu = new GpuReplay(countedGl, motion);
+      // The drawer compiles lazily; do it here so its shader fails before timing, like the simulation's.
+      gpu.drawer.prepare();
     } catch (error) {
+      gpu?.dispose();
       // Unsupported limits, failed allocation or a shader that does not compile: no fallback.
       throw new Error(`GPU backend failed: ${String(error)}: run invalid`);
     }
@@ -91,7 +94,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const debug = gl.getExtension("WEBGL_debug_renderer_info");
   const rendererName = gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
 
-  await new Promise<void>((resolve, reject) => {
+  // A failed run releases the GPU replay's resources; the page still needs a reload before the next run.
+  const timed = new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", visibility);
@@ -162,6 +166,12 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     };
     raf = requestAnimationFrame(frame);
   });
+  try {
+    await timed;
+  } catch (error) {
+    gpu?.dispose();
+    throw error;
+  }
 
   // No performance warmup overlaps validation, and no readback happened while timing. The timed
   // run's final state is checked against an untimed replay of its own backend; the other backend

@@ -349,6 +349,8 @@ Unit tests cover the replay ordering, readback counting, stale-generation and ov
 
 **PR #129 review follow-up:** Codex and Qodo found that five-second windows drifted: a step crossing a boundary went wholly to the earlier window and the next began at its end, so 858 steps of `Float32(0.07)` gave 11 windows instead of 12. Windows are now fixed at multiples of 5 s, and a crossing step's count is split between both. Qodo also found three more issues, all fixed. `crossValidate: false` now skips the CPU replay of a GPU run too. The texture-upload counter no longer allocates a rest-argument array inside timed GPU steps. GL errors are checked after the timed run and before validation, so an error raised by the optional GPU replay is reported in `validation.gpu` instead of failing a CPU run. The 1/256 s rule is kept: the Task 3 step ruling already restricts experimental traces above 256 Hz. The README now says to benchmark at 144 Hz or below. Each fix has a regression test.
 
+A second Qodo pass noted that the drawer compiles lazily, inside the frame loop, so a drawer shader failure escaped the `GPU backend failed` guard and left the GPU replay's resources allocated. `GpuParticleDrawer.prepare()` now compiles the program and sets up the current buffer's vertex array without drawing; the harness calls it inside that guard before timing. A failed run of either kind releases the GPU replay. A headless GPU smoke run still matched its validation replay exactly.
+
 ## Task 6: Measure and decide
 
 **Files:** Record the result ledger here and summarize the decision in `docs/PLAN.md`; document runnable harness commands in `README.md`.

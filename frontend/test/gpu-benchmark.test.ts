@@ -90,6 +90,14 @@ describe("GPU backend", () => {
     await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/GPU backend failed.*unsupported/);
   });
 
+  it("reports a drawer shader failure as a failed GPU start and releases the GPU replay", async () => {
+    // The renderer links three programs and the simulation three more; the drawer's is the seventh.
+    let links = 0;
+    const { calls } = stubPage({ overrides: { linkProgram: () => { links++; }, getProgramParameter: () => links < 7, getProgramInfoLog: () => "drawer link" } });
+    await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/GPU backend failed.*drawer link.*run invalid/);
+    expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
+  });
+
   it("needs warmup for the drawer's first draw and rejects unknown backends", async () => {
     stubPage();
     await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0 })).rejects.toThrow(/warmup/);
@@ -97,11 +105,13 @@ describe("GPU backend", () => {
   });
 
   it("marks a run invalid when the context is lost", async () => {
-    const { state } = stubPage();
+    const { calls, state } = stubPage();
     const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05 });
     state.callback?.(0);
     state.lost?.();
     await expect(run).rejects.toThrow(/context lost/);
+    // A failed run releases the GPU replay's resources.
+    expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
   });
 
   it("marks a run invalid when the context is lost during validation", async () => {
