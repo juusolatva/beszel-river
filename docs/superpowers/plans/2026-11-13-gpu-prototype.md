@@ -302,6 +302,8 @@ Verification: `npm run typecheck`, `npm run coverage` (210 bridge + 213 frontend
 
 **PR #126 review follow-up:** Qodo found that a throwing `source.draw` left blending on and the trail framebuffer bound for later GL work; `Renderer` now restores both in `finally`. The regression test also showed that an RGBA8 deposit which failed stayed in the trail clock and was repeated next frame, so each 60 Hz step is now consumed before it is drawn (no change on success). Gemini suggested clamping the GPU fade to [0, 1]: valid stepped particles cannot go negative, but the clamp keeps corrupt state from subtracting light under additive blending. Typecheck, coverage (214 frontend tests) and build pass; the real-shader checks still show a 0-byte difference, and the renderer readbacks are unchanged.
 
+Qodo's second pass found two more issues. First, a context that advertises `EXT_color_buffer_float` but cannot complete a half-float target makes `Renderer.resize` fall back to RGBA8 silently, so a "half-float" browser check could have run in 8-bit. `Renderer.halfFloat` now exposes the format in use, and both renderer browser checks assert it. Second, the drawer's stream-slot bound is now `MAX_STREAMS` in `particle-gpu.vert`, and a unit test ties it to `streams.ts`. `simulate.vert` still uses literal 32/31, left unchanged from Task 3. The checks pass again with unchanged results.
+
 ## Task 5: Replay budget decisions and verify failure behavior
 
 **Files:** Extend the GPU benchmark harness, GPU lifecycle tests and browser tests; inspect `frontend/src/sim/budget.ts` and `frontend/src/main.ts` for behavior to reproduce.

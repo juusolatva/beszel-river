@@ -6,6 +6,9 @@ precision highp int;
 precision highp sampler2D;
 precision highp usampler2D;
 
+// Stream slots, the rows of the stream and command textures: MAX_STREAMS in streams.ts (unit-tested).
+#define MAX_STREAMS 32u
+
 layout(location = 0) in vec2 a_corner; // x: 0 tail .. 1 head, y: -1 .. 1 across
 layout(location = 1) in vec4 a_motion; // x, y, vx, vy
 layout(location = 2) in vec4 a_lifetime; // age, life, hueJitter, size
@@ -48,7 +51,7 @@ void main() {
   v_length = 0.0;
   v_rgb = vec3(0.0);
   // Inactive slots, and defensively any stale generation, collapse outside the clip volume.
-  if (a_identity.z == 0u || a_identity.x >= 32u ||
+  if (a_identity.z == 0u || a_identity.x >= MAX_STREAMS ||
       texelFetch(u_command, ivec2(0, int(a_identity.x)), 0).x != a_identity.y) {
     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
     return;

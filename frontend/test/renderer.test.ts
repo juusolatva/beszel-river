@@ -152,6 +152,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 10);
     renderer.resize(800, 600);
     expect(callsTo(calls, "texImage2D").map(([, , format]) => format)).toEqual(["RGBA16F", "RGBA16F"]);
+    expect(renderer.halfFloat).toBe(true);
 
     calls.length = 0;
     renderer.resize(800, 600);
@@ -170,6 +171,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 10);
     renderer.resize(800, 600);
     expect(callsTo(calls, "texImage2D").map(([, , format]) => format)).toEqual(["RGBA16F", "RGBA16F", "RGBA8", "RGBA8"]);
+    expect(renderer.halfFloat).toBe(false);
 
     calls.length = 0;
     renderer.resize(400, 300);

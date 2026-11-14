@@ -77,6 +77,11 @@ export class Renderer {
     gl.bindVertexArray(null);
   }
 
+  /** Whether trails use RGBA16F targets; false once `resize` has fallen back to RGBA8. */
+  get halfFloat(): boolean {
+    return this.half;
+  }
+
   resize(width: number, height: number): void {
     if (width === this.width && height === this.height) return;
     const { gl } = this;

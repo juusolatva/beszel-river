@@ -4,7 +4,7 @@ import { LOOK } from "../src/config";
 import { GpuParticleDrawer } from "../src/render/gpu-particle-drawer";
 import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
-import { StreamSet } from "../src/sim/streams";
+import { MAX_STREAMS, StreamSet } from "../src/sim/streams";
 import { callsTo, createFakeGl, type Call } from "./fake-gl";
 
 function inputs() {
@@ -189,10 +189,13 @@ describe("GpuParticleDrawer", () => {
     expect(callsTo(calls, "deleteBuffer")).not.toContainEqual([particles.stateBuffer]);
   });
 
-  it("shares colour conversion and fragment shading with the CPU particle shader", () => {
+  it("shares colour conversion and fragment shading with the CPU particle shader and its stream count", () => {
     const read = (name: string) => readFileSync(new URL(`../src/render/shaders/${name}`, import.meta.url), "utf8");
     const oklch = (source: string) => source.slice(source.indexOf("vec3 oklchToLinearSrgb"), source.indexOf("void main"));
     expect(oklch(read("particle-gpu.vert"))).toBe(oklch(read("particle.vert")));
+    // The slot bound must follow the stream and command texture rows.
+    expect(read("particle-gpu.vert")).toContain(`#define MAX_STREAMS ${MAX_STREAMS}u\n`);
+    expect(read("particle-gpu.vert").replace(/#define MAX_STREAMS \d+u/, "")).not.toMatch(/\b3[12]u?\b/);
     const drawer = readFileSync(new URL("../src/render/gpu-particle-drawer.ts", import.meta.url), "utf8");
     expect(drawer).toContain('from "./shaders/particle.frag?raw"');
   });

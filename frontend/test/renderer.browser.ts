@@ -30,6 +30,7 @@ export function runRendererBrowserChecks(RendererClass = Renderer): { half: bool
       for (const hz of [30, 60, 120, 240]) {
         const renderer = new RendererClass(gl, 1);
         renderer.resize(32, 32);
+        assert(renderer.halfFloat === half, `${half}: renderer fell back to RGBA8`);
         const instances = new Float32Array([0.5, 0.5, 0.5, 0.5, 0, 0, 0.75, intensity, 2]);
         for (let frame = 0; frame < hz * 2; frame++) renderer.render(instances, 1, 1 / hz, 1);
         gl.readPixels(16, 16, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
@@ -133,6 +134,8 @@ export function runGpuDrawBrowserChecks(tolerance = 1): { half: boolean; hz: num
         preloadGpuState(gl, gpu, state);
         cpuRenderer.resize(width, height);
         gpuRenderer.resize(width, height);
+        // A half-float target that is advertised but incomplete falls back silently; that is not this check.
+        assert(cpuRenderer.halfFloat === half && gpuRenderer.halfFloat === half, `${half}: renderer fell back to RGBA8`);
         const dt = Math.fround(1 / hz);
         const frames = Math.round(hz / 2);
         for (let frame = 0; frame < frames; frame++) {
@@ -179,6 +182,7 @@ export function runGpuDrawBrowserChecks(tolerance = 1): { half: boolean; hz: num
         gpu.step(1 / 60, streams, field, DRAW_ASPECT);
         preloadGpuState(gl, gpu, state);
         renderer.resize(width, height);
+        assert(renderer.halfFloat === half, `${half}: renderer fell back to RGBA8`);
         for (let frame = 0; frame < 4; frame++) renderer.renderGpu(drawer, dt, DRAW_ASPECT, pixelRatio, 0, 1);
         gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, gpuPixels);
         const brightest = maxByte(gpuPixels);
