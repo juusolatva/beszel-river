@@ -296,13 +296,30 @@ Seeded end-to-end replay (`captureGpuRiverComparison`, same browser; CPU seed 42
 | Draining, 8 s after | 41.9 / 28.2 / 30.9 | 41.9 / 28.4 / 31.2 | 0.972 |
 | Draining, 16 s after | 21.4 / 15.0 / 11.4 | 14.5 / 9.8 / 5.8 | 0.770 |
 
-Band placement and widths, filament strands, colour, streak length and brightness match by eye in the steady scenes and early draining. At 16 s after removal the CPU still shows a sparse trickle of births at the bottom while the GPU river has lifted off the bottom edge. This is Task 3's intentional suppression of requests below presence 0.01, now visible; it remains an open visual-acceptance item for Task 6, not a drawing defect. Images are not retained.
+Band placement and widths, filament strands, colour, streak length and brightness match by eye in the steady scenes and early draining. At 16 s after removal the CPU still shows a sparse trickle of births at the bottom while the GPU river has lifted off the bottom edge. This is Task 3's intentional suppression of requests below presence 0.01, now visible. It was resolved on 2026-11-15 by the drain taper below, applied to both backends. Images are not retained.
 
 Verification: `npm run typecheck`, `npm run coverage` (210 bridge + 213 frontend tests, thresholds unchanged, drawer fully covered) and `npm run build`. The existing renderer browser checks still pass with unchanged values. The production bundle (one 29.4 kB script) contains no drawer, `particle-gpu.vert`, scan or feedback shader strings. Its only `transformFeedback` match is `createProgram`'s optional varyings branch, which is already on `main`. No GPU selection was added to the public page or the benchmark harness; Task 5 adds the harness backend.
 
 **PR #126 review follow-up:** Qodo found that a throwing `source.draw` left blending on and the trail framebuffer bound for later GL work; `Renderer` now restores both in `finally`. The regression test also showed that an RGBA8 deposit which failed stayed in the trail clock and was repeated next frame, so each 60 Hz step is now consumed before it is drawn (no change on success). Gemini suggested clamping the GPU fade to [0, 1]: valid stepped particles cannot go negative, but the clamp keeps corrupt state from subtracting light under additive blending. Typecheck, coverage (214 frontend tests) and build pass; the real-shader checks still show a 0-byte difference, and the renderer readbacks are unchanged.
 
 Qodo's second pass found two more issues. First, a context that advertises `EXT_color_buffer_float` but cannot complete a half-float target makes `Renderer.resize` fall back to RGBA8 silently, so a "half-float" browser check could have run in 8-bit. `Renderer.halfFloat` now exposes the format in use, and both renderer browser checks assert it. Second, the drawer's stream-slot bound is now `MAX_STREAMS` in `particle-gpu.vert`, and a unit test ties it to `streams.ts`. `simulate.vert` still uses literal 32/31, left unchanged from Task 3. The checks pass again with unchanged results.
+
+### Drain taper — 2026-11-15
+
+**Decision (user, 2026-11-15):** both backends end a removed stream's births the same way, so Task 4's late-draining difference disappears instead of becoming a GPU-only look. `StreamSet.derive` multiplies a removed stream's `spawnWeight` by a smoothstep from 1 at presence `DRAIN_TAPER_PRESENCE` (0.05) to 0 at `DRAIN_PRESENCE` (0.01), the threshold the GPU lifecycle and slot release already used; both now read the shared constants. Streams in the frame, including ones fading in or returning before release, keep full weight, and `shareWeight` is unchanged, so other streams' rates do not jump. The CPU now has the GPU's cutoff. Both lose the abrupt step from about 1 % of the normal rate to zero, and the GPU's release proof is unchanged: no births after presence 0.01.
+
+This changes the public page. Presence falls from 1 to 0.05 in about 6 s and to 0.01 in about 9.2 s (`tau.presence` 2 s), so a removed band is fed for about 9 s and then rises away within the 14 s maximum lifetime. Before, its births followed presence towards zero, which kept feeding the lower half of the band for well over 16 s. The CPU frees the slot when its count reaches zero, sooner than before; the GPU keeps its 14.1 s rule. The steady occupancy-gate fixtures never remove a stream, so the passed gate and its Node reproduction are unaffected. Task 3's retained rotation curves describe the old CPU tail and remain historical evidence.
+
+Unit tests first failed and now pass: the taper is smooth (largest relative change under 5 % per 60 Hz step) and reaches zero by presence 0.01, in-frame and returning streams keep full weight, and a removed stream's CPU count only falls after presence 0.01 until its slot is released. Seeded draining replay (`captureGpuRiverComparison({ scenes: ["draining"] })`, headless Chrome 157 with SwiftShader, same settings as Task 4):
+
+| Seconds after the empty frame | CPU mean RGB | GPU mean RGB | Column-profile correlation |
+| --- | --- | --- | ---: |
+| 4 | 46.1 / 33.3 / 38.1 | 45.9 / 33.7 / 38.2 | 0.976 |
+| 8 | 40.8 / 27.2 / 29.3 | 41.0 / 27.5 / 29.8 | 0.972 |
+| 12 | 23.4 / 15.6 / 12.4 | 23.4 / 15.8 / 12.6 | 0.908 |
+| 16 | 7.5 / 5.9 / 3.7 | 8.1 / 6.2 / 3.7 | 0.694 |
+
+By eye both rivers lift off the bottom edge at the same time and fade alike; the lower correlation at 16 s reflects the few remaining particles. Still to check: a host disappearing on the real page.
 
 ## Task 5: Replay budget decisions and verify failure behavior
 

@@ -1,5 +1,5 @@
 import { LOOK } from "../config";
-import { MAX_STREAMS, MIN_SHARE, type StreamReleasePolicy, type StreamSet, type StreamSlot } from "./streams";
+import { DRAIN_PRESENCE, MAX_STREAMS, MIN_SHARE, type StreamReleasePolicy, type StreamSet, type StreamSlot } from "./streams";
 
 /** Supported schedule keeps accumulated Float32 age error below one birth step. */
 export function effectiveGpuStep(dt: number): number {
@@ -71,7 +71,7 @@ export class GpuLifecycle {
   }
 
   private requestCount(slot: StreamSlot, index: number, rate: number, dt: number): number {
-    if (!slot.used || !(slot.inFrame || slot.presence >= 0.01)) return 0;
+    if (!slot.used || !(slot.inFrame || slot.presence >= DRAIN_PRESENCE)) return 0;
     this.lastPossibleSpawn[index] = this.time;
     this.carry[index] += rate * slot.spawnWeight * dt;
     const n = Math.floor(this.carry[index]);

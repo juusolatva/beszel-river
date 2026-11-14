@@ -205,8 +205,8 @@ type RiverScene = "filaments" | "dense" | "draining";
  * lockstep at 60 Hz, captured as PNG data URLs for visual comparison with summary statistics. The two
  * spawn different particles, so full rivers are compared by eye and by profile, never pixel for pixel.
  */
-export function captureGpuRiverComparison(options: { width?: number; height?: number; seed?: number } = {}) {
-  const { width = 480, height = 320, seed = 42 } = options;
+export function captureGpuRiverComparison(options: { width?: number; height?: number; seed?: number; scenes?: readonly RiverScene[] } = {}) {
+  const { width = 480, height = 320, seed = 42, scenes: only = ["filaments", "dense", "draining"] } = options;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -228,9 +228,10 @@ export function captureGpuRiverComparison(options: { width?: number; height?: nu
     ["filaments", [1], 20, [20]],
     ["dense", [2], 20, [20]],
     // Full river, then an empty frame at 20 s: draining while presence fades and particles die.
-    ["draining", [2, 4], 36, [20, 24, 28, 36]],
+    ["draining", [2, 4], 36, [20, 24, 28, 32, 36]],
   ];
   for (const [scene, frames, seconds, captureAt] of scenes) {
+    if (!only.includes(scene)) continue;
     const cpuStreams = new StreamSet(1), cpuField = new FlowField(mulberry32(seed));
     const cpu = new ParticleSystem(capacity, mulberry32(seed + 1));
     const gpu = new GpuParticles(gl, capacity, seed + 1000);
