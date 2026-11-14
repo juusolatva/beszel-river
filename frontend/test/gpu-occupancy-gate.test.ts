@@ -96,7 +96,7 @@ describe("occupancy gate statistic", () => {
     expect(evaluateGate(syntheticRuns({ gpuShift: (_w, s) => (s < BUSY ? 0.375 : 0) })).summary.gpuPassed).toBe(true);
     const { comparisons } = evaluateGate(syntheticRuns({ gpuShift: (_w, s) => (s < BUSY ? 7.5 : 0) }));
     const failed = comparisons.gpu!.filter((r) => !r.passed);
-    expect(failed.length).toBe(10);
+    expect(failed).toHaveLength(10);
     expect(failed.every((r) => r.slot === -1)).toBe(true);
   });
 
