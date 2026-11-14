@@ -2,7 +2,7 @@ import { LOOK } from "../src/config";
 import { Renderer } from "../src/render/renderer";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
 import { compareGpuStates, CpuReplay, CPU_REFERENCE, fiveSecondWindows, GpuReplay, readGpuState, REPLAY_CAPACITY,
-  REPLAY_SEED, ReplayTrace, replayableStep, replayFrameIndex, validateCpuTrace, validateGpuTrace,
+  REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, validateCpuTrace, validateGpuTrace,
   type ReplayScenario } from "./fixtures/gpu-replay";
 
 interface BenchmarkOptions {
@@ -27,10 +27,16 @@ function distribution(values: Float64Array, length: number) {
   return { median: sorted[Math.floor(length * 0.5)], p95: sorted[Math.floor(length * 0.95)], p99: sorted[Math.floor(length * 0.99)] };
 }
 
-/** Run the untimed GPU validation replay, or say why the GPU could not provide one. */
+/**
+ * Run the untimed GPU validation replay, or say why the GPU could not provide one. GL errors raised
+ * during it belong to it, not to the timed run, whose errors are checked before validation.
+ */
 function gpuValidation(gl: WebGL2RenderingContext, trace: ReplayTrace) {
   try {
-    return validateGpuTrace(gl, trace);
+    const result = validateGpuTrace(gl, trace);
+    const error = gl.getError();
+    if (error !== gl.NO_ERROR) throw new Error(`WebGL error ${error} during GPU validation`);
+    return result;
   } catch (error) {
     return { unavailable: String(error) };
   }
@@ -166,11 +172,13 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     readGpuState(gl, gpu.particles, timedGpuState);
     gpu.dispose();
   }
-  const cpuCheck = validateCpuTrace(trace);
+  if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL error: run invalid");
+  // crossValidate: false keeps only the run's own backend's replay.
+  const cpuCheck = cpu || crossValidate ? validateCpuTrace(trace) : null;
   const gpuCheck = gpu || crossValidate ? gpuValidation(gl, trace) : null;
   if (gl.isContextLost()) throw new Error("WebGL context lost during validation: run invalid");
   let finalState: { matches: boolean; maxFloatDifference?: number };
-  if (cpu) {
+  if (cpu && cpuCheck) {
     finalState = { matches: cpu.particles.count === cpuCheck.cpu.particles.count
       && cpu.particles.instances.every((value, k) => Object.is(value, cpuCheck.cpu.particles.instances[k]))
       && cpu.streams.slots.every((slot, k) => slot.id === cpuCheck.cpu.streams.slots[k].id && slot.particles === cpuCheck.cpu.streams.slots[k].particles) };
@@ -182,7 +190,6 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     if (!finalState.matches) throw new Error("Final GPU active/slot/generation state differs from its validation replay: occupancy invalid");
     if (scenario === "drained" && gpuCheck.counts.some((n, k) => trace.measured[k] && n !== 0)) throw new Error("Drained measurement still has live particles: run invalid");
   }
-  if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL error: run invalid");
   const occupancy = (check: { counts: Uint32Array; perSlot: Uint32Array; perSlotIdentity: Uint16Array; occupancy: ReturnType<typeof validateCpuTrace>["occupancy"] }) => ({
     occupancy: check.occupancy, counts: check.counts, perSlot: check.perSlot, perSlotIdentity: check.perSlotIdentity,
     windows: fiveSecondWindows(trace, check.counts, check.perSlot),
@@ -198,8 +205,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
       simulatedSlotsPerPositiveStep: REPLAY_CAPACITY, drawCapacity: backend === "gpu" ? REPLAY_CAPACITY : "live count",
       gpuTime: "not measured" },
     validation: { source: `untimed ${backend.toUpperCase()} replay of this trace`, finalStateMatches: finalState.matches,
-      finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: cpuCheck.ids,
-      cpu: occupancy(cpuCheck),
+      finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: replayIds,
+      cpu: cpuCheck === null ? { unavailable: "crossValidate: false" } : occupancy(cpuCheck),
       gpu: gpuCheck === null ? { unavailable: "crossValidate: false" } : "unavailable" in gpuCheck ? gpuCheck : occupancy(gpuCheck) },
     trace,
     acceptance: "Correctness harness: timing from one backend, exact occupancy from untimed replays of the same trace through both. Paired target-device runs and the parity decision are Task 6.",

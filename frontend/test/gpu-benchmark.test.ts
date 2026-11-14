@@ -34,8 +34,8 @@ it("includes canvas layout reads in callback work and replays the final rendered
   expect(result.metadata.effectiveStep).toBe("Float32(clamp(interval, 0, LOOK.maxDt))");
   await expect(runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/Reload/);
   // CPU runs replay the trace through the GPU too, untimed.
-  expect(result.validation.cpu.counts).toHaveLength(3);
-  expect("counts" in result.validation.gpu).toBe(true);
+  expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
+  expect(result.validation.gpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
 });
 
 /** Stub a visible page around a fake context; returns the next animation callback. */
@@ -80,7 +80,8 @@ describe("GPU backend", () => {
     expect(result.validation.finalStateMatches).toBe(true);
     expect(result.validation.finalStateMaxFloatDifference).toBe(0);
     expect(result.validation.source).toMatch(/GPU/);
-    expect(result.validation.cpu.counts).toHaveLength(result.trace.length);
+    // crossValidate: false skips the CPU replay of a GPU run.
+    expect(result.validation.cpu).toEqual({ unavailable: "crossValidate: false" });
     expect(result.validation.gpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 
@@ -119,6 +120,22 @@ describe("GPU backend", () => {
       state.callback?.(1);
       await expect(run).rejects.toThrow(/below 1\/256 s/);
     }
+  });
+
+  it("attributes GL errors to the timed run or to the optional GPU replay", async () => {
+    // During the timed CPU run: the run is invalid.
+    const timed = stubPage({ overrides: { getError: () => "INVALID_OPERATION" } });
+    const failing = runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05 });
+    for (const now of [0, 20, 40, 60]) timed.state.callback?.(now);
+    await expect(failing).rejects.toThrow(/WebGL error: run invalid/);
+    // Raised by the GPU cross-replay of a CPU run (its first readback): reported there only.
+    let replaying = false;
+    const replay = stubPage({ overrides: { getBufferSubData: () => { replaying = true; }, getError: () => (replaying ? "OUT_OF_MEMORY" : "NO_ERROR") } });
+    const run = runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05 });
+    for (const now of [0, 20, 40, 60]) replay.state.callback?.(now);
+    const result = await run;
+    expect(result.validation.gpu).toEqual({ unavailable: expect.stringMatching(/OUT_OF_MEMORY during GPU validation/) });
+    expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 
   it("reports an unavailable cross-backend replay instead of failing a CPU run", async () => {

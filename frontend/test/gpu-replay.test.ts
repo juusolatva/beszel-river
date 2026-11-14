@@ -219,10 +219,29 @@ describe("GPU comparison replay foundation", () => {
     }
     const windows = fiveSecondWindows(trace, counts, perSlot);
     expect(windows).toHaveLength(3); // 350 measured callbacks of 0.05 s; the partial window is left out
-    windows.forEach((w, k) => expect(w.start).toBeCloseTo(5 * k, 5));
+    expect(windows.map((w) => w.start)).toEqual([0, 5, 10]);
     expect(windows[0]).toMatchObject({ frames: [2], total: 100 });
     expect(windows[0].perSlot[3]).toBe(100);
     expect(windows[1].frames).toEqual([2, 4]);
     expect(windows[2]).toMatchObject({ frames: [4], total: 40 });
+  });
+
+  it("splits a step that crosses a window boundary and keeps the windows aligned", () => {
+    // Float32(0.07) does not divide 5 s; 858 steps cover 60.06 s and must still give 12 windows.
+    const trace = new ReplayTrace(858);
+    const counts = new Uint32Array(858), perSlot = new Uint32Array(858 * 32);
+    for (let i = 0; i < 858; i++) {
+      trace.append(0.07, 2, 960, 640, 1, 1, false, 1000, 1, true);
+      counts[i] = i < 72 ? 100 : 200; // steps 0–71 cover 0–5.04 s
+      perSlot[i * 32] = counts[i];
+    }
+    const windows = fiveSecondWindows(trace, counts, perSlot);
+    expect(windows.map((w) => w.start)).toEqual(Array.from({ length: 12 }, (_, k) => 5 * k));
+    // Step 71 spans 4.97–5.04 s: its count fills the end of the first window and the start of the second.
+    const dt = Math.fround(0.07);
+    expect(windows[0].total).toBeCloseTo(100, 4);
+    expect(windows[1].total).toBeCloseTo((100 * (72 * dt - 5) + 200 * (10 - 72 * dt)) / 5, 4);
+    expect(windows[1].perSlot[0]).toBeCloseTo(windows[1].total, 9);
+    expect(windows[11].total).toBeCloseTo(200, 4);
   });
 });

@@ -17,13 +17,13 @@ export function createSubmissionCounter(gl: WebGL2RenderingContext) {
     }
   });
   // Texture uploads, such as the GPU prototype's flow, stream and command data, counted separately.
-  methods.set("texSubImage2D", (...args: unknown[]) => {
-    const pixels = args[8];
-    if (ArrayBuffer.isView(pixels)) {
-      const elementBytes = "BYTES_PER_ELEMENT" in pixels ? Number(pixels.BYTES_PER_ELEMENT) : 1;
-      counters.textureUploadBytes += pixels.byteLength - Number(args[9] ?? 0) * elementBytes;
-    }
-    Reflect.apply(gl.texSubImage2D, gl, args);
+  // Fixed parameters, not rest arguments, so a timed step allocates nothing here either.
+  methods.set("texSubImage2D", (target: GLenum, level: GLint, x: GLint, y: GLint, width: GLsizei, height: GLsizei,
+    format: GLenum, type: GLenum, pixels: ArrayBufferView, srcOffset?: number) => {
+    const elementBytes = "BYTES_PER_ELEMENT" in pixels ? Number(pixels.BYTES_PER_ELEMENT) : 1;
+    counters.textureUploadBytes += pixels.byteLength - (srcOffset ?? 0) * elementBytes;
+    if (srcOffset === undefined) gl.texSubImage2D(target, level, x, y, width, height, format, type, pixels);
+    else gl.texSubImage2D(target, level, x, y, width, height, format, type, pixels, srcOffset);
   });
   methods.set("drawArrays", (mode: number, first: number, count: number) => {
     counters.drawCalls++;

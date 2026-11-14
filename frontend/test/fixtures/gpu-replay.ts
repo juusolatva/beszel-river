@@ -284,30 +284,37 @@ export function compareGpuStates(a: ArrayBuffer, b: ArrayBuffer): { identityMatc
 }
 
 /**
- * Simulation-time-weighted means over aligned five-second windows of the measured callbacks, total
- * and per slot, with the replay frames each window covers so dense, draining and rotation phases are
- * never averaged together. A trailing partial window is left out.
+ * Simulation-time-weighted means over fixed five-second windows of the measured callbacks, total and
+ * per slot, with the replay frames each window covers so dense, draining and rotation phases are
+ * never averaged together. A callback's post-step count holds over its whole step, so a step crossing
+ * a boundary is split between both windows. A trailing partial window is left out.
  */
 export function fiveSecondWindows(trace: ReplayTrace, counts: Uint32Array, perSlot: Uint32Array) {
   const windows: { start: number; frames: number[]; total: number; perSlot: number[] }[] = [];
-  let time = 0, start = 0, weight = 0, total = 0;
+  let time = 0, end = 5, weight = 0, total = 0;
   let slots = new Array<number>(MAX_STREAMS).fill(0);
   let frames = new Set<number>();
   for (let i = 0; i < trace.length; i++) {
-    if (!trace.measured[i]) continue;
-    const dt = trace.dt[i];
-    if (dt <= 0) continue;
-    weight += dt;
-    total += dt * counts[i];
-    for (let slot = 0; slot < MAX_STREAMS; slot++) slots[slot] += dt * perSlot[i * MAX_STREAMS + slot];
-    frames.add(trace.frame[i]);
-    time += dt;
-    if (time - start >= 5 - 1e-9) {
-      windows.push({ start, frames: [...frames].sort((a, b) => a - b), total: total / weight, perSlot: slots.map((v) => v / weight) });
-      start = time;
-      weight = total = 0;
-      slots = new Array<number>(MAX_STREAMS).fill(0);
-      frames = new Set();
+    if (!trace.measured[i] || trace.dt[i] <= 0) continue;
+    let remaining = trace.dt[i];
+    while (remaining > 0) {
+      const part = Math.min(remaining, end - time);
+      weight += part;
+      total += part * counts[i];
+      for (let slot = 0; slot < MAX_STREAMS; slot++) slots[slot] += part * perSlot[i * MAX_STREAMS + slot];
+      frames.add(trace.frame[i]);
+      time += part;
+      remaining -= part;
+      // Close at the boundary, tolerating rounding in the summed steps.
+      if (end - time <= 1e-9) {
+        windows.push({ start: end - 5, frames: [...frames].sort((a, b) => a - b), total: total / weight, perSlot: slots.map((v) => v / weight) });
+        time = end;
+        end += 5;
+        weight = total = 0;
+        slots = new Array<number>(MAX_STREAMS).fill(0);
+        frames = new Set();
+        if (remaining <= 1e-9) remaining = 0;
+      }
     }
   }
   return windows;
