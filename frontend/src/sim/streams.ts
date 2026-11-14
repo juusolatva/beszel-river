@@ -1,6 +1,6 @@
 import type { Frame, Stream } from "@beszel-river/shared";
 import { LOOK } from "../config";
-import { ease, fract, hashString, lerp } from "../util/math";
+import { clamp, ease, fract, hashString, lerp } from "../util/math";
 
 /** Slot count; particles store their slot index in a byte. Extra streams are ignored. */
 export const MAX_STREAMS = 32;
@@ -8,6 +8,10 @@ export const MAX_STREAMS = 32;
 export const FILAMENTS = 6;
 /** Share of a fully present stream of width 0; bands and spawn shares grow from it with width. */
 export const MIN_SHARE = 0.6;
+/** Below this presence a removed stream spawns nothing and its slot may be released. */
+export const DRAIN_PRESENCE = 0.01;
+/** A removed stream's births taper smoothly to zero from this presence down to `DRAIN_PRESENCE`. */
+export const DRAIN_TAPER_PRESENCE = 0.05;
 /** Backend-specific proof that a draining slot has no remaining owners. */
 export type StreamReleasePolicy = (slot: StreamSlot, index: number) => boolean;
 const cpuCanRelease: StreamReleasePolicy = slot => slot.particles === 0;
@@ -150,7 +154,7 @@ export class StreamSet {
       this.easeLayout(slot, dt);
       this.derive(slot);
       slot.rebuildCenters();
-      if (!slot.inFrame && slot.presence < 0.01 && this.canRelease(slot, index)) {
+      if (!slot.inFrame && slot.presence < DRAIN_PRESENCE && this.canRelease(slot, index)) {
         this.release(slot);
         released = true;
       }
@@ -207,7 +211,9 @@ export class StreamSet {
     slot.turbulenceAmp = lerp(LOOK.turbulenceRange[0], LOOK.turbulenceRange[1], slot.turbulence) * this.motion;
     slot.shareWeight = (MIN_SHARE + 0.8 * slot.width) * slot.presence;
     const pulse = slot.pulse * this.motion * this.motion;
-    slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v);
+    // A removed stream stops spawning at DRAIN_PRESENCE, so its last particles can be proven gone
+    // without counting them (the GPU prototype's release rule); the taper avoids an abrupt end.
+    slot.spawnWeight = slot.shareWeight * lerp(0.25, 1, slot.density) * (1 + 2 * pulse) * lerp(0.2, 1, v) * drainTaper(slot);
     slot.brightness = (1 + 1.2 * pulse) * lerp(0.3, 1, v) * lerp(0.3, 1, slot.presence);
     slot.chroma = LOOK.chroma * lerp(0.1, 1, v);
     slot.streakSeconds = lerp(LOOK.streakRange[0], LOOK.streakRange[1], slot.flow);
@@ -276,4 +282,11 @@ export class StreamSet {
 /** A band's share of the width, before normalizing. */
 function bandWeight(slot: StreamSlot): number {
   return MIN_SHARE + 0.8 * (slot.latest?.width ?? 0);
+}
+
+/** 1 for streams in the frame; for removed ones a smoothstep from 1 at DRAIN_TAPER_PRESENCE to 0 at DRAIN_PRESENCE. */
+function drainTaper(slot: StreamSlot): number {
+  if (slot.inFrame) return 1;
+  const t = clamp((slot.presence - DRAIN_PRESENCE) / (DRAIN_TAPER_PRESENCE - DRAIN_PRESENCE), 0, 1);
+  return t * t * (3 - 2 * t);
 }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { FlowField } from "../src/sim/noise";
 import { INSTANCE_FLOATS, ParticleSystem } from "../src/sim/particles";
-import { StreamSet } from "../src/sim/streams";
+import { DRAIN_PRESENCE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
 
 const ASPECT = 1.6;
@@ -132,6 +132,23 @@ describe("ParticleSystem", () => {
     run(LOOK.turnoverSeconds * 3);
     fromStart.run(LOOK.turnoverSeconds * 3);
     expect(particles.count).toBeGreaterThan(0.9 * fromStart.particles.count);
+  });
+
+  it("stops births from a removed stream once its presence falls below the drain presence", () => {
+    const { set, particles, run } = setup(2000, stream("a"), stream("b"));
+    run(LOOK.turnoverSeconds * 2);
+    set.apply({ v: 1, t: 0, streams: [stream("b")] });
+    const a = set.slots.find((s) => s.id === "a")!;
+    while (a.presence >= DRAIN_PRESENCE) run(DT);
+    // From here on its count only falls, and reaches zero within the longest lifetime.
+    let previous = a.particles;
+    for (let t = 0; t < LOOK.lifeRange[1] + 1 && a.used; t += DT) {
+      run(DT);
+      if (!a.used) break;
+      expect(a.particles).toBeLessThanOrEqual(previous);
+      previous = a.particles;
+    }
+    expect(a.used).toBe(false);
   });
 
   it("scales intensity with intensityScale", () => {

@@ -1,7 +1,7 @@
 import type { Frame, Stream } from "@beszel-river/shared";
 import { describe, expect, it, vi } from "vitest";
 import { LOOK } from "../src/config";
-import { FILAMENTS, MAX_STREAMS, StreamSet, StreamSlot, laneCenter } from "../src/sim/streams";
+import { DRAIN_PRESENCE, DRAIN_TAPER_PRESENCE, FILAMENTS, MAX_STREAMS, StreamSet, StreamSlot, laneCenter } from "../src/sim/streams";
 
 function stream(id: string, overrides: Partial<Stream> = {}): Stream {
   return { id, alive: true, width: 0.5, flow: 0.5, density: 0.5, turbulence: 0.5, pulse: 0, heat: 0.5, ...overrides };
@@ -161,6 +161,54 @@ describe("StreamSet", () => {
     set.apply(frame(stream("latest")));
     run(set, 30);
     expect(set.slots.filter((s) => s.used).map((s) => s.id)).toEqual(["latest"]);
+  });
+
+  it("tapers a removed stream's births smoothly to zero by the drain presence", () => {
+    expect(DRAIN_PRESENCE).toBe(0.01);
+    expect(DRAIN_TAPER_PRESENCE).toBeGreaterThan(DRAIN_PRESENCE);
+    const set = new StreamSet(1);
+    set.apply(frame(stream("a"), stream("b")));
+    set.apply(frame(stream("b")));
+    const a = slotOf(set, "a");
+    // Weight per unit of share, so the presence factor in both cancels out.
+    const relative = () => a.spawnWeight / a.shareWeight;
+    set.update(1 / 60, 1.6);
+    const full = relative();
+    let previous = full, largestStep = 0, sawTaper = false;
+    for (let i = 0; i < 60 * 12; i++) {
+      set.update(1 / 60, 1.6);
+      if (a.presence >= DRAIN_TAPER_PRESENCE) expect(relative()).toBeCloseTo(full, 12);
+      else if (a.presence > DRAIN_PRESENCE) {
+        sawTaper = true;
+        expect(relative()).toBeLessThan(full);
+        expect(relative()).toBeGreaterThan(0);
+      } else expect(a.spawnWeight).toBe(0);
+      largestStep = Math.max(largestStep, Math.abs(relative() - previous));
+      previous = relative();
+    }
+    expect(sawTaper).toBe(true);
+    expect(a.presence).toBeLessThan(DRAIN_PRESENCE);
+    // No abrupt cutoff: one 60 Hz step changes the relative rate by only a few percent.
+    expect(largestStep).toBeLessThan(0.05 * full);
+  });
+
+  it("keeps full births for a stream that is fading in or returns while draining", () => {
+    const set = new StreamSet(1);
+    set.apply(frame(stream("a")));
+    set.apply(frame(stream("a"), stream("b")));
+    const b = slotOf(set, "b");
+    set.update(1 / 60, 1.6);
+    expect(b.presence).toBeLessThan(DRAIN_PRESENCE);
+    expect(b.spawnWeight).toBeGreaterThan(0);
+    const fullRelative = b.spawnWeight / b.shareWeight;
+
+    set.apply(frame(stream("a")));
+    run(set, 30);
+    expect(b.spawnWeight).toBe(0);
+    b.particles = 1; // keep the slot
+    set.apply(frame(stream("a"), stream("b")));
+    set.update(1 / 60, 1.6);
+    expect(b.spawnWeight / b.shareWeight).toBeCloseTo(fullRelative, 6);
   });
 
   it("drains a removed stream, releases its slot once faded and empty, and reuses it", () => {
