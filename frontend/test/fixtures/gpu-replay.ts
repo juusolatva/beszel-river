@@ -1,5 +1,7 @@
 import type { Frame } from "@beszel-river/shared";
 import { LOOK } from "../../src/config";
+import { GpuParticleDrawer } from "../../src/render/gpu-particle-drawer";
+import { GpuParticles } from "../../src/sim/gpu-particles";
 import { FlowField } from "../../src/sim/noise";
 import { ParticleSystem } from "../../src/sim/particles";
 import { MAX_STREAMS, StreamSet } from "../../src/sim/streams";
@@ -121,6 +123,71 @@ export class CpuReplay {
   }
 }
 
+/** Smallest positive effective step the GPU prototype accepts (`effectiveGpuStep`). */
+export const MIN_GPU_STEP = 1 / 256;
+
+/** Trace schedules both backends can replay: zero, or at least 1/256 s. */
+export function replayableStep(dt: number): boolean {
+  return dt === 0 || dt >= MIN_GPU_STEP;
+}
+
+/**
+ * GPU prototype adapter for the same trace. It spawns on the GPU and never reports a live count;
+ * counts come only from untimed readbacks (`validateGpuTrace`).
+ */
+export class GpuReplay {
+  readonly streams: StreamSet;
+  readonly field = new FlowField(mulberry32(REPLAY_SEED));
+  readonly particles: GpuParticles;
+  readonly drawer: GpuParticleDrawer;
+  /** Brightness factor for this callback's draw, from the trace. */
+  intensity = 1;
+  private frame = -1;
+  private time = 0;
+
+  constructor(gl: WebGL2RenderingContext, private readonly motion = 1) {
+    this.particles = new GpuParticles(gl, REPLAY_CAPACITY, REPLAY_SEED + 1);
+    this.particles.spawningEnabled = true;
+    this.streams = new StreamSet(motion, this.particles.lifecycle.canRelease);
+    // Creates nothing until its first draw, which a harness puts in warmup.
+    this.drawer = new GpuParticleDrawer(gl, this.particles);
+  }
+
+  step(trace: ReplayTrace, i: number): void {
+    if (trace.motion[i] !== this.motion) throw new Error("Motion changes require a new replay run");
+    const frame = trace.frame[i];
+    if (frame !== this.frame) {
+      this.streams.apply(replayFrames[frame]);
+      this.frame = frame;
+    }
+    this.streams.offline = trace.offline[i] !== 0;
+    this.particles.limit = trace.limit[i];
+    this.intensity = trace.intensity[i];
+    const dt = trace.dt[i];
+    if (dt <= 0) return;
+    const aspect = trace.width[i] / trace.height[i];
+    this.time += dt;
+    // The release clock advances before the streams, so a draining slot is judged in simulation time.
+    this.particles.lifecycle.advanceTime(dt);
+    this.streams.update(dt, aspect);
+    this.field.update(this.time, aspect);
+    this.particles.step(dt, this.streams, this.field, aspect);
+  }
+
+  dispose(): void {
+    this.drawer.dispose();
+    this.particles.dispose();
+  }
+}
+
+/** Test-only synchronous readback of the whole state buffer; never inside a timed run. */
+export function readGpuState(gl: WebGL2RenderingContext, particles: GpuParticles, out: ArrayBuffer): void {
+  if (out.byteLength !== particles.capacity * 64) throw new Error("State readback size mismatch");
+  gl.bindBuffer(gl.ARRAY_BUFFER, particles.stateBuffer);
+  gl.getBufferSubData(gl.ARRAY_BUFFER, 0, new Uint8Array(out));
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+}
+
 /** Exact post-step counts; weights are reported separately for simulation and callback time. */
 export function summarizeOccupancy(trace: ReplayTrace, counts: Uint32Array) {
   let min = Infinity, max = 0, simWeight = 0, wallWeight = 0, simSum = 0, wallSum = 0;
@@ -136,14 +203,18 @@ export function summarizeOccupancy(trace: ReplayTrace, counts: Uint32Array) {
   return { min: min === Infinity ? 0 : min, max, simulationMean: simWeight ? simSum / simWeight : 0, wallMean: wallWeight ? wallSum / wallWeight : 0 };
 }
 
+/** Stream IDs of the replay frames; per-slot identities index into this, 0 = unused. */
+export const replayIds = ["", ...new Set(replayFrames.flatMap((frame) => frame.streams.map((stream) => stream.id)))];
+const replayIdIndices = new Map(replayIds.map((id, i) => [id, i]));
+
 /** Untimed replay records total and per-slot exact counts without influencing timed work. */
 export function validateCpuTrace(trace: ReplayTrace) {
   if (!trace.valid) throw new Error("Cannot validate an invalid trace");
   const cpu = new CpuReplay(trace.length ? trace.motion[0] : 1);
   const counts = new Uint32Array(trace.length);
   const perSlot = new Uint32Array(trace.length * MAX_STREAMS);
-  const ids = ["", ...new Set(replayFrames.flatMap((frame) => frame.streams.map((stream) => stream.id)))];
-  const idIndices = new Map(ids.map((id, i) => [id, i]));
+  const ids = replayIds;
+  const idIndices = replayIdIndices;
   const perSlotIdentity = new Uint16Array(trace.length * MAX_STREAMS);
   for (let i = 0; i < trace.length; i++) {
     counts[i] = cpu.step(trace, i);
@@ -153,4 +224,91 @@ export function validateCpuTrace(trace: ReplayTrace) {
     }
   }
   return { cpu, counts, perSlot, ids, perSlotIdentity, occupancy: summarizeOccupancy(trace, counts) };
+}
+
+/**
+ * Untimed GPU replay of a trace with a full readback after every positive step: exact total and
+ * per-slot counts from the active flags and stream slots. Fails on a live particle whose generation
+ * differs from its slot's, and on the sticky spawn-counter overflow marker. Returns the final state.
+ */
+export function validateGpuTrace(gl: WebGL2RenderingContext, trace: ReplayTrace) {
+  if (!trace.valid) throw new Error("Cannot validate an invalid trace");
+  const gpu = new GpuReplay(gl, trace.length ? trace.motion[0] : 1);
+  const counts = new Uint32Array(trace.length);
+  const perSlot = new Uint32Array(trace.length * MAX_STREAMS);
+  const perSlotIdentity = new Uint16Array(trace.length * MAX_STREAMS);
+  const state = new ArrayBuffer(REPLAY_CAPACITY * 64);
+  const words = new Uint32Array(state), floats = new Float32Array(state);
+  const slotCounts = new Uint32Array(MAX_STREAMS);
+  let total = 0;
+  try {
+    for (let i = 0; i < trace.length; i++) {
+      gpu.step(trace, i);
+      if (trace.dt[i] > 0) {
+        readGpuState(gl, gpu.particles, state);
+        const commands = gpu.particles.lifecycle.commands;
+        slotCounts.fill(0);
+        total = 0;
+        for (let p = 0; p < REPLAY_CAPACITY; p++) {
+          const o = p * 16;
+          if (floats[o + 10] !== 0) throw new Error(`Spawn counter overflow marker at particle ${p}, callback ${i}: run invalid`);
+          if (!words[o + 14]) continue;
+          const slot = words[o + 12];
+          if (slot >= MAX_STREAMS || words[o + 13] !== commands[slot * 4]) throw new Error(`Stale stream generation at particle ${p}, callback ${i}: run invalid`);
+          slotCounts[slot]++;
+          total++;
+        }
+      }
+      counts[i] = total;
+      for (let slot = 0; slot < MAX_STREAMS; slot++) {
+        perSlot[i * MAX_STREAMS + slot] = slotCounts[slot];
+        perSlotIdentity[i * MAX_STREAMS + slot] = replayIdIndices.get(gpu.streams.slots[slot].id)!;
+      }
+    }
+    readGpuState(gl, gpu.particles, state);
+  } finally {
+    gpu.dispose();
+  }
+  return { counts, perSlot, ids: replayIds, perSlotIdentity, finalState: state, occupancy: summarizeOccupancy(trace, counts) };
+}
+
+/** Compare two final states: identity words exactly, and the largest float difference. */
+export function compareGpuStates(a: ArrayBuffer, b: ArrayBuffer): { identityMatches: boolean; maxFloatDifference: number } {
+  const aw = new Uint32Array(a), bw = new Uint32Array(b), af = new Float32Array(a), bf = new Float32Array(b);
+  let identityMatches = aw.length === bw.length, maxFloatDifference = 0;
+  for (let i = 0; identityMatches && i < aw.length; i++) {
+    if (i % 16 >= 12) identityMatches = aw[i] === bw[i];
+    else maxFloatDifference = Math.max(maxFloatDifference, Math.abs(af[i] - bf[i]));
+  }
+  return { identityMatches, maxFloatDifference };
+}
+
+/**
+ * Simulation-time-weighted means over aligned five-second windows of the measured callbacks, total
+ * and per slot, with the replay frames each window covers so dense, draining and rotation phases are
+ * never averaged together. A trailing partial window is left out.
+ */
+export function fiveSecondWindows(trace: ReplayTrace, counts: Uint32Array, perSlot: Uint32Array) {
+  const windows: { start: number; frames: number[]; total: number; perSlot: number[] }[] = [];
+  let time = 0, start = 0, weight = 0, total = 0;
+  let slots = new Array<number>(MAX_STREAMS).fill(0);
+  let frames = new Set<number>();
+  for (let i = 0; i < trace.length; i++) {
+    if (!trace.measured[i]) continue;
+    const dt = trace.dt[i];
+    if (dt <= 0) continue;
+    weight += dt;
+    total += dt * counts[i];
+    for (let slot = 0; slot < MAX_STREAMS; slot++) slots[slot] += dt * perSlot[i * MAX_STREAMS + slot];
+    frames.add(trace.frame[i]);
+    time += dt;
+    if (time - start >= 5 - 1e-9) {
+      windows.push({ start, frames: [...frames].sort((a, b) => a - b), total: total / weight, perSlot: slots.map((v) => v / weight) });
+      start = time;
+      weight = total = 0;
+      slots = new Array<number>(MAX_STREAMS).fill(0);
+      frames = new Set();
+    }
+  }
+  return windows;
 }

@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { CpuReplay, ReplayTrace, replayFrames, replayFrameIndex, summarizeOccupancy, validateCpuTrace } from "./fixtures/gpu-replay";
+import { callsTo, createFakeGl } from "./fake-gl";
+import { compareGpuStates, CpuReplay, fiveSecondWindows, GpuReplay, MIN_GPU_STEP, REPLAY_CAPACITY, ReplayTrace, replayableStep,
+  replayFrames, replayFrameIndex, replayIds, summarizeOccupancy, validateCpuTrace, validateGpuTrace } from "./fixtures/gpu-replay";
+
+/** A short trace on the four-stream frame: one zero callback, then steady 30 Hz steps. */
+function shortTrace(length: number, motion = 1): ReplayTrace {
+  const trace = new ReplayTrace(length);
+  for (let i = 0; i < length; i++) trace.append(i === 0 ? 0 : 1 / 30, 1, 960, 640, 1, motion, i === length - 1, 9000, 1.25, i > 0);
+  return trace;
+}
+
+/** Fake GL whose state readbacks report `fill` for particle 0 and inactive slots elsewhere. */
+function readbackGl(fill: (floats: Float32Array, words: Uint32Array) => void) {
+  return createFakeGl({ overrides: {
+    getBufferSubData: (_target, _offset, out) => {
+      const bytes = out as Uint8Array;
+      bytes.fill(0);
+      fill(new Float32Array(bytes.buffer, bytes.byteOffset, 16), new Uint32Array(bytes.buffer, bytes.byteOffset, 16));
+    },
+  } });
+}
 
 describe("GPU comparison replay foundation", () => {
   it("covers synthetic plain, filament, pulse, expansion, rotation and empty frames", () => {
@@ -119,5 +139,90 @@ describe("GPU comparison replay foundation", () => {
     expect(stats.max).toBe(20);
     expect(stats.simulationMean).toBeCloseTo((10 * 0.05 + 20 * LOOK.maxDt) / (0.05 + LOOK.maxDt));
     expect(stats.wallMean).toBeCloseTo((10 * 0.05 + 20) / 1.05);
+  });
+
+  it("accepts only steps both backends can replay", () => {
+    expect(MIN_GPU_STEP).toBe(1 / 256);
+    expect([0, 1 / 256, 1 / 60, LOOK.maxDt].every(replayableStep)).toBe(true);
+    expect([1 / 300, 1e-6].some(replayableStep)).toBe(false);
+  });
+
+  it("drives the GPU from the same trace: limit, offline, intensity, and the release clock before the streams", () => {
+    const { gl, calls } = createFakeGl();
+    const trace = shortTrace(3);
+    const gpu = new GpuReplay(gl);
+    expect(gpu.particles.spawningEnabled).toBe(true);
+    expect(gpu.particles.capacity).toBe(REPLAY_CAPACITY);
+    const order: string[] = [];
+    const advance = gpu.particles.lifecycle.advanceTime.bind(gpu.particles.lifecycle);
+    gpu.particles.lifecycle.advanceTime = (dt) => { order.push("clock"); advance(dt); };
+    const update = gpu.streams.update.bind(gpu.streams);
+    gpu.streams.update = (dt, aspect) => { order.push("streams"); update(dt, aspect); };
+    calls.length = 0;
+    gpu.step(trace, 0);
+    expect(order).toEqual([]);
+    expect(callsTo(calls, "drawArrays")).toEqual([]);
+    gpu.step(trace, 1);
+    expect(order).toEqual(["clock", "streams"]);
+    expect(gpu.particles.limit).toBe(9000);
+    expect(gpu.intensity).toBe(1.25);
+    expect(gpu.streams.offline).toBe(false);
+    expect(callsTo(calls, "drawArrays").at(-1)).toEqual(["POINTS", 0, REPLAY_CAPACITY]);
+    gpu.step(trace, 2);
+    expect(gpu.streams.offline).toBe(true);
+    expect(() => gpu.step(shortTrace(1, 0.5), 0)).toThrow(/Motion changes/);
+    gpu.dispose();
+    expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
+  });
+
+  it("counts live particles per slot from readbacks after positive steps only", () => {
+    const { gl, calls } = readbackGl((_floats, words) => words.set([0, 1, 1, 1], 12));
+    const trace = shortTrace(4);
+    const result = validateGpuTrace(gl, trace);
+    expect(Array.from(result.counts)).toEqual([0, 1, 1, 1]);
+    expect(result.perSlot[32]).toBe(1);
+    expect(result.ids[result.perSlotIdentity[32]]).toBe(replayFrames[1].streams[0].id);
+    expect(result.ids).toBe(replayIds);
+    expect(result.finalState.byteLength).toBe(REPLAY_CAPACITY * 64);
+    // One readback per positive step and a final one.
+    expect(callsTo(calls, "getBufferSubData")).toHaveLength(4);
+    expect(() => validateGpuTrace(gl, Object.assign(shortTrace(1), { valid: false }))).toThrow(/invalid trace/);
+  });
+
+  it("rejects stale generations and the spawn-counter overflow marker", () => {
+    const stale = readbackGl((_floats, words) => words.set([0, 7, 1, 1], 12));
+    expect(() => validateGpuTrace(stale.gl, shortTrace(2))).toThrow(/Stale stream generation/);
+    const outOfRange = readbackGl((_floats, words) => words.set([40, 1, 1, 1], 12));
+    expect(() => validateGpuTrace(outOfRange.gl, shortTrace(2))).toThrow(/Stale stream generation/);
+    const overflow = readbackGl((floats) => { floats[10] = 1; });
+    expect(() => validateGpuTrace(overflow.gl, shortTrace(2))).toThrow(/overflow marker/);
+    // The replay's resources are released either way.
+    expect(callsTo(overflow.calls, "deleteTransformFeedback")).toHaveLength(1);
+  });
+
+  it("compares final states exactly on identity and reports float differences", () => {
+    const a = new ArrayBuffer(128), b = new ArrayBuffer(128);
+    new Float32Array(b)[17] = 0.25;
+    expect(compareGpuStates(a, b)).toEqual({ identityMatches: true, maxFloatDifference: 0.25 });
+    new Uint32Array(b)[30] = 1;
+    expect(compareGpuStates(a, b).identityMatches).toBe(false);
+    expect(compareGpuStates(a, new ArrayBuffer(64)).identityMatches).toBe(false);
+  });
+
+  it("averages measured callbacks over five-second simulation windows without mixing frames", () => {
+    const trace = new ReplayTrace(400);
+    const counts = new Uint32Array(400), perSlot = new Uint32Array(400 * 32);
+    for (let i = 0; i < 400; i++) {
+      trace.append(i === 0 ? 0 : 0.05, i <= 150 ? 2 : 4, 960, 640, 1, 1, false, 1000, 1, i >= 50);
+      counts[i] = i < 150 ? 100 : 40;
+      perSlot[i * 32 + 3] = counts[i];
+    }
+    const windows = fiveSecondWindows(trace, counts, perSlot);
+    expect(windows).toHaveLength(3); // 350 measured callbacks of 0.05 s; the partial window is left out
+    windows.forEach((w, k) => expect(w.start).toBeCloseTo(5 * k, 5));
+    expect(windows[0]).toMatchObject({ frames: [2], total: 100 });
+    expect(windows[0].perSlot[3]).toBe(100);
+    expect(windows[1].frames).toEqual([2, 4]);
+    expect(windows[2]).toMatchObject({ frames: [4], total: 40 });
   });
 });

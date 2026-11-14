@@ -1,5 +1,5 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { createFakeGl } from "./fake-gl";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { callsTo, createFakeGl } from "./fake-gl";
 import { runGpuBenchmark } from "./gpu-benchmark.browser";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -33,7 +33,103 @@ it("includes canvas layout reads in callback work and replays the final rendered
   expect(result.trace).toHaveLength(3);
   expect(result.metadata.effectiveStep).toBe("Float32(clamp(interval, 0, LOOK.maxDt))");
   await expect(runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/Reload/);
-  await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/not implemented/);
+  // CPU runs replay the trace through the GPU too, untimed.
+  expect(result.validation.cpu.counts).toHaveLength(3);
+  expect("counts" in result.validation.gpu).toBe(true);
+});
+
+/** Stub a visible page around a fake context; returns the next animation callback. */
+function stubPage(options: Parameters<typeof createFakeGl>[0] = {}) {
+  let clock = 0;
+  const state: { callback?: FrameRequestCallback; lost?: () => void } = {};
+  const fake = createFakeGl({ ...options, overrides: {
+    getParameter: () => "test renderer",
+    getFramebufferAttachmentParameter: () => "FLOAT",
+    getError: () => "NO_ERROR",
+    isContextLost: () => false,
+    ...options.overrides,
+  } });
+  const canvas = { clientWidth: 960, clientHeight: 640, getContext: () => fake.gl,
+    addEventListener: (type: string, listener: () => void) => { if (type === "webglcontextlost") state.lost = listener; },
+    removeEventListener: vi.fn() };
+  vi.stubGlobal("document", { hidden: false, querySelector: () => canvas, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  vi.stubGlobal("devicePixelRatio", 1);
+  vi.stubGlobal("navigator", { userAgent: "test browser" });
+  vi.stubGlobal("performance", { now: () => clock++ });
+  vi.stubGlobal("requestAnimationFrame", (next: FrameRequestCallback) => { state.callback = next; return 1; });
+  vi.stubGlobal("cancelAnimationFrame", () => { state.callback = undefined; });
+  return { ...fake, state };
+}
+
+describe("GPU backend", () => {
+  it("draws from GPU state on the recorded schedule and validates both backends untimed", async () => {
+    const { calls, state } = stubPage();
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05, crossValidate: false });
+    for (let now = 0; now <= 1100; now += 20) state.callback?.(now);
+    const result = await run;
+    expect(result.metadata.backend).toBe("gpu");
+    expect(result.timing.drawCapacity).toBe(10000);
+    // Every positive step drew the full pool and uploaded no particle instances.
+    const draws = callsTo(calls, "drawArraysInstanced");
+    expect(draws.length).toBeGreaterThan(0);
+    expect(draws.every(([, , , instances]) => instances === 10000)).toBe(true);
+    expect(callsTo(calls, "bufferSubData")).toEqual([]);
+    expect(result.timing.uploadedBytes).toBe(0);
+    // Stream and command data every measured step, and the flow grid.
+    expect(result.timing.textureUploadBytes).toBeGreaterThanOrEqual(result.timing.callbacks * (24 * 32 * 16 + 32 * 16));
+    expect(result.validation.finalStateMatches).toBe(true);
+    expect(result.validation.finalStateMaxFloatDifference).toBe(0);
+    expect(result.validation.source).toMatch(/GPU/);
+    expect(result.validation.cpu.counts).toHaveLength(result.trace.length);
+    expect(result.validation.gpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
+  });
+
+  it("fails without falling back to the CPU when the GPU backend cannot start", async () => {
+    stubPage({ overrides: { getParameter: (name) => (name === "MAX_VERTEX_TEXTURE_IMAGE_UNITS" ? 0 : "test renderer") } });
+    await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/GPU backend failed.*unsupported/);
+  });
+
+  it("needs warmup for the drawer's first draw and rejects unknown backends", async () => {
+    stubPage();
+    await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0 })).rejects.toThrow(/warmup/);
+    await expect(runGpuBenchmark({ backend: "webgpu" as "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/cpu or gpu/);
+  });
+
+  it("marks a run invalid when the context is lost", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05 });
+    state.callback?.(0);
+    state.lost?.();
+    await expect(run).rejects.toThrow(/context lost/);
+  });
+
+  it("marks a run invalid when the context is lost during validation", async () => {
+    let lost = false;
+    const { state } = stubPage({ overrides: { isContextLost: () => lost, getBufferSubData: () => { lost = true; } } });
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05 });
+    for (let now = 0; now <= 1100; now += 20) state.callback?.(now);
+    await expect(run).rejects.toThrow(/lost during validation/);
+  });
+
+  it("rejects callback intervals the GPU cannot replay, on either backend", async () => {
+    for (const backend of ["cpu", "gpu"] as const) {
+      const { state } = stubPage();
+      const run = runGpuBenchmark({ backend, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05 });
+      state.callback?.(0);
+      state.callback?.(1);
+      await expect(run).rejects.toThrow(/below 1\/256 s/);
+    }
+  });
+
+  it("reports an unavailable cross-backend replay instead of failing a CPU run", async () => {
+    let fail = false;
+    const { state } = stubPage({ overrides: { getParameter: (name) => (fail && name === "MAX_VERTEX_ATTRIBS" ? 0 : "test renderer") } });
+    const run = runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05 });
+    for (const now of [0, 20, 40, 60]) state.callback?.(now);
+    fail = true;
+    const result = await run;
+    expect(result.validation.gpu).toEqual({ unavailable: expect.stringMatching(/unsupported/) });
+  });
 });
 
 it("rejects a missing render framebuffer before querying a default-framebuffer color attachment", async () => {

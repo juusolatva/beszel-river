@@ -1,7 +1,7 @@
 /** Count submission work without allocating argument arrays inside GL calls. */
 export function createSubmissionCounter(gl: WebGL2RenderingContext) {
   const counters = {
-    uploadedBytes: 0, drawCalls: 0, particleDrawCapacity: 0,
+    uploadedBytes: 0, textureUploadBytes: 0, drawCalls: 0, particleDrawCapacity: 0,
     lastFramebuffer: null as WebGLFramebuffer | null,
   };
   const methods = new Map<PropertyKey, unknown>();
@@ -15,6 +15,15 @@ export function createSubmissionCounter(gl: WebGL2RenderingContext) {
       counters.uploadedBytes += data.byteLength;
       gl.bufferSubData(target, offset, data);
     }
+  });
+  // Texture uploads, such as the GPU prototype's flow, stream and command data, counted separately.
+  methods.set("texSubImage2D", (...args: unknown[]) => {
+    const pixels = args[8];
+    if (ArrayBuffer.isView(pixels)) {
+      const elementBytes = "BYTES_PER_ELEMENT" in pixels ? Number(pixels.BYTES_PER_ELEMENT) : 1;
+      counters.textureUploadBytes += pixels.byteLength - Number(args[9] ?? 0) * elementBytes;
+    }
+    Reflect.apply(gl.texSubImage2D, gl, args);
   });
   methods.set("drawArrays", (mode: number, first: number, count: number) => {
     counters.drawCalls++;
