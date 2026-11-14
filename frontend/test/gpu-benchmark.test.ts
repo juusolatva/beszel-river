@@ -114,6 +114,14 @@ describe("GPU backend", () => {
     expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
   });
 
+  it("releases the GPU replay when the final readback fails", async () => {
+    const { calls, state } = stubPage({ overrides: { getBufferSubData: () => { throw new Error("readback failed"); } } });
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 1, measureSeconds: 0.05 });
+    for (let now = 0; now <= 1100; now += 20) state.callback?.(now);
+    await expect(run).rejects.toThrow(/readback failed/);
+    expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
+  });
+
   it("marks a run invalid when the context is lost during validation", async () => {
     let lost = false;
     const { state } = stubPage({ overrides: { isContextLost: () => lost, getBufferSubData: () => { lost = true; } } });

@@ -149,7 +149,7 @@ export class GpuReplay {
     this.particles = new GpuParticles(gl, REPLAY_CAPACITY, REPLAY_SEED + 1);
     this.particles.spawningEnabled = true;
     this.streams = new StreamSet(motion, this.particles.lifecycle.canRelease);
-    // Creates nothing until its first draw, which a harness puts in warmup.
+    // Creates nothing until `prepare()` or its first draw; the harness prepares it before timing.
     this.drawer = new GpuParticleDrawer(gl, this.particles);
   }
 

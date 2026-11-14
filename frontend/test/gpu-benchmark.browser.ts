@@ -179,8 +179,11 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   let timedGpuState: ArrayBuffer | null = null;
   if (gpu) {
     timedGpuState = new ArrayBuffer(REPLAY_CAPACITY * 64);
-    readGpuState(gl, gpu.particles, timedGpuState);
-    gpu.dispose();
+    try {
+      readGpuState(gl, gpu.particles, timedGpuState);
+    } finally {
+      gpu.dispose();
+    }
   }
   if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL error: run invalid");
   // crossValidate: false keeps only the run's own backend's replay.
