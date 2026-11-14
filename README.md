@@ -54,7 +54,7 @@ npm run build          # build bridge (bridge/dist) and frontend (frontend/dist)
 
 ### Browser checks
 
-Each console snippet below is a separate check for one piece of work; run only the one you need, with `npm run dev:frontend` running. Results appear in the console (or download), not on the page: only `runGpuBenchmark` draws the river. The GPU prototype's acceptance check is the [GPU occupancy gate](#gpu-occupancy-gate); the others are its earlier correctness checks and investigations, the renderer's regression checks and the performance benchmarks.
+Each console snippet below is a separate check for one piece of work; run only the one you need, with `npm run dev:frontend` running. Results appear in the console (or download), not on the page: only `runGpuBenchmark` draws the river there. `captureGpuRiverComparison` also renders full rivers, offscreen, and takes minutes in software WebGL. The GPU prototype's acceptance check is the [GPU occupancy gate](#gpu-occupancy-gate); the others are its earlier correctness checks and investigations, the renderer's regression checks and the performance benchmarks.
 
 For real-shader regression checks, start Vite, open the demo page, and run this in its browser console:
 
@@ -174,7 +174,7 @@ console.log(window.river.pairs);
 
 #### GPU performance benchmark
 
-This is the separate performance experiment, not part of the occupancy gate, and the only check that draws the river. The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
+This is the separate performance experiment, not part of the occupancy gate, and the only check that draws the river on the page. The isolated GPU experiment starts with a rendered CPU reference. Open `http://localhost:5173/test/gpu-benchmark.html` with Vite running and run:
 
 ```js
 const { runGpuBenchmark } = await import("/test/gpu-benchmark.browser.ts");
