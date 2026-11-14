@@ -9,8 +9,8 @@ bounds. Task 4 is unblocked.
 One `runGpuOccupancyGate()` session (README, "GPU occupancy gate") on the target
 laptop: ThinkPad X280, Firefox 159 on Linux, renderer reported as "Intel(R) HD
 Graphics 400, or similar" (Firefox masks the real name). 160 runs of 600 steps,
-20 per group and scenario, in 317 seconds. Power and thermal conditions were not
-recorded; the gate compares occupancy, not timing.
+20 per group and scenario, in 317 seconds, on battery. Thermal conditions were
+not recorded; the gate compares occupancy, not timing.
 
 [`2026-11-14-gpu-occupancy-gate.json`](2026-11-14-gpu-occupancy-gate.json) is the
 output of `summarize-gpu-occupancy-gate.ts`. Its `metadata`, `gpuSkipped`,
