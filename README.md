@@ -139,21 +139,20 @@ The approved occupancy gate (GPU plan, "Revised occupancy gate") checks that the
   const { runGpuOccupancyGate } = await import("/test/gpu-occupancy-gate.browser.ts");
   window.gate = await runGpuOccupancyGate({ onProgress: (done, total, label) => console.log(`${done}/${total} ${label}`) });
   const text = JSON.stringify(window.gate);
-  const link = Object.assign(document.createElement("a"), {
-    href: URL.createObjectURL(new Blob([text], { type: "application/json" })),
-    download: "gpu-occupancy-gate.json",
-  });
+  const href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const link = Object.assign(document.createElement("a"), { href, download: "gpu-occupancy-gate.json" });
   document.body.append(link);
   link.click();
   link.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10000);
   console.log(`Saved ${text.length} characters; gpuSkipped: ${window.gate.gpuSkipped}`);
 })();
 ```
 
-If the download is blocked, the result stays in `window.gate`. Apply the gate to the downloaded file from the repository root:
+If the download is blocked, the result stays in `window.gate`. Apply the gate to the downloaded file from the repository root, adjusting the path if your browser saves elsewhere than `~/Downloads`:
 
 ```sh
-npx tsx frontend/test/summarize-gpu-occupancy-gate.ts gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
+npx tsx frontend/test/summarize-gpu-occupancy-gate.ts ~/Downloads/gpu-occupancy-gate.json --output /tmp/gpu-occupancy-gate-summary.json
 ```
 
 It uses the same statistic as the browser's calibration check (`test/fixtures/occupancy-gate.ts`) and exits successfully only if calibration and the GPU comparison both pass; the summary lists failures, each control's median 90 % detectable difference and the comparisons closest to their bounds. If the browser returned `gpuSkipped: true`, or `summary.calibration.passed` is false, the gate itself needs revising before any GPU run (GPU plan); keep that export too, and do not rerun with other seeds either way. Keep the `--output` file, which contains the browser export unchanged, as `docs/experiments/<date>-gpu-occupancy-gate.json`, and record the device notes from step 2 with the result. `runsPerGroup` below 20 makes a smoke run, which the processor rejects. `test/gpu-occupancy-gate.test.ts` checks in Node that the runner's CPU side reproduces the retained Task 3 and matched-control means exactly.
