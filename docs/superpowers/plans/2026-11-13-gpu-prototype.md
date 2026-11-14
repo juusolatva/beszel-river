@@ -300,6 +300,8 @@ Band placement and widths, filament strands, colour, streak length and brightnes
 
 Verification: `npm run typecheck`, `npm run coverage` (210 bridge + 213 frontend tests, thresholds unchanged, drawer fully covered) and `npm run build`. The existing renderer browser checks still pass with unchanged values. The production bundle (one 29.4 kB script) contains no drawer, `particle-gpu.vert`, scan or feedback shader strings. Its only `transformFeedback` match is `createProgram`'s optional varyings branch, which is already on `main`. No GPU selection was added to the public page or the benchmark harness; Task 5 adds the harness backend.
 
+**PR #126 review follow-up:** Qodo found that a throwing `source.draw` left blending on and the trail framebuffer bound for later GL work; `Renderer` now restores both in `finally`. The regression test also showed that an RGBA8 deposit which failed stayed in the trail clock and was repeated next frame, so each 60 Hz step is now consumed before it is drawn (no change on success). Gemini suggested clamping the GPU fade to [0, 1]: valid stepped particles cannot go negative, but the clamp keeps corrupt state from subtracting light under additive blending. Typecheck, coverage (214 frontend tests) and build pass; the real-shader checks still show a 0-byte difference, and the renderer readbacks are unchanged.
+
 ## Task 5: Replay budget decisions and verify failure behavior
 
 **Files:** Extend the GPU benchmark harness, GPU lifecycle tests and browser tests; inspect `frontend/src/sim/budget.ts` and `frontend/src/main.ts` for behavior to reproduce.

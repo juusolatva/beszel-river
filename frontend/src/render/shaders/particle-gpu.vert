@@ -60,7 +60,8 @@ void main() {
   vec2 head = a_motion.xy;
   vec2 tail = head - a_motion.zw * look.z;
   float age = a_lifetime.x;
-  float fade = min(min(age / u_look.z, (a_lifetime.y - age) / u_look.w), 1.0);
+  // Live stepped particles have 0 <= age <= life; the clamp keeps corrupt state from subtracting light.
+  float fade = clamp(min(age / u_look.z, (a_lifetime.y - age) / u_look.w), 0.0, 1.0);
   float hue = fract(u_hue + head.y * u_look.y + hueOffset + a_lifetime.z);
   float intensity = u_intensity * fade * look.x;
 

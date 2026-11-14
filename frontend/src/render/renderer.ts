@@ -119,17 +119,22 @@ export class Renderer {
     if (!targets) return;
     gl.viewport(0, 0, this.width, this.height);
 
-    if (this.half) this.accumulate(dt, aspect, instances, count, source);
-    else {
-      this.trailTime += dt;
-      // Retain fractional time, allowing a tiny tolerance at exact display-period boundaries.
-      while (this.trailTime + 1e-9 >= TRAIL_STEP) {
-        this.accumulate(TRAIL_STEP, aspect, instances, count, source);
-        this.trailTime = Math.max(0, this.trailTime - TRAIL_STEP);
+    try {
+      if (this.half) this.accumulate(dt, aspect, instances, count, source);
+      else {
+        this.trailTime += dt;
+        // Retain fractional time, allowing a tiny tolerance at exact display-period boundaries.
+        // Each step is consumed before it is drawn, so a failed deposit is not repeated next frame.
+        while (this.trailTime + 1e-9 >= TRAIL_STEP) {
+          this.trailTime = Math.max(0, this.trailTime - TRAIL_STEP);
+          this.accumulate(TRAIL_STEP, aspect, instances, count, source);
+        }
       }
+    } finally {
+      // Also after a failed draw, so later GL work does not land in a trail target.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.useProgram(this.present.program);
     // Frames without an accumulate pass would otherwise bind to whichever unit was left active.
     gl.activeTexture(gl.TEXTURE0);
@@ -163,8 +168,11 @@ export class Renderer {
     if (source) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      source.draw(aspect, this.gpuPixelRatio, this.gpuHue, this.gpuIntensity, depositScale, 1 / this.height);
-      gl.disable(gl.BLEND);
+      try {
+        source.draw(aspect, this.gpuPixelRatio, this.gpuHue, this.gpuIntensity, depositScale, 1 / this.height);
+      } finally {
+        gl.disable(gl.BLEND);
+      }
     } else if (count > 0) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);

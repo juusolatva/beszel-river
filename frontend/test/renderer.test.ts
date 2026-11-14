@@ -320,6 +320,25 @@ describe("Renderer", () => {
       }
     });
 
+    it("restores blending and the default framebuffer when a source fails, and renders again afterwards", () => {
+      for (const halfFloat of [true, false]) {
+        const { gl, calls } = createFakeGl({ halfFloat });
+        const renderer = new Renderer(gl, 10);
+        renderer.resize(100, 100);
+        calls.length = 0;
+        const failing: GpuDrawSource = { draw: () => { throw new Error("draw failed"); } };
+        expect(() => renderer.renderGpu(failing, 1 / 60, 1, 1, 0, 1)).toThrow("draw failed");
+        expect(callsTo(calls, "disable").at(-1)).toEqual(["BLEND"]);
+        expect(callsTo(calls, "bindFramebuffer").at(-1)).toEqual(["FRAMEBUFFER", null]);
+        expect(callsTo(calls, "drawArrays")).toHaveLength(1); // the fade, but no present
+        calls.length = 0;
+        const source = recordingSource();
+        renderer.renderGpu(source, 1 / 60, 1, 1, 0, 1);
+        expect(source.draws).toHaveLength(1);
+        expect(callsTo(calls, "drawArrays")).toHaveLength(2);
+      }
+    });
+
     it("leaves the CPU path unchanged after GPU frames", () => {
       const { gl, calls } = createFakeGl({ halfFloat: true });
       const renderer = new Renderer(gl, 10);
