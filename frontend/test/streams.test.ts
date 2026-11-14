@@ -202,11 +202,16 @@ describe("StreamSet", () => {
     expect(b.spawnWeight).toBeGreaterThan(0);
     const fullRelative = b.spawnWeight / b.shareWeight;
 
+    // A live particle keeps the slot, so "b" returns before release rather than being claimed afresh.
+    const claim = b.claimVersion;
+    b.particles = 1;
     set.apply(frame(stream("a")));
     run(set, 30);
+    expect(b.used).toBe(true);
     expect(b.spawnWeight).toBe(0);
-    b.particles = 1; // keep the slot
     set.apply(frame(stream("a"), stream("b")));
+    expect(slotOf(set, "b")).toBe(b);
+    expect(b.claimVersion).toBe(claim);
     set.update(1 / 60, 1.6);
     expect(b.spawnWeight / b.shareWeight).toBeCloseTo(fullRelative, 6);
   });
