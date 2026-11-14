@@ -126,9 +126,9 @@ export class CpuReplay {
 /** Smallest positive effective step the GPU prototype accepts (`effectiveGpuStep`). */
 export const MIN_GPU_STEP = 1 / 256;
 
-/** Trace schedules both backends can replay: zero, or at least 1/256 s. */
+/** Steps both backends can replay: zero, or 1/256 s through Float32(maxDt), as `effectiveGpuStep` accepts. */
 export function replayableStep(dt: number): boolean {
-  return dt === 0 || dt >= MIN_GPU_STEP;
+  return dt === 0 || (dt >= MIN_GPU_STEP && dt <= Math.fround(LOOK.maxDt));
 }
 
 /**

@@ -144,7 +144,21 @@ describe("GPU comparison replay foundation", () => {
   it("accepts only steps both backends can replay", () => {
     expect(MIN_GPU_STEP).toBe(1 / 256);
     expect([0, 1 / 256, 1 / 60, LOOK.maxDt].every(replayableStep)).toBe(true);
-    expect([1 / 300, 1e-6].some(replayableStep)).toBe(false);
+    expect([1 / 300, 1e-6, -1 / 60, Math.fround(LOOK.maxDt) * 1.001, Infinity, NaN].some(replayableStep)).toBe(false);
+    expect(replayableStep(Math.fround(LOOK.maxDt))).toBe(true);
+  });
+
+  it("refuses unreplayable steps in the GPU replay itself, not only in the harness", () => {
+    const { gl } = createFakeGl();
+    for (const dt of [1 / 300, LOOK.maxDt * 2, Infinity, NaN]) {
+      const trace = shortTrace(2);
+      // Bypass ReplayTrace.append's clamp, as a future trace source might.
+      trace.dt[1] = dt;
+      const gpu = new GpuReplay(gl);
+      gpu.step(trace, 0);
+      expect(() => gpu.step(trace, 1)).toThrow(/GPU step/);
+      gpu.dispose();
+    }
   });
 
   it("drives the GPU from the same trace: limit, offline, intensity, and the release clock before the streams", () => {

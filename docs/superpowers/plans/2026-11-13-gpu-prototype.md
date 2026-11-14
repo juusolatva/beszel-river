@@ -351,7 +351,7 @@ Unit tests cover the replay ordering, readback counting, stale-generation and ov
 
 A second Qodo pass noted that the drawer compiles lazily, inside the frame loop, so a drawer shader failure escaped the `GPU backend failed` guard and left the GPU replay's resources allocated. `GpuParticleDrawer.prepare()` now compiles the program and sets up the current buffer's vertex array without drawing; the harness calls it inside that guard before timing. A failed run of either kind releases the GPU replay. A headless GPU smoke run still matched its validation replay exactly.
 
-Two later Qodo passes found two more gaps. A failed final readback also skipped that release; it now runs in `finally`. And `prepare()` covered only the current buffer, so a first positive callback delayed past warmup would set up the other buffer's vertex array while measured. `GpuParticles.stateBuffers` now exposes both buffers, `prepare()` sets up both, and the 1 s warmup rule for GPU runs is gone, because nothing is set up lazily during a run.
+Two later Qodo passes found two more gaps. A failed final readback also skipped that release; it now runs in `finally`. And `prepare()` covered only the current buffer, so a first positive callback delayed past warmup would set up the other buffer's vertex array while measured. `GpuParticles.stateBuffers` now exposes both buffers, `prepare()` sets up both, and the 1 s warmup rule for GPU runs is gone, because nothing is set up lazily during a run. The harness's step check (`replayableStep`) now matches `effectiveGpuStep` exactly, with the `Math.fround(LOOK.maxDt)` upper bound; tests cover oversized, negative and nonfinite steps, and show that `GpuReplay` itself rejects them when a trace bypasses the clamp.
 
 ## Task 6: Measure and decide
 
