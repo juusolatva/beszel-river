@@ -29,7 +29,6 @@ Four moments of the live page. Each vertical band is one host; the bands overlap
 | `frontend/` | Static WebGL2 page built with Vite; unit tests for everything but the page setup and debug panel. |
 | `deploy/` | Container image (`Dockerfile`), compose file, its overrides and `.env.example`; nginx and Caddy configs in front of the container; systemd unit and nginx configs for running without Docker; deployment tests. |
 | `docs/PLAN.md` | Plan: design, configuration, message format, milestones. |
-| [GLOSSARY.md](GLOSSARY.md) | Domain terms for host activity, streams and the visible river. |
 | `docs/images/` | Screenshots used in this README. |
 | `.github/` | CI workflows (`ci.yml`, `osv-scanner.yml`, `image-scan.yml`, `ghcr-cleanup.yml`) and Dependabot config for their actions and the pinned Docker images. |
 | `sonar-project.properties` | SonarQube Cloud project settings; the CI scan needs the `SONAR_TOKEN` secret. |
