@@ -7,6 +7,16 @@ import particleFrag from "./shaders/particle.frag?raw";
 import particleVert from "./shaders/particle.vert?raw";
 import presentFrag from "./shaders/present.frag?raw";
 
+/**
+ * Particles drawn from state the renderer never sees, such as the experimental GPU simulation.
+ * Called once per deposit pass with blending set up; it must leave TEXTURE0 active and its own
+ * vertex array, buffers and textures unbound. `pixel` is world units per device pixel.
+ */
+export interface GpuDrawSource {
+  draw(aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number, depositScale: number, pixel: number): void;
+}
+
+const NO_INSTANCES = new Float32Array(0);
 const TRAIL_STEP = 1 / 60;
 const REFERENCE_DEPOSIT = -Math.expm1(-TRAIL_STEP / LOOK.trailTau);
 
@@ -26,6 +36,10 @@ export class Renderer {
   private width = 0;
   private height = 0;
   private trailTime = 0;
+  // Per-frame GPU draw arguments, held in fields so a deposit pass allocates nothing.
+  private gpuPixelRatio = 1;
+  private gpuHue = 0;
+  private gpuIntensity = 1;
 
   constructor(
     private readonly gl: WebGL2RenderingContext,
@@ -86,16 +100,31 @@ export class Renderer {
   }
 
   render(instances: Float32Array, count: number, dt: number, aspect: number): void {
+    this.frame(dt, aspect, instances, count, null);
+  }
+
+  /**
+   * The same trails and present pass, with particles drawn by `source` on every deposit. An
+   * 8-bit fallback may deposit several times per callback; all of them draw the one simulated state.
+   */
+  renderGpu(source: GpuDrawSource, dt: number, aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number): void {
+    this.gpuPixelRatio = devicePixelRatio;
+    this.gpuHue = globalHue;
+    this.gpuIntensity = intensityScale;
+    this.frame(dt, aspect, NO_INSTANCES, 0, source);
+  }
+
+  private frame(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
     const { gl, targets } = this;
     if (!targets) return;
     gl.viewport(0, 0, this.width, this.height);
 
-    if (this.half) this.accumulate(instances, count, dt, aspect);
+    if (this.half) this.accumulate(dt, aspect, instances, count, source);
     else {
       this.trailTime += dt;
       // Retain fractional time, allowing a tiny tolerance at exact display-period boundaries.
       while (this.trailTime + 1e-9 >= TRAIL_STEP) {
-        this.accumulate(instances, count, TRAIL_STEP, aspect);
+        this.accumulate(TRAIL_STEP, aspect, instances, count, source);
         this.trailTime = Math.max(0, this.trailTime - TRAIL_STEP);
       }
     }
@@ -112,7 +141,7 @@ export class Renderer {
     gl.bindVertexArray(null);
   }
 
-  private accumulate(instances: Float32Array, count: number, dt: number, aspect: number): void {
+  private accumulate(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
     const { gl } = this;
     const targets = this.targets!;
     const [previous, next] = targets;
@@ -130,8 +159,13 @@ export class Renderer {
     gl.bindVertexArray(this.emptyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // Particles, added on top.
-    if (count > 0) {
+    // Particles, added on top. A GPU source draws its whole pool: only the GPU knows the live count.
+    if (source) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      source.draw(aspect, this.gpuPixelRatio, this.gpuHue, this.gpuIntensity, depositScale, 1 / this.height);
+      gl.disable(gl.BLEND);
+    } else if (count > 0) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.useProgram(this.particles.program);
