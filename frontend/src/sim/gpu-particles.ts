@@ -65,6 +65,8 @@ export class GpuParticles {
   }
 
   get stateBuffer(): WebGLBuffer { return this.buffers[this.current]; }
+  /** Both state buffers, which `step` alternates between; for drawers that set up ahead of time. */
+  get stateBuffers(): readonly WebGLBuffer[] { return this.buffers; }
   get streamTexture(): WebGLTexture { return this.textures[1]; }
   get commandTexture(): WebGLTexture { return this.textures[2]; }
   get globalHue(): number { return this.hue; }

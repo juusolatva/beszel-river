@@ -98,9 +98,19 @@ describe("GPU backend", () => {
     expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
   });
 
-  it("needs warmup for the drawer's first draw and rejects unknown backends", async () => {
+  it("sets the drawer up before timing, so even a run without warmup creates nothing while measured", async () => {
+    const { calls, state } = stubPage();
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    const prepared = callsTo(calls, "createVertexArray").length;
+    const links = callsTo(calls, "linkProgram").length;
+    for (const now of [0, 20, 40, 60]) state.callback?.(now);
+    expect(callsTo(calls, "createVertexArray")).toHaveLength(prepared);
+    expect(callsTo(calls, "linkProgram")).toHaveLength(links);
+    expect((await run).validation.finalStateMatches).toBe(true);
+  });
+
+  it("rejects unknown backends", async () => {
     stubPage();
-    await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0 })).rejects.toThrow(/warmup/);
     await expect(runGpuBenchmark({ backend: "webgpu" as "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/cpu or gpu/);
   });
 

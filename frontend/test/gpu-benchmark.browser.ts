@@ -50,8 +50,6 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { backend = "cpu", scenario = "dense", limit = 10000, warmupSeconds = scenario === "drained" ? 60 : 30,
     measureSeconds = 60, traceCapacity = 120000, motion = 1, refreshHz, conditions, crossValidate = true } = options;
   if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
-  // The drawer's second vertex array is made on its first draw after a buffer swap, in warmup.
-  if (backend === "gpu" && !(warmupSeconds >= 1)) throw new Error("GPU runs need at least 1 s of warmup");
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
   if (!Number.isInteger(traceCapacity) || traceCapacity <= 0) throw new Error("Trace capacity must be a positive integer");
@@ -73,7 +71,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (backend === "gpu") {
     try {
       gpu = new GpuReplay(countedGl, motion);
-      // The drawer compiles lazily; do it here so its shader fails before timing, like the simulation's.
+      // All drawer setup happens here, so its shader fails before timing and no measured callback sets anything up.
       gpu.drawer.prepare();
     } catch (error) {
       gpu?.dispose();

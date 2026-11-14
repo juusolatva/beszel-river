@@ -35,18 +35,25 @@ describe("GpuParticleDrawer", () => {
     expect(drawer.drawCapacity).toBe(12);
   });
 
-  it("prepares its program and vertex array without drawing, and does not repeat that on the first draw", () => {
-    const { calls, drawer } = setup();
+  it("prepares its program and both buffers' vertex arrays without drawing, so draws after swaps set up nothing", () => {
+    const { calls, particles, drawer } = setup();
+    expect(particles.stateBuffers).toHaveLength(2);
+    expect(particles.stateBuffers).toContain(particles.stateBuffer);
     drawer.prepare();
     expect(callsTo(calls, "linkProgram")).toHaveLength(1);
-    expect(callsTo(calls, "createVertexArray")).toHaveLength(1);
+    expect(callsTo(calls, "createVertexArray")).toHaveLength(2);
+    expect(callsTo(calls, "vertexAttribIPointer")).toHaveLength(2);
     expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
     expect(callsTo(calls, "bindVertexArray").at(-1)).toEqual([null]);
     expect(callsTo(calls, "bindBuffer").at(-1)).toEqual(["ARRAY_BUFFER", null]);
+    const { streams, field } = inputs();
     calls.length = 0;
+    drawer.draw(1, 1, 0, 1, 1, 0.01);
+    particles.step(1 / 60, streams, field, 1);
     drawer.draw(1, 1, 0, 1, 1, 0.01);
     expect(callsTo(calls, "linkProgram")).toEqual([]);
     expect(callsTo(calls, "createVertexArray")).toEqual([]);
+    expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(2);
   });
 
   it("reports a failed preparation and releases the partial setup", () => {
