@@ -30,6 +30,17 @@ interface SequenceState {
   message: string;
 }
 
+/**
+ * Run IDs (`crypto.randomUUID`), the battery state and the screen wake lock exist only in secure
+ * contexts, which a page loaded from a LAN address is not. A phone reaches localhost through adb.
+ */
+const INSECURE = "This page is not a secure context, so every run would fail (crypto.randomUUID) and neither the battery state nor the screen wake lock is available. "
+  + "Open it through localhost (on a phone: adb reverse tcp:5173 tcp:5173, then http://localhost:5173/test/gpu-sequence.html) or HTTPS.";
+
+let screenLock: WakeLockSentinel | null = null;
+/** Lock requests left on this page load, which holds one run. */
+let screenLockRequests = 5;
+
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
 function load(): SequenceState | null {
@@ -70,6 +81,42 @@ function button(label: string, action: () => void): HTMLButtonElement {
   element.addEventListener("click", action);
   $("#actions").append(element);
   return element;
+}
+
+/**
+ * Keeps the screen on while the sequence runs: a phone on battery has no setting for that, and a
+ * locked screen hides the tab, which invalidates the run. The reload between runs releases the lock
+ * and so does a hidden page, so every page load and every return to the page asks again; so does a
+ * lock the browser drops while the page stays visible (low battery), through `onLost`. Returns why
+ * the lock was not granted, or "" when it was.
+ */
+async function keepScreenOn(state: SequenceState, onLost: () => void): Promise<string> {
+  if (!("wakeLock" in navigator)) return "this browser has none";
+  // A browser that keeps dropping the lock must not make the page ask in a loop.
+  if (screenLockRequests <= 0) return "the browser keeps releasing it";
+  screenLockRequests--;
+  try {
+    const sentinel = await navigator.wakeLock.request("screen");
+    // Paused while the request was pending: let the screen sleep.
+    if (state.status !== "running") {
+      void sentinel.release();
+      return "";
+    }
+    const previous = screenLock;
+    screenLock = sentinel;
+    void previous?.release();
+    sentinel.addEventListener("release", () => {
+      // Locks this page released itself (replaced, or paused in render) are no longer current.
+      if (screenLock !== sentinel) return;
+      screenLock = null;
+      // A hidden page asks again when it becomes visible.
+      if (state.status === "running" && document.visibilityState === "visible") onLost();
+    });
+    return "";
+  } catch (error) {
+    // Refused, such as by battery saver or a hidden page.
+    return String(error);
+  }
 }
 
 /** Median callback interval over about a second, as a refresh-rate suggestion. */
@@ -195,6 +242,8 @@ async function runNext(state: SequenceState): Promise<void> {
 }
 
 function render(state: SequenceState | null): void {
+  void screenLock?.release();
+  screenLock = null;
   document.body.className = "";
   document.title = "GPU comparison sequence";
   $("#actions").replaceChildren();
@@ -235,8 +284,9 @@ function render(state: SequenceState | null): void {
 }
 
 function setup(): void {
-  status("");
   const form = $<HTMLFormElement>("#setup");
+  status(window.isSecureContext ? "" : INSECURE, !window.isSecureContext);
+  form.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled = !window.isSecureContext;
   $("#workloads").replaceChildren(...WORKLOADS.map((workload) => {
     const label = document.createElement("label");
     const input = document.createElement("input");
@@ -290,12 +340,31 @@ function setup(): void {
 function main(): void {
   const state = load();
   if (state?.status !== "running") return render(state);
+  if (!window.isSecureContext) {
+    state.status = "paused";
+    state.message = INSECURE;
+    save(state);
+    return render(state);
+  }
   // A short window to stop between runs; pausing keeps everything stored.
   render(state);
   $("#actions").replaceChildren();
   let remaining = COUNTDOWN_SECONDS;
   const spec = state.plan[state.next];
-  const tick = () => status(`Run ${state.next + 1}/${state.plan.length} (${spec.viewport}, ${spec.workload}, ${spec.backend}, repetition ${spec.repetition}) starts in ${remaining} s.`);
+  let screenNote = "";
+  const tick = () => status(`Run ${state.next + 1}/${state.plan.length} (${spec.viewport}, ${spec.workload}, ${spec.backend}, repetition ${spec.repetition}) starts in ${remaining} s.${screenNote}`, screenNote !== "");
+  // A refusal during the countdown shows at once; during a run the panel is hidden, but the next
+  // page load asks again and its countdown reports a refusal that persists.
+  // Requests can overlap (the page became visible while one was pending), so a refusal warns only
+  // while no lock is held, whichever request settles last.
+  const lock = (): void => void keepScreenOn(state, lock).then((reason) => {
+    screenNote = reason && !screenLock ? ` No screen wake lock (${reason}): keep the screen on yourself.` : "";
+    if (state.status === "running" && remaining > 0) tick();
+  });
+  lock();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.status === "running") lock();
+  });
   tick();
   const timer = setInterval(() => {
     remaining--;
