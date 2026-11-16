@@ -214,7 +214,16 @@ For the full paired comparison (GPU plan, Task 6), open `http://localhost:5173/t
 - Each run records the battery state (Chrome) and JS heap size where the browser reports them. A failed run, such as one invalidated by a hidden tab, is kept and can be retried at the end. If the browser refuses to store the state, the sequence pauses with the results on the page to download.
 - Pause stops between runs; Continue resumes. When it finishes, download the JSON summaries (with each viewport's discovery schedule and every run's applied budget decisions) and the ledger rows (one row per viewport, workload and backend: medians across repetitions with their range), or copy them from the page. Reset deletes everything stored.
 
-Keep the tab visible, the screen awake and the machine otherwise idle. Use Chrome for GPU times (Firefox lacks the timer extension), and run each power mode as its own sequence.
+Keep the tab visible and the machine otherwise idle. While a sequence runs, the page holds a screen wake lock so the screen stays on, also on battery; if the browser refuses it (battery saver, an unsupported browser), the countdown before each run says so and the screen must be kept on by hand. Use Chrome for GPU times (Firefox lacks the timer extension), and run each power mode as its own sequence.
+
+The page needs a secure context: run IDs come from `crypto.randomUUID`, and the battery state and wake lock are offered only there. `localhost` is one, a LAN address such as `http://10.0.0.3:5173` is not, so the page refuses to start from it. To run on a phone, serve the page as usual and forward the port over adb, with USB debugging, or wireless debugging for battery runs (Developer options; `adb pair` and `adb connect` with the addresses it shows):
+
+```sh
+npm run dev:frontend
+adb reverse tcp:5173 tcp:5173
+```
+
+then open `http://localhost:5173/test/gpu-sequence.html` on the phone.
 
 A timed run fails rather than survive a hidden tab, so page lifecycle events have their own untimed real-shader check on the same page. It replays synthetic traces through both backends with the page's time clamping, at normal and reduced motion (0.5), and takes a few minutes in software WebGL:
 
