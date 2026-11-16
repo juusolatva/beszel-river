@@ -211,6 +211,17 @@ describe("ParticleBudget", () => {
     expect(budget.limit).toBe(640);
   });
 
+  it("rises after keeping up whether or not particles above the lowered limit are still alive", () => {
+    const budget = new ParticleBudget(1000, false);
+    run(budget, 1 / 60, 1, 1000);
+    run(budget, 1 / 20, 2.1, 1000);
+    expect(budget.limit).toBe(800);
+    // Recovery looks only at timing: the 1000 particles from before the drop do not hold it back.
+    expect(run(budget, 1 / 60, 20.1, 1000)).toBe(true);
+    expect(budget.limit).toBe(880);
+    expect(budget.intensityScale).toBeCloseTo(Math.sqrt(1000 / 880));
+  });
+
   it("ignores pauses, non-positive intervals and a fixed count", () => {
     const budget = new ParticleBudget(1000, false);
     expect(budget.update(0, 0, 0)).toBe(false);
