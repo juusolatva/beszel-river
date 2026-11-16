@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { callsTo, createFakeGl } from "./fake-gl";
+import { LOOK } from "../src/config";
 import { ParticleBudget } from "../src/sim/budget";
 import { runGpuBenchmark } from "./gpu-benchmark.browser";
 
@@ -59,7 +60,7 @@ function stubPage(options: Parameters<typeof createFakeGl>[0] = {}) {
   vi.stubGlobal("performance", { now: () => clock++ });
   vi.stubGlobal("requestAnimationFrame", (next: FrameRequestCallback) => { state.callback = next; return 1; });
   vi.stubGlobal("cancelAnimationFrame", () => { state.callback = undefined; });
-  return { ...fake, state };
+  return { ...fake, state, canvas };
 }
 
 describe("GPU backend", () => {
@@ -353,5 +354,63 @@ describe("budget schedules", () => {
     const run = runGpuBenchmark({ backend: "gpu", schedule, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
     for (const now of [0, 20, 40, 60]) state.callback?.(now);
     expect((await run).validation.finalStateMatches).toBe(true);
+  });
+});
+
+describe("GPU runs across page lifecycle events", () => {
+  /** Resource creation and deletion calls, by name. */
+  const LIFECYCLE = ["createBuffer", "deleteBuffer", "createTransformFeedback", "deleteTransformFeedback", "createProgram", "deleteProgram",
+    "createVertexArray", "deleteVertexArray", "createTexture", "deleteTexture", "createFramebuffer", "deleteFramebuffer"];
+  const lifecycleCalls = (calls: unknown[][], from: number) => calls.slice(from).filter(([name]) => LIFECYCLE.includes(name as string)).map(([name]) => name);
+
+  it("recreates only the trail targets on landscape/portrait resizes and DPR changes", async () => {
+    const { calls, state, canvas } = stubPage();
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.5, crossValidate: false });
+    state.callback?.(0);
+    const started = calls.length;
+    const sizes: [number, number, number][] = [];
+    for (let now = 20; now <= 520; now += 20) {
+      // Landscape → portrait, then DPR 1 → 2 (capped at LOOK.devicePixelRatioCap), each held for a few callbacks.
+      if (now === 120) { canvas.clientWidth = 400; canvas.clientHeight = 700; }
+      if (now === 240) vi.stubGlobal("devicePixelRatio", 2);
+      state.callback?.(now);
+    }
+    // Disposal and the validation replay run after timing, once the run resolves.
+    const timed = lifecycleCalls(calls, started);
+    const result = await run;
+    for (let i = 0; i < result.trace.length; i++) sizes.push([result.trace.width[i], result.trace.height[i], result.trace.pixelRatio[i]]);
+    const distinct = [...new Set(sizes.map((size) => size.join("x")))];
+    expect(distinct).toEqual(["960x640x1", "400x700x1", `${Math.round(400 * LOOK.devicePixelRatioCap)}x${Math.round(700 * LOOK.devicePixelRatioCap)}x${LOOK.devicePixelRatioCap}`]);
+    // Two resizes, each replacing the two trail targets; the flow grid follows the aspect with
+    // texImage2D on its existing texture. No simulation buffer, program or vertex array is touched.
+    const target = ["deleteFramebuffer", "deleteTexture", "deleteFramebuffer", "deleteTexture", "createTexture", "createFramebuffer", "createTexture", "createFramebuffer"];
+    expect(timed).toEqual([...target, ...target]);
+    expect(result.validation.finalStateMatches).toBe(true);
+  });
+
+  it("fails the run and releases the GPU replay when the trail targets cannot be allocated", async () => {
+    // At the first callback and after a mid-run resize.
+    for (const failAt of [0, 100]) {
+      let failing = false;
+      const { calls, state, canvas } = stubPage({ overrides: { checkFramebufferStatus: () => (failing ? "FRAMEBUFFER_UNSUPPORTED" : "FRAMEBUFFER_COMPLETE") } });
+      const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.5 });
+      for (let now = 0; now <= 200 && state.callback; now += 20) {
+        if (now === failAt) { failing = true; canvas.clientWidth = 400; }
+        state.callback?.(now);
+      }
+      await expect(run).rejects.toThrow(/Cannot create render targets/);
+      expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
+    }
+  });
+
+  it("runs reduced motion on the GPU and validates it", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ backend: "gpu", motion: 0.5, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.1 });
+    for (let now = 0; now <= 120; now += 20) state.callback?.(now);
+    const result = await run;
+    expect(result.metadata.motion).toBe(0.5);
+    expect([...result.trace.motion.slice(0, result.trace.length)].every((motion) => motion === 0.5)).toBe(true);
+    expect(result.validation.finalStateMatches).toBe(true);
+    expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 });
