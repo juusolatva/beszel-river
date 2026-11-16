@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { callsTo, createFakeGl } from "./fake-gl";
-import { BudgetSchedule, compareGpuStates, CpuReplay, effectiveDecisions, fiveSecondWindows, GpuReplay, MIN_GPU_STEP, REPLAY_CAPACITY, ReplayTrace, replayableStep,
+import { BudgetSchedule, compareGpuStates, CpuReplay, effectiveDecisions, fiveSecondWindows, occupancyParity, parityBound, GpuReplay, MIN_GPU_STEP, REPLAY_CAPACITY, ReplayTrace, replayableStep,
   replayFrames, replayFrameIndex, replayIds, ScheduleCursor, summarizeOccupancy, validateCpuTrace, validateGpuTrace } from "./fixtures/gpu-replay";
 
 /** A short trace on the four-stream frame: one zero callback, then steady 30 Hz steps. */
@@ -317,5 +317,68 @@ describe("budget schedules", () => {
       { callback: 4, time: 3 * step, limit: 8000, intensity: 1.2 },
     ]);
     expect(effectiveDecisions(new ReplayTrace(0))).toEqual([]);
+  });
+});
+
+describe("occupancy parity gate", () => {
+  /** `seconds` of measured 0.1 s steps after one unmeasured zero callback. */
+  function steadyTrace(seconds: number) {
+    const trace = new ReplayTrace(seconds * 10 + 1);
+    trace.append(0, 2, 960, 640, 1, 1, false, REPLAY_CAPACITY, 1, false);
+    for (let k = 0; k < seconds * 10; k++) trace.append(0.1, 2, 960, 640, 1, 1, false, REPLAY_CAPACITY, 1, true);
+    return trace;
+  }
+  /** Constant per-callback totals, all in slot 0 unless `slots` spreads them. */
+  function replay(trace: ReplayTrace, total: (i: number) => number, slots: (i: number) => number[] = (i) => [total(i)]) {
+    const counts = new Uint32Array(trace.length), perSlot = new Uint32Array(trace.length * 32);
+    for (let i = 0; i < trace.length; i++) {
+      counts[i] = total(i);
+      perSlot.set(slots(i), i * 32);
+    }
+    return { counts, perSlot };
+  }
+
+  it("bounds each window's total by max(5 particles, 5% of the CPU mean)", () => {
+    expect([parityBound(0), parityBound(50), parityBound(100), parityBound(1000)]).toEqual([5, 5, 5, 50]);
+    const trace = steadyTrace(10);
+    const cpu = replay(trace, () => 1000);
+    const within = occupancyParity(trace, "dense", cpu, replay(trace, () => 1050));
+    expect(within).toEqual(expect.objectContaining({ gated: true, passed: true }));
+    expect(within.windows.map(({ start, cpu: a, gpu: b, bound }) => [start, a, b, bound])).toEqual([[0, 1000, 1050, 50], [5, 1000, 1050, 50]]);
+    // One window just outside fails the whole run.
+    const outside = occupancyParity(trace, "dense", cpu, replay(trace, (i) => (i > 50 ? 1051 : 1000)));
+    expect(outside.passed).toBe(false);
+    expect(outside.windows.map(({ pass }) => pass)).toEqual([true, false]);
+    // Small counts get the 5-particle floor.
+    expect(occupancyParity(trace, "empty", replay(trace, () => 0), replay(trace, () => 5)).passed).toBe(true);
+    expect(occupancyParity(trace, "empty", replay(trace, () => 0), replay(trace, () => 6)).passed).toBe(false);
+  });
+
+  it("reports the worst stream without gating on it", () => {
+    const trace = steadyTrace(5);
+    const result = occupancyParity(trace, "dense", replay(trace, () => 1000, () => [600, 400]), replay(trace, () => 1000, () => [400, 600]));
+    expect(result.passed).toBe(true);
+    expect(result.windows[0].worstStream).toEqual({ slot: 0, cpu: 600, gpu: 400, withinBound: false });
+    expect(occupancyParity(trace, "dense", replay(trace, () => 0, () => []), replay(trace, () => 0, () => [])).windows[0].worstStream).toBeNull();
+  });
+
+  it("reports draining and rotation phases without gating, and decides nothing without a full window", () => {
+    const trace = steadyTrace(10);
+    for (const scenario of ["draining", "rotation"] as const) {
+      const result = occupancyParity(trace, scenario, replay(trace, () => 1000), replay(trace, () => 2000));
+      expect([result.gated, result.passed, result.windows.length]).toEqual([false, null, 2]);
+      expect(result.rule).toMatch(new RegExp(`${scenario} phases are reported, not gated`));
+    }
+    const short = steadyTrace(4);
+    expect(occupancyParity(short, "dense", replay(short, () => 1000), replay(short, () => 1000))).toEqual(expect.objectContaining({ gated: true, passed: null, windows: [] }));
+  });
+
+  it("requires zero live particles in both replays throughout a drained measurement", () => {
+    const trace = steadyTrace(5);
+    const zero = replay(trace, () => 0);
+    expect(occupancyParity(trace, "drained", zero, zero)).toEqual(expect.objectContaining({ gated: true, passed: true, nonzeroCallbacks: 0 }));
+    expect(occupancyParity(trace, "drained", zero, replay(trace, (i) => (i === 7 ? 1 : 0)))).toEqual(expect.objectContaining({ passed: false, nonzeroCallbacks: 1 }));
+    // The unmeasured first callback does not count.
+    expect(occupancyParity(trace, "drained", replay(trace, (i) => (i === 0 ? 9 : 0)), zero).passed).toBe(true);
   });
 });

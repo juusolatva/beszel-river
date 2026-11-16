@@ -38,6 +38,8 @@ it("includes canvas layout reads in callback work and replays the final rendered
   // CPU runs replay the trace through the GPU too, untimed.
   expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   expect(result.validation.gpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
+  // Both replays feed the parity gate; a run shorter than one window decides nothing.
+  expect(result.validation.parity).toEqual(expect.objectContaining({ gated: true, passed: null, windows: [] }));
 });
 
 /** Stub a visible page around a fake context; returns the next animation callback. */
@@ -82,8 +84,9 @@ describe("GPU backend", () => {
     expect(result.validation.finalStateMatches).toBe(true);
     expect(result.validation.finalStateMaxFloatDifference).toBe(0);
     expect(result.validation.source).toMatch(/GPU/);
-    // crossValidate: false skips the CPU replay of a GPU run.
+    // crossValidate: false skips the CPU replay of a GPU run, and with it the parity gate.
     expect(result.validation.cpu).toEqual({ unavailable: "crossValidate: false" });
+    expect(result.validation.parity).toEqual({ unavailable: "crossValidate: false" });
     expect(result.validation.gpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 
@@ -165,6 +168,7 @@ describe("GPU backend", () => {
     for (const now of [0, 20, 40, 60]) replay.state.callback?.(now);
     const result = await run;
     expect(result.validation.gpu).toEqual({ unavailable: expect.stringMatching(/OUT_OF_MEMORY during GPU validation/) });
+    expect(result.validation.parity).toEqual({ unavailable: expect.stringMatching(/GPU replay unavailable: .*OUT_OF_MEMORY/) });
     expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 

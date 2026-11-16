@@ -3,7 +3,7 @@ import { Renderer } from "../src/render/renderer";
 import { ParticleBudget } from "../src/sim/budget";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
 import { GpuTimer } from "./fixtures/gpu-timer";
-import { BudgetSchedule, compareGpuStates, CpuReplay, CPU_REFERENCE, effectiveDecisions, fiveSecondWindows, GpuReplay, readGpuState,
+import { BudgetSchedule, compareGpuStates, occupancyParity, CpuReplay, CPU_REFERENCE, effectiveDecisions, fiveSecondWindows, GpuReplay, readGpuState,
   REPLAY_CAPACITY, REPLAY_SCENARIOS, REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, ScheduleCursor, validateCpuTrace,
   validateGpuTrace, type RecordedSchedule, type ReplayScenario } from "./fixtures/gpu-replay";
 
@@ -316,7 +316,10 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     validation: { source: `untimed ${backend.toUpperCase()} replay of this trace`, finalStateMatches: finalState.matches,
       finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: replayIds,
       cpu: cpuCheck === null ? { unavailable: "crossValidate: false" } : occupancy(cpuCheck),
-      gpu: gpuCheck === null ? { unavailable: "crossValidate: false" } : "unavailable" in gpuCheck ? gpuCheck : occupancy(gpuCheck) },
+      gpu: gpuCheck === null ? { unavailable: "crossValidate: false" } : "unavailable" in gpuCheck ? gpuCheck : occupancy(gpuCheck),
+      /** The decided cross-backend gate; a failure makes this run's performance comparison inconclusive. */
+      parity: cpuCheck && gpuCheck && !("unavailable" in gpuCheck) ? occupancyParity(trace, scenario, cpuCheck, gpuCheck)
+        : { unavailable: cpuCheck && gpuCheck ? `GPU replay unavailable: ${(gpuCheck as { unavailable: string }).unavailable}` : "crossValidate: false" } },
     trace,
     /** Limit and intensity changes this run applied, per callback; validation replayed exactly these. */
     decisions: effectiveDecisions(trace),
