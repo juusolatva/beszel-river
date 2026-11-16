@@ -10,7 +10,8 @@ import { mulberry32 } from "../../src/util/math";
 export const CPU_REFERENCE = "a90be9077096e35749f3b3409193db31ca51635a";
 export const REPLAY_CAPACITY = 10000;
 export const REPLAY_SEED = 42;
-export type ReplayScenario = "dense" | "empty" | "draining" | "drained" | "rotation";
+export const REPLAY_SCENARIOS = ["dense", "empty", "draining", "drained", "rotation"] as const;
+export type ReplayScenario = (typeof REPLAY_SCENARIOS)[number];
 
 // Built once, outside callback timing. Only synthetic public channel values are used.
 export const replayFrames: Frame[] = [1, 4, 32, 32, 0].map((count, stage) => ({
@@ -24,12 +25,17 @@ export const replayFrames: Frame[] = [1, 4, 32, 32, 0].map((count, stage) => ({
   })),
 }));
 
-/** Frame indices are recorded, so validation never reschedules from its own clock. */
+/**
+ * Frame for a step starting at `seconds` of simulation time, so runs at different cadences see the
+ * same streams at the same simulated moment. Frame indices are recorded, so validation never
+ * reschedules from its own clock.
+ */
 export function replayFrameIndex(scenario: ReplayScenario, seconds: number): number {
   if (scenario === "empty") return 4;
   if (scenario === "dense") return 2;
   if (scenario === "draining" || scenario === "drained") return seconds < 30 ? 2 : 4;
-  return seconds < 5 ? 0 : seconds < 10 ? 1 : seconds < 40 ? 2 : seconds < 70 ? 3 : 4;
+  if (scenario === "rotation") return seconds < 5 ? 0 : seconds < 10 ? 1 : seconds < 40 ? 2 : seconds < 70 ? 3 : 4;
+  throw new Error(`Unknown replay scenario ${String(scenario)}`);
 }
 
 /** Full effective inputs, including warmup; arrays never grow inside a callback. */

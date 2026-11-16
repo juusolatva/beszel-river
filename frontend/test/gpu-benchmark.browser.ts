@@ -3,7 +3,7 @@ import { Renderer } from "../src/render/renderer";
 import { ParticleBudget } from "../src/sim/budget";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
 import { BudgetSchedule, compareGpuStates, CpuReplay, CPU_REFERENCE, effectiveDecisions, fiveSecondWindows, GpuReplay, readGpuState,
-  REPLAY_CAPACITY, REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, ScheduleCursor, validateCpuTrace,
+  REPLAY_CAPACITY, REPLAY_SCENARIOS, REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, ScheduleCursor, validateCpuTrace,
   validateGpuTrace, type RecordedSchedule, type ReplayScenario } from "./fixtures/gpu-replay";
 
 interface BenchmarkOptions {
@@ -66,6 +66,12 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (budgetOption !== "fixed" && budgetOption !== "adaptive") throw new Error("Budget must be fixed or adaptive");
   // Native GPU adaptation needs exact live counts the GPU never reports; replay a CPU schedule instead.
   if (budgetOption === "adaptive" && backend !== "cpu") throw new Error("Adaptive discovery runs on the CPU only; replay its schedule on the GPU");
+  // A saved schedule arrives as JSON: null or a non-object must not quietly become a fixed-limit run.
+  if (options.schedule !== undefined && (typeof schedule !== "object" || schedule === null || !Array.isArray(schedule.decisions) || typeof schedule.runId !== "string")) {
+    throw new Error("A schedule must be a recorded discovery schedule");
+  }
+  if (!REPLAY_SCENARIOS.includes(scenario)) throw new Error(`Scenario must be one of ${REPLAY_SCENARIOS.join(", ")}`);
+  if (budgetOption === "adaptive" && options.limit !== undefined) throw new Error("Adaptive discovery starts from the full pool; omit limit");
   if (schedule && budgetOption === "adaptive") throw new Error("A schedule replay recalculates no budget");
   if (schedule && options.limit !== undefined) throw new Error("A schedule replay takes its limits from the schedule");
   if (schedule && (scenario !== schedule.scenario || motion !== schedule.motion)) throw new Error("Replay a schedule on the scenario and motion it was discovered with");
@@ -109,7 +115,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   // In force for the next step; a budget change made after a callback's render applies to the following one, as in main.ts.
   let stepLimit = cursor ? cursor.limit : budget ? budget.limit : limit;
   let stepIntensity = cursor ? cursor.intensity : budget ? budget.intensityScale : 1;
-  // Simulation time at the start of the next step: the sum of the trace's effective steps.
+  // Simulation time at the start of the next step, the sum of the trace's effective steps: it picks
+  // the scenario's frame and the schedule's decision, so slow, clamped callbacks shift neither.
   let simulationTime = 0;
   const work = new Float64Array(traceCapacity);
   const simulation = new Float64Array(traceCapacity);
@@ -164,7 +171,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           stepLimit = cursor.limit;
           stepIntensity = cursor.intensity;
         }
-        trace.append(interval, replayFrameIndex(scenario, seconds), width, height, pixelRatio, motion, false, stepLimit, stepIntensity, isMeasured);
+        trace.append(interval, replayFrameIndex(scenario, simulationTime), width, height, pixelRatio, motion, false, stepLimit, stepIntensity, isMeasured);
         const i = trace.length - 1, dt = trace.dt[i];
         // Both backends must be able to replay every trace; the GPU rejects tiny positive steps.
         if (!replayableStep(dt)) {

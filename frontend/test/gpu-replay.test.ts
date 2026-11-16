@@ -39,6 +39,7 @@ describe("GPU comparison replay foundation", () => {
     expect(replayFrameIndex("empty", 0)).toBe(4);
     expect(replayFrameIndex("draining", 30)).toBe(4);
     expect(replayFrameIndex("draining", 29)).toBe(2);
+    expect(() => replayFrameIndex("spiral" as "dense", 0)).toThrow(/Unknown replay scenario/);
     expect(replayFrameIndex("drained", 60)).toBe(4);
   });
 

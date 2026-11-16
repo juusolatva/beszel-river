@@ -363,6 +363,8 @@ Unit tests cover schedule checks and overflow, the cursor's boundary rule (inclu
 
 Headless Chrome 157 with SwiftShader, a correctness smoke run rather than a performance result (dense, 2 s warmup, 10 s measured): the discovery's limit fell 10,000 → 8,000 → 6,400 → 5,120 at simulation times 2.48, 4.32 and 5.97 s, and its CPU and GPU validation replays averaged 5,422 and 5,419 live particles. A CPU replay at its own cadence applied all four decisions at the first steps starting at or after those times (2.55, 4.37, 6.00 s) and matched its validation; a GPU replay did the same (2.55, 4.35, 6.05 s) and matched its validation with identical identity words and zero float difference. Remaining in Task 5: the resize/DPR, reduced-motion, loss/recovery and long-pause checks with the GPU backend.
 
+**PR #130 review follow-up:** Qodo found three gaps, all fixed with regression tests. Scenario stages followed wall time while decisions followed simulation time, so a callback above the 0.1 s clamp let the clocks drift and a replay could apply a limit to different streams than its discovery did; `replayFrameIndex` now receives the step's starting simulation time in every mode, which leaves runs without clamped callbacks unchanged. A JSON `null` schedule silently started a fixed-limit run and an unknown scenario fell through to rotation; both, and a schedule without decisions or a run ID, are now refused before the page is used. An adaptive discovery silently ignored `limit`; it now refuses it, as schedule replays do.
+
 ## Task 6: Measure and decide
 
 **Files:** Record the result ledger here and summarize the decision in `docs/PLAN.md`; document runnable harness commands in `README.md`.

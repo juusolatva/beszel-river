@@ -275,6 +275,25 @@ describe("budget schedules", () => {
     expect(runs[0].decisions.map(({ limit }) => limit)).toEqual([10000, 8000]);
   });
 
+  it("changes scenario frames at simulation times, so slow clamped callbacks do not shift them", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ scenario: "rotation", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 8, crossValidate: false });
+    // 4 s of 200 ms callbacks simulate only 2 s (clamped to 0.1 s), then 100 ms callbacks.
+    let now = 0;
+    for (; now < 4000; now += 200) state.callback?.(now);
+    for (; now <= 8100; now += 100) state.callback?.(now);
+    const { trace } = await run;
+    // The 1 → 4 stream expansion is due at 5 s.
+    const expansion = trace.frame.indexOf(1);
+    expect(trace.frame[expansion - 1]).toBe(0);
+    expect(startTime(trace, expansion)).toBeGreaterThanOrEqual(5);
+    expect(startTime(trace, expansion - 1)).toBeLessThan(5);
+    // By wall time it would have come at 5 s; it came at 7 s, after 5 simulated seconds.
+    let wall = 0;
+    for (let k = 0; k < expansion; k++) wall += trace.interval[k];
+    expect(wall).toBeCloseTo(7, 1);
+  });
+
   it("reports decisions a shorter replay never reached", async () => {
     const { schedule } = await discover();
     const { state } = stubPage();
@@ -314,6 +333,13 @@ describe("budget schedules", () => {
       [{ budget: "adaptive", scheduleCapacity: 0 }, /Schedule capacity/],
       [{ schedule: { ...schedule, decisions: [{ time: 1, limit: 10000, intensity: 1 }] } }, /nondecreasing times from 0/],
       [{ schedule: { ...schedule, decisions: [] } }, /initial decision/],
+      // Saved schedules arrive as JSON: null or a wrong shape must not become a fixed-limit run.
+      [{ schedule: null as unknown as typeof schedule }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, decisions: "none" as unknown as [] } }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, runId: 7 as unknown as string } }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, scenario: "spiral" as "dense" } }, /Scenario must be one of/],
+      [{ scenario: "spiral" as "dense" }, /Scenario must be one of/],
+      [{ budget: "adaptive", limit: 8000 }, /full pool; omit limit/],
     ];
     for (const [options, message] of cases) {
       stubPage();
