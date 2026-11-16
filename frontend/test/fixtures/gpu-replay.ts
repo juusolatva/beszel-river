@@ -423,3 +423,50 @@ export function fiveSecondWindows(trace: ReplayTrace, counts: Uint32Array, perSl
   }
   return windows;
 }
+
+/** The performance-run parity bound for a window's CPU mean: `max(5 particles, 5%)` (decided 2026-11-16). */
+export function parityBound(cpuMean: number): number {
+  return Math.max(5, 0.05 * cpuMean);
+}
+
+/**
+ * Occupancy parity between a trace's untimed CPU and GPU replays, decided on 2026-11-16: in every
+ * aligned five-second window of a steady scenario (`dense` at any limit, `empty`), the total
+ * simulation-time mean live count must differ by no more than `max(5 particles, 5% of the CPU
+ * mean)`. Per-stream differences are reported, not gated: how many streams exceed the same bound,
+ * and the stream furthest outside it relative to its bound. Draining and rotation phases are not
+ * gated (their curves are reported), and `drained` requires zero live particles in both replays
+ * throughout the measurement. A failed gate makes the performance comparison inconclusive;
+ * `passed: null` means the scenario is not gated or no complete window was measured.
+ */
+export function occupancyParity(trace: ReplayTrace, scenario: ReplayScenario,
+  cpu: { counts: Uint32Array; perSlot: Uint32Array }, gpu: { counts: Uint32Array; perSlot: Uint32Array }) {
+  const rule = "total mean live count per aligned 5 s window within max(5 particles, 5% of the CPU mean); per-stream reported, not gated";
+  if (scenario === "drained") {
+    let nonzero = 0;
+    for (let i = 0; i < trace.length; i++) if (trace.measured[i] && (cpu.counts[i] || gpu.counts[i])) nonzero++;
+    return { rule: "zero live particles in both replays throughout the measurement", gated: true, passed: nonzero === 0, nonzeroCallbacks: nonzero, windows: [] };
+  }
+  const cpuWindows = fiveSecondWindows(trace, cpu.counts, cpu.perSlot);
+  const gpuWindows = fiveSecondWindows(trace, gpu.counts, gpu.perSlot);
+  const windows = cpuWindows.map((window, k) => {
+    const other = gpuWindows[k];
+    const bound = parityBound(window.total);
+    // Streams are ranked by difference relative to their own bound, so a small stream outside its
+    // 5-particle floor is not hidden by a larger absolute difference inside a wide bound.
+    let worstSlot = -1, worstRatio = 0, streamsOutsideBound = 0;
+    for (let slot = 0; slot < MAX_STREAMS; slot++) {
+      const ratio = Math.abs(window.perSlot[slot] - other.perSlot[slot]) / parityBound(window.perSlot[slot]);
+      if (ratio > 1) streamsOutsideBound++;
+      if (ratio > worstRatio) { worstRatio = ratio; worstSlot = slot; }
+    }
+    return { start: window.start, frames: window.frames, cpu: window.total, gpu: other.total, bound,
+      pass: Math.abs(window.total - other.total) <= bound, streamsOutsideBound,
+      worstStream: worstSlot < 0 ? null : { slot: worstSlot, cpu: window.perSlot[worstSlot], gpu: other.perSlot[worstSlot],
+        bound: parityBound(window.perSlot[worstSlot]), withinBound: worstRatio <= 1 } };
+  });
+  const gated = scenario === "dense" || scenario === "empty";
+  return { rule: gated ? rule : `${rule}; ${scenario} phases are reported, not gated`, gated,
+    // A measurement shorter than one window decides nothing.
+    passed: gated && windows.length ? windows.every((window) => window.pass) : null, windows };
+}
