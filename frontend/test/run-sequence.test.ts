@@ -83,7 +83,7 @@ describe("run summaries and ledger", () => {
       validation: { finalStateMatches: true, cpu: check, gpu: check,
         parity: { rule: "draining", gated: parityPassed !== null, passed: parityPassed, windows: [{ pass: parityPassed !== false, streamsOutsideBound: 2 }] } },
       trace: t,
-      decisions: [{}],
+      decisions: [{ callback: 0, time: 0, limit: 10000, intensity: 1 }],
       scheduleApplied: undefined,
     } as unknown as Parameters<typeof summarizeRun>[1];
   }
@@ -91,7 +91,8 @@ describe("run summaries and ledger", () => {
 
   it("keeps what the ledger needs, curves and time to zero, without traces or per-callback arrays", () => {
     const summary = summarizeRun(spec(), result("abcdef123456", 7, null, { samples: 3, totalMs: { median: 4, p95: 5, p99: 6 }, callbacks: new Uint32Array(3) }), env);
-    expect(summary).toEqual(expect.objectContaining({ ok: true, runId: "abcdef123456", battery: env.battery, finalStateMatches: true, decisions: 1 }));
+    expect(summary).toEqual(expect.objectContaining({ ok: true, runId: "abcdef123456", battery: env.battery, finalStateMatches: true }));
+    expect(summary.decisions).toEqual([{ callback: 0, time: 0, limit: 10000, intensity: 1 }]);
     expect(summary.timing.gpuTime).toEqual({ samples: 3, totalMs: { median: 4, p95: 5, p99: 6 } });
     const gpu = summary.occupancy.gpu as { curve: number[]; timeToZeroAfterRemoval: number | null; simulationMean: number };
     expect(gpu.curve).toHaveLength(40);
@@ -129,5 +130,7 @@ describe("run summaries and ledger", () => {
     expect(ledger[3]).toContain("unavailable: EXT_disjoint_timer_query_webgl2 not supported / heap – MiB / unknown");
     expect(ledger.slice(5)).toEqual(["Failed runs:", "- #9 full draining cpu rep 1: Error: Hidden tab: run invalid"]);
     expect(ledgerMarkdown([], "")).not.toContain("Failed runs");
+    // Two repetitions: the median averages them.
+    expect(ledgerMarkdown(runs.slice(0, 2), "abc1234")).toContain("| 8.00 (7.00–9.00) / 10.00 (9.00–11.00) / 12.00 (11.00–13.00) ms |");
   });
 });

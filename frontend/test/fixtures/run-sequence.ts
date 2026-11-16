@@ -147,7 +147,8 @@ export function summarizeRun(spec: RunSpec, result: BenchmarkResult, environment
       maxStreamsOutsideBound: parity.windows.reduce((max, window) => Math.max(max, window.streamsOutsideBound), 0),
       nonzeroCallbacks: "nonzeroCallbacks" in parity ? parity.nonzeroCallbacks : undefined },
     finalStateMatches: validation.finalStateMatches,
-    decisions: result.decisions.length,
+    /** The limit and brightness changes the run applied, with their callbacks and simulation times. */
+    decisions: result.decisions,
     scheduleApplied: result.scheduleApplied,
   };
 }
@@ -157,11 +158,12 @@ export type RunSummary = ReturnType<typeof summarizeRun>;
 export interface FailedRun { spec: RunSpec; ok: false; error: string; startedAt: string }
 
 const fmt = (value: number | undefined | null, digits = 2) => (value === undefined || value === null || !Number.isFinite(value) ? "–" : value.toFixed(digits));
-/** Median and range of one statistic across repetitions. */
+/** Median and range of one statistic across repetitions; an even count averages the middle two. */
 function spread(values: number[]): string {
   if (!values.length) return "–";
   const sorted = [...values].sort((a, b) => a - b);
-  const median = sorted[Math.floor((sorted.length - 1) / 2)];
+  const middle = sorted.length >> 1;
+  const median = sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
   return sorted.length === 1 ? fmt(median) : `${fmt(median)} (${fmt(sorted[0])}–${fmt(sorted[sorted.length - 1])})`;
 }
 

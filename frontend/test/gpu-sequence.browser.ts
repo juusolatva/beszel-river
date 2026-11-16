@@ -25,6 +25,8 @@ interface SequenceState {
   status: "running" | "paused" | "done";
   /** The viewport the person has confirmed the window for, so the sequence does not stop again. */
   readyViewport: Viewport | null;
+  /** The window size when it was confirmed; a full-screen confirmation lapses when it changes. */
+  readySize?: [number, number] | null;
   message: string;
 }
 
@@ -40,8 +42,19 @@ function load(): SequenceState | null {
   }
 }
 
-function save(state: SequenceState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+/**
+ * Stores the state, or pauses it when storage refuses (full or blocked): reloading after a failed
+ * save would rerun the same run forever. The results stay on the page to download.
+ */
+function save(state: SequenceState): boolean {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
+  } catch (error) {
+    state.status = "paused";
+    state.message = `Could not store the sequence (${String(error)}). Download the results below before reloading.`;
+    return false;
+  }
 }
 
 function status(text: string, warn = false): void {
@@ -73,7 +86,9 @@ async function detectRefreshHz(): Promise<number> {
     requestAnimationFrame(frame);
   });
   intervals.sort((a, b) => a - b);
-  return Math.round(1000 / intervals[Math.floor(intervals.length / 2)]);
+  // A coarse clock can report equal timestamps; suggest 60 Hz rather than Infinity.
+  const median = intervals[Math.floor(intervals.length / 2)];
+  return median > 0 ? Math.round(1000 / median) : 60;
 }
 
 async function environment(): Promise<RunEnvironment> {
@@ -96,12 +111,14 @@ function download(name: string, text: string, type: string): void {
   link.href = url;
   link.download = name;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Revoking too early can cancel the download in Firefox.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 function showResults(state: SequenceState): void {
   if (!state.results.length) return;
-  const json = JSON.stringify({ conditions: state.conditions, refreshHz: state.refreshHz, commit: state.commit, config: state.config, results: state.results }, null, 1);
+  const json = JSON.stringify({ conditions: state.conditions, refreshHz: state.refreshHz, commit: state.commit, config: state.config,
+    schedules: state.schedules, results: state.results }, null, 1);
   const ledger = ledgerMarkdown(state.results, state.commit);
   $("#output").hidden = false;
   $<HTMLTextAreaElement>("#json").value = json;
@@ -114,13 +131,21 @@ function showResults(state: SequenceState): void {
 /** Browser full screen (F11) makes the window the size of the screen; phones may never report it. */
 const isFullScreen = () => innerWidth >= screen.width && innerHeight >= screen.height;
 
+function confirmViewport(state: SequenceState, viewport: Viewport): void {
+  state.readyViewport = viewport;
+  state.readySize = [innerWidth, innerHeight];
+}
+
 /**
  * Whether the window suits the next run's viewport: confirmed by the person, or detected. Otherwise
- * pause and say what to change; Continue confirms it where detection cannot (phones).
+ * pause and say what to change; Continue confirms it where detection cannot (phones). A full-screen
+ * confirmation holds only while the window keeps its size, so leaving full screen or rotating a
+ * phone between runs pauses again instead of running full-screen runs in a smaller window.
  */
 function viewportReady(state: SequenceState, viewport: Viewport): boolean {
+  if (state.readyViewport === "full" && (state.readySize?.[0] !== innerWidth || state.readySize?.[1] !== innerHeight)) state.readyViewport = null;
   if (state.readyViewport !== viewport && (viewport === "full" ? isFullScreen() : !isFullScreen() && innerWidth >= 960 && innerHeight >= 640)) {
-    state.readyViewport = viewport;
+    confirmViewport(state, viewport);
   }
   if (state.readyViewport === viewport) return true;
   state.status = "paused";
@@ -162,8 +187,7 @@ async function runNext(state: SequenceState): Promise<void> {
   }
   state.next++;
   if (state.next === state.plan.length) state.status = "done";
-  save(state);
-  if (state.status === "running") location.reload();
+  if (save(state) && state.status === "running") location.reload();
   else {
     document.body.className = "";
     render(state);
@@ -183,10 +207,10 @@ function render(state: SequenceState | null): void {
   if (state.status !== "done") {
     button("Continue", () => {
       state.status = "running";
-      state.readyViewport = state.plan[state.next].viewport;
+      confirmViewport(state, state.plan[state.next].viewport);
       state.message = "";
-      save(state);
-      location.reload();
+      if (save(state)) location.reload();
+      else render(state);
     });
   }
   const failures = state.results.filter((result): result is FailedRun => !result.ok);
@@ -198,8 +222,8 @@ function render(state: SequenceState | null): void {
       for (const spec of retry) state.plan.push({ ...spec, index: state.plan.length });
       state.status = "running";
       state.readyViewport = null;
-      save(state);
-      location.reload();
+      if (save(state)) location.reload();
+      else render(state);
     });
   }
   button("Reset", () => {
@@ -258,8 +282,8 @@ function setup(): void {
     const state: SequenceState = { version: 1, config: config(), conditions: String(data.get("conditions")).trim(), refreshHz: Number(data.get("refreshHz")),
       commit: String(data.get("commit")).trim(), plan, next: 0, results: [], schedules: {}, status: "running", readyViewport: null, message: "" };
     if (!viewportReady(state, plan[0].viewport)) return render(state);
-    save(state);
-    location.reload();
+    if (save(state)) location.reload();
+    else render(state);
   });
 }
 
