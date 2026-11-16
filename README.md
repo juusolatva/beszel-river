@@ -207,6 +207,15 @@ const replay = await runGpuBenchmark({ backend: "gpu", schedule, refreshHz: 60, 
 
 `metadata.budget` labels each run: `fixed limit`, `CPU adaptive discovery (not a paired performance result)` or `CPU-schedule replay`. A decision the budget makes after a callback's render applies from the next step, as on the page, and is recorded at the simulation time that step starts; a replay applies it to the first step starting at or after that time, whatever the replay's own cadence. The GPU never feeds the budget, so `budget: "adaptive"` is refused on the GPU, and native GPU adaptation is not implemented. A replay takes its scenario and motion from the schedule and refuses others, a `limit`, or a schedule that is not a recorded one (such as JSON `null`); a discovery refuses `limit` too, since it starts from the full pool. Every run saves `result.decisions`, the limit and brightness changes it applied with their callbacks; its untimed validation replays exactly these. `result.scheduleApplied` says how many of a schedule's decisions a replay reached, as a shorter run stops before later ones.
 
+A timed run fails rather than survive a hidden tab, so page lifecycle events have their own untimed real-shader check on the same page. It replays synthetic traces through both backends with the page's time clamping, at normal and reduced motion (0.5), and takes a few minutes in software WebGL:
+
+```js
+const { runGpuReplayLifecycleChecks } = await import("/test/gpu-replay-lifecycle.browser.ts");
+console.log(runGpuReplayLifecycleChecks());
+```
+
+It throws on the first failure. `outage` checks that a single stream dries up while offline and recovers. `hiddenTab` replaces all 32 streams in the callback after a 20 s pause (one 0.1 s step) and reports how long each backend took to claim the replacements, in simulation and wall time; the GPU must wait more than 14.1 simulated seconds after the drain, so the pause cannot release live slots. `zeroSteps` requires byte-identical GPU state and unchanged CPU instances across zero-dt callbacks. `resize` replays landscape, portrait and DPR changes, and `drawing` draws GPU state at each size and requires lit pixels. Resizing and DPR changes during a timed run recreate only the trail targets; a failed target allocation fails the run (unit tests).
+
 
 ### Bridge setup
 
