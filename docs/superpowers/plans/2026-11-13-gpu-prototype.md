@@ -372,7 +372,7 @@ A timed run still fails on a hidden tab or context loss, so lifecycle events are
 - **Stream loss and recovery:** the single plain stream (frame 0), offline from 15 to 30 s of simulation time. Each backend's mean over 25–30 s must be below 75% of its 10–15 s mean and its 50–55 s mean above 90% of it. A pulsing stream keeps the pool nearly full even at the offline fifth of the spawn rate, so frame 1 does not show the outage.
 - **Hidden-tab return during a full replacement:** 32 original streams for 15 s, then all 32 replaced in the callback after a 20 s pause (one 0.1 s step), then 35 s more. The GPU's first replacement claim must come more than `LOOK.lifeRange[1] + Float32(maxDt)` simulated seconds after the removal, and both backends must claim all 32 slots.
 - **Zero dt:** five zero-interval callbacks after 3 s leave the GPU state byte-identical and the CPU count and instances unchanged.
-- **Resize and DPR:** 5 s each at 1152×768/DPR 1.2, 432×768/1.2, 864×1536/2 and 1920×1280/2 through both replays, then 2 s each drawn from GPU state through `Renderer.renderGpu`, with lit pixels required in the bottom centre after each resize.
+- **Resize and DPR:** 5 s each at 1152×768/DPR 1.2, 432×768/1.2, 864×1536/2 and 1920×1280/2 through both replays, each size's last-3-s mean above 1,000 live particles on both backends and within `max(5 particles, 5%)` of each other, then 2 s each drawn from GPU state through `Renderer.renderGpu`, with lit pixels required in the bottom centre after each resize.
 
 Headless Chrome 157 with SwiftShader, RGBA16F, 144 s, all passing; correctness evidence, not performance:
 
@@ -386,6 +386,8 @@ Headless Chrome 157 with SwiftShader, RGBA16F, 144 s, all passing; correctness e
 The GPU claims a replacement 23.3 s after removal: presence falls below 0.01 after about 9.2 s and the deadline adds 14.1 s; the pause contributed one 0.1 s step. That is 3.4 s later than the CPU's first exact-count claim, the conservative replacement latency for Task 6's visual acceptance. Drawing lit 3,903, 4,096, 4,096 and 195 of the 4,096 sampled pixels at the four sizes (2 s of particles, which reach a smaller share of the 1920×1280 sample).
 
 Fake-GL harness tests add the timed side: a GPU run resized from landscape to portrait and then from DPR 1 to 2 deletes and creates only the two trail targets per resize during timing, with no simulation buffer, program or vertex array touched, and still matches its validation replay; a trail-target allocation failure at the first callback or after a mid-run resize fails the run and releases the GPU replay; and a reduced-motion GPU run records motion 0.5 throughout and validates. `npm run typecheck`, `npm run coverage` (210 bridge + 253 frontend tests, thresholds unchanged) and `npm run build` passed; the production bundle contains none of the check.
+
+**PR #132 review follow-up:** Qodo noted that the resize replay only reported its means, so a resize that emptied both rivers would have passed; it now asserts the populated-river and parity bounds above (largest measured difference 0.25%). Qodo and Gemini noted that the check never released its renderer's trail targets or its WebGL context; it now loses the context in a `finally`, which frees everything it allocated. A rerun passed with the same results.
 
 Task 5's correctness checks are complete. Native GPU adaptation remains unimplemented, and Task 6's paired measurements remain.
 

@@ -154,11 +154,20 @@ const SIZES = [
   { name: "landscape DPR 2", width: 1920, height: 1280, pixelRatio: 2 },
 ];
 
-/** Landscape/portrait resizes and DPR changes: both replays follow the aspect change and the flow grid it resizes. */
+/**
+ * Landscape/portrait resizes and DPR changes: both replays follow the aspect change and the flow
+ * grid it resizes. Each size must keep a populated river, with the backends' means over its last
+ * 3 s within `max(5 particles, 5%)` of each other.
+ */
 function resize(gl: WebGL2RenderingContext, motion: number) {
   const trace = buildTrace(motion, SIZES.map((size, k) => ({ until: 5 * (k + 1), interval: 1 / 60, frame: 1, ...size })));
   const { cpu, gpu } = replayBoth(gl, trace);
-  return SIZES.map((size, k) => ({ size: size.name, cpu: windowMean(trace, cpu.counts, 5 * k + 2, 5 * k + 5), gpu: windowMean(trace, gpu.counts, 5 * k + 2, 5 * k + 5) }));
+  return SIZES.map((size, k) => {
+    const result = { size: size.name, cpu: windowMean(trace, cpu.counts, 5 * k + 2, 5 * k + 5), gpu: windowMean(trace, gpu.counts, 5 * k + 2, 5 * k + 5) };
+    assert(result.cpu > 1000 && result.gpu > 1000, `River emptied after resizing to ${size.name} (motion ${motion})`);
+    assert(Math.abs(result.cpu - result.gpu) <= Math.max(5, 0.05 * result.cpu), `CPU and GPU diverged after resizing to ${size.name} (motion ${motion})`);
+    return result;
+  });
 }
 
 /**
@@ -212,12 +221,18 @@ export function runGpuReplayLifecycleChecks() {
   const canvas = document.createElement("canvas");
   const gl = canvas.getContext("webgl2", { alpha: false, antialias: false, depth: false, stencil: false });
   assert(!!gl, "WebGL2 required");
-  const results = [1, 0.5].map((motion) => ({
-    motion,
-    outage: outage(gl!, motion),
-    hiddenTab: hiddenTab(gl!, motion),
-    zeroSteps: zeroSteps(gl!, motion),
-    resize: resize(gl!, motion),
-  }));
-  return { results, drawing: drawAcrossResizes(gl!) };
+  try {
+    const results = [1, 0.5].map((motion) => ({
+      motion,
+      outage: outage(gl!, motion),
+      hiddenTab: hiddenTab(gl!, motion),
+      zeroSteps: zeroSteps(gl!, motion),
+      resize: resize(gl!, motion),
+    }));
+    return { results, drawing: drawAcrossResizes(gl!) };
+  } finally {
+    // Frees everything the checks allocated, the renderer's trail targets included, so reruns
+    // neither accumulate GPU memory nor exhaust the browser's context limit.
+    gl!.getExtension("WEBGL_lose_context")?.loseContext();
+  }
 }
