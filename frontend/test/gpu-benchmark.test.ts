@@ -414,3 +414,83 @@ describe("GPU runs across page lifecycle events", () => {
     expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
   });
 });
+
+describe("GPU timer queries", () => {
+  const EXT = { TIME_ELAPSED_EXT: "TIME_ELAPSED_EXT", GPU_DISJOINT_EXT: "GPU_DISJOINT_EXT" };
+  /** A page offering the timer extension; every query reports 2 ms once `ready`. */
+  function timedPage(state: { ready: boolean }) {
+    return stubPage({ overrides: {
+      getExtension: (name) => (name === "EXT_disjoint_timer_query_webgl2" ? EXT : null),
+      getQueryParameter: (_query, pname) => (pname === "QUERY_RESULT_AVAILABLE" ? state.ready : 2e6),
+      getParameter: (name) => (name === "GPU_DISJOINT_EXT" ? false : "test renderer"),
+    } });
+  }
+
+  it("times every measured callback's simulation and rendering on the GPU and releases the queries", async () => {
+    for (const backend of ["gpu", "cpu"] as const) {
+      const { calls, state } = timedPage({ ready: true });
+      const run = runGpuBenchmark({ backend, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0.04, measureSeconds: 0.1, crossValidate: false });
+      for (let now = 0; now <= 160; now += 20) state.callback?.(now);
+      const result = await run;
+      expect(result.metadata.gpuTiming).toBe("enabled");
+      const gpuTime = result.timing.gpuTime as Exclude<typeof result.timing.gpuTime, string>;
+      // Warmup callbacks are not timed; every measured one is (this warmup covers the zero-dt first callback).
+      expect(gpuTime.measuredSteps).toBe(result.timing.callbacks);
+      expect(gpuTime.samples).toBe(result.timing.callbacks);
+      expect([...gpuTime.callbacks]).toEqual([...result.trace.measured.slice(0, result.trace.length).keys()].filter((i) => result.trace.measured[i]));
+      expect(gpuTime.simulationMs?.median).toBe(2);
+      expect(gpuTime.totalMs?.median).toBe(4);
+      expect([gpuTime.skippedRingFull, gpuTime.discardedDisjoint, gpuTime.lostAtEnd]).toEqual([0, 0, 0]);
+      expect(callsTo(calls, "deleteQuery")).toHaveLength(callsTo(calls, "createQuery").length);
+      // Queries go to the raw context, so the GPU still counts no buffer uploads.
+      if (backend === "gpu") expect(result.timing.uploadedBytes).toBe(0);
+    }
+  });
+
+  it("collects results that arrive only after timing, before validation", async () => {
+    const ready = { ready: false };
+    const { state } = timedPage(ready);
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) state.callback?.(now);
+    ready.ready = true;
+    const result = await run;
+    const gpuTime = result.timing.gpuTime as Exclude<typeof result.timing.gpuTime, string>;
+    // The zero-dt first callback is measured but submits no GPU work, so it is not timed.
+    expect(result.timing.callbacks).toBe(3);
+    expect([gpuTime.measuredSteps, gpuTime.samples, gpuTime.lostAtEnd]).toEqual([2, 2, 0]);
+  });
+
+  it("discloses an opt-out or a missing extension and never relabels submission time", async () => {
+    const optOut = timedPage({ ready: true });
+    let run = runGpuBenchmark({ backend: "gpu", gpuTiming: false, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) optOut.state.callback?.(now);
+    let result = await run;
+    expect(result.metadata.gpuTiming).toBe("disabled (gpuTiming: false)");
+    expect(result.timing.gpuTime).toBe("disabled (gpuTiming: false)");
+    expect(callsTo(optOut.calls, "createQuery")).toEqual([]);
+
+    const missing = stubPage();
+    run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) missing.state.callback?.(now);
+    result = await run;
+    expect(result.timing.gpuTime).toBe("unavailable: EXT_disjoint_timer_query_webgl2 not supported");
+  });
+
+  it("fails the run, releasing the GPU replay, when the queries cannot be created", async () => {
+    const { calls } = stubPage({ overrides: {
+      getExtension: (name) => (name === "EXT_disjoint_timer_query_webgl2" ? EXT : null), createQuery: () => null,
+    } });
+    await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/GPU timer queries failed.*run invalid/);
+    expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
+  });
+
+  it("ends an active query and releases the queries when a timed run fails", async () => {
+    const { calls, state } = timedPage({ ready: false });
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 1 });
+    state.callback?.(0);
+    state.callback?.(20);
+    state.lost?.();
+    await expect(run).rejects.toThrow(/context lost/);
+    expect(callsTo(calls, "deleteQuery")).toHaveLength(callsTo(calls, "createQuery").length);
+  });
+});
