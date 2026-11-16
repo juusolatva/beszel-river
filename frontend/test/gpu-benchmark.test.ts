@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { callsTo, createFakeGl } from "./fake-gl";
+import { ParticleBudget } from "../src/sim/budget";
 import { runGpuBenchmark } from "./gpu-benchmark.browser";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -197,4 +198,160 @@ it("rejects a missing render framebuffer before querying a default-framebuffer c
   callback?.(0);
   await expect(run).rejects.toThrow(/render framebuffer/);
   expect(calls.filter(([name]) => name === "getFramebufferAttachmentParameter")).toEqual([]);
+});
+
+describe("budget schedules", () => {
+  /** Callbacks every `step` ms until the run resolves. */
+  function drive(state: { callback?: FrameRequestCallback }, step: number, until: number) {
+    for (let now = 0; now <= until; now += step) state.callback?.(now);
+  }
+
+  /** Simulation time at the start of callback `i`. */
+  function startTime(trace: { dt: Float32Array }, i: number) {
+    let time = 0;
+    for (let k = 0; k < i; k++) time += trace.dt[k];
+    return time;
+  }
+
+  /** A CPU discovery whose 60 ms frames are slow from the start: the budget drops once in 3 s. */
+  async function discover() {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ budget: "adaptive", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 3, crossValidate: false });
+    drive(state, 60, 3100);
+    return run;
+  }
+
+  it("records a CPU adaptive discovery whose decisions take effect on the following step", async () => {
+    const update = vi.spyOn(ParticleBudget.prototype, "update");
+    const result = await discover();
+    expect(result.metadata.budget).toMatch(/CPU adaptive discovery.*not a paired performance result/);
+    expect(result.metadata.limit).toBe("scheduled");
+    // More than 2 s of slow frames: the 34th 60 ms step returns the drop, the next step uses it.
+    const { trace } = result;
+    expect(trace.limit[34]).toBe(10000);
+    expect(trace.limit[35]).toBe(8000);
+    expect(trace.intensity[35]).toBeCloseTo(Math.sqrt(10000 / 8000));
+    expect(result.schedule).toEqual({ runId: result.runId, scenario: "dense", motion: 1, decisions: [
+      { time: 0, limit: 10000, intensity: 1 },
+      { time: startTime(trace, 35), limit: 8000, intensity: Math.sqrt(10000 / 8000) },
+    ] });
+    expect(result.decisions).toEqual([
+      { callback: 0, time: 0, limit: 10000, intensity: 1 },
+      { callback: 35, time: startTime(trace, 35), limit: 8000, intensity: Math.sqrt(10000 / 8000) },
+    ]);
+    // The budget saw every positive step, with the CPU's exact live count and real intervals.
+    expect(update).toHaveBeenCalledTimes(trace.length - 1);
+    expect(update.mock.calls.every(([interval, live]) => interval === 0.06 && Number.isInteger(live) && live <= 10000)).toBe(true);
+    // The untimed replay applied the same decisions and reproduced the run.
+    expect(result.validation.finalStateMatches).toBe(true);
+    update.mockRestore();
+  });
+
+  it("replays one CPU schedule on both backends at its simulation times, with no budget", async () => {
+    const { schedule } = await discover();
+    const update = vi.spyOn(ParticleBudget.prototype, "update");
+    const runs = [];
+    for (const backend of ["cpu", "gpu"] as const) {
+      const { state } = stubPage();
+      // A different cadence than the discovery: the boundary is in simulation time, not callbacks.
+      const run = runGpuBenchmark({ backend, schedule, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 3, crossValidate: false });
+      drive(state, 50, 3100);
+      runs.push(await run);
+    }
+    expect(update).not.toHaveBeenCalled();
+    update.mockRestore();
+    const boundary = schedule!.decisions[1].time;
+    for (const result of runs) {
+      expect(result.metadata.budget).toBe("CPU-schedule replay");
+      expect(result.metadata.scheduleSource).toBe(schedule!.runId);
+      expect(result.scheduleApplied).toEqual({ applied: 2, total: 2 });
+      const first = result.decisions[1].callback;
+      expect(startTime(result.trace, first)).toBeGreaterThanOrEqual(boundary);
+      expect(startTime(result.trace, first - 1)).toBeLessThan(boundary);
+      expect(result.validation.finalStateMatches).toBe(true);
+    }
+    // Same callbacks, same schedule: both backends applied identical decisions.
+    expect(runs[1].decisions).toEqual(runs[0].decisions);
+    expect(runs[0].decisions.map(({ limit }) => limit)).toEqual([10000, 8000]);
+  });
+
+  it("changes scenario frames at simulation times, so slow clamped callbacks do not shift them", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ scenario: "rotation", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 8, crossValidate: false });
+    // 4 s of 200 ms callbacks simulate only 2 s (clamped to 0.1 s), then 100 ms callbacks.
+    let now = 0;
+    for (; now < 4000; now += 200) state.callback?.(now);
+    for (; now <= 8100; now += 100) state.callback?.(now);
+    const { trace } = await run;
+    // The 1 → 4 stream expansion is due at 5 s.
+    const expansion = trace.frame.indexOf(1);
+    expect(trace.frame[expansion - 1]).toBe(0);
+    expect(startTime(trace, expansion)).toBeGreaterThanOrEqual(5);
+    expect(startTime(trace, expansion - 1)).toBeLessThan(5);
+    // By wall time it would have come at 5 s; it came at 7 s, after 5 simulated seconds.
+    let wall = 0;
+    for (let k = 0; k < expansion; k++) wall += trace.interval[k];
+    expect(wall).toBeCloseTo(7, 1);
+  });
+
+  it("reports decisions a shorter replay never reached", async () => {
+    const { schedule } = await discover();
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ schedule, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 1, crossValidate: false });
+    drive(state, 50, 1100);
+    const result = await run;
+    expect(result.scheduleApplied).toEqual({ applied: 1, total: 2 });
+    expect(result.decisions).toEqual([{ callback: 0, time: 0, limit: 10000, intensity: 1 }]);
+  });
+
+  it("saves the effective decisions of a fixed-limit run", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ limit: 8000, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05 });
+    drive(state, 20, 60);
+    const result = await run;
+    expect(result.metadata).toEqual(expect.objectContaining({ budget: "fixed limit", limit: 8000 }));
+    expect(result.decisions).toEqual([{ callback: 0, time: 0, limit: 8000, intensity: 1 }]);
+    expect(result.schedule).toBeUndefined();
+  });
+
+  it("fails a discovery whose schedule overflows", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ budget: "adaptive", scheduleCapacity: 1, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 3 });
+    drive(state, 60, 3100);
+    await expect(run).rejects.toThrow(/schedule overflow/);
+  });
+
+  it("refuses GPU adaptation and schedules that would silently change the workload", async () => {
+    const schedule = { runId: "r", scenario: "dense" as const, motion: 1, decisions: [{ time: 0, limit: 10000, intensity: 1 }] };
+    const cases: [Partial<Parameters<typeof runGpuBenchmark>[0]>, RegExp][] = [
+      [{ backend: "gpu", budget: "adaptive" }, /CPU only/],
+      [{ budget: "native" as "adaptive" }, /fixed or adaptive/],
+      [{ schedule, budget: "adaptive" }, /recalculates no budget/],
+      [{ schedule, limit: 8000 }, /limits from the schedule/],
+      [{ schedule, scenario: "rotation" }, /scenario and motion/],
+      [{ schedule, motion: 0 }, /scenario and motion/],
+      [{ budget: "adaptive", scheduleCapacity: 0 }, /Schedule capacity/],
+      [{ schedule: { ...schedule, decisions: [{ time: 1, limit: 10000, intensity: 1 }] } }, /nondecreasing times from 0/],
+      [{ schedule: { ...schedule, decisions: [] } }, /initial decision/],
+      // Saved schedules arrive as JSON: null or a wrong shape must not become a fixed-limit run.
+      [{ schedule: null as unknown as typeof schedule }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, decisions: "none" as unknown as [] } }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, runId: 7 as unknown as string } }, /recorded discovery schedule/],
+      [{ schedule: { ...schedule, scenario: "spiral" as "dense" } }, /Scenario must be one of/],
+      [{ scenario: "spiral" as "dense" }, /Scenario must be one of/],
+      [{ budget: "adaptive", limit: 8000 }, /full pool; omit limit/],
+    ];
+    for (const [options, message] of cases) {
+      stubPage();
+      await expect(runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture", ...options })).rejects.toThrow(message);
+    }
+    // A malformed schedule fails before any GPU resource exists or the page is used up.
+    const { calls, state } = stubPage();
+    const bad = { ...schedule, decisions: [{ time: 0, limit: 0, intensity: 1 }] };
+    await expect(runGpuBenchmark({ backend: "gpu", schedule: bad, refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/limits within the pool/);
+    expect(callsTo(calls, "createBuffer")).toEqual([]);
+    const run = runGpuBenchmark({ backend: "gpu", schedule, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) state.callback?.(now);
+    expect((await run).validation.finalStateMatches).toBe(true);
+  });
 });

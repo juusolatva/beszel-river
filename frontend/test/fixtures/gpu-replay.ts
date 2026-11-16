@@ -10,7 +10,8 @@ import { mulberry32 } from "../../src/util/math";
 export const CPU_REFERENCE = "a90be9077096e35749f3b3409193db31ca51635a";
 export const REPLAY_CAPACITY = 10000;
 export const REPLAY_SEED = 42;
-export type ReplayScenario = "dense" | "empty" | "draining" | "drained" | "rotation";
+export const REPLAY_SCENARIOS = ["dense", "empty", "draining", "drained", "rotation"] as const;
+export type ReplayScenario = (typeof REPLAY_SCENARIOS)[number];
 
 // Built once, outside callback timing. Only synthetic public channel values are used.
 export const replayFrames: Frame[] = [1, 4, 32, 32, 0].map((count, stage) => ({
@@ -24,12 +25,17 @@ export const replayFrames: Frame[] = [1, 4, 32, 32, 0].map((count, stage) => ({
   })),
 }));
 
-/** Frame indices are recorded, so validation never reschedules from its own clock. */
+/**
+ * Frame for a step starting at `seconds` of simulation time, so runs at different cadences see the
+ * same streams at the same simulated moment. Frame indices are recorded, so validation never
+ * reschedules from its own clock.
+ */
 export function replayFrameIndex(scenario: ReplayScenario, seconds: number): number {
   if (scenario === "empty") return 4;
   if (scenario === "dense") return 2;
   if (scenario === "draining" || scenario === "drained") return seconds < 30 ? 2 : 4;
-  return seconds < 5 ? 0 : seconds < 10 ? 1 : seconds < 40 ? 2 : seconds < 70 ? 3 : 4;
+  if (scenario === "rotation") return seconds < 5 ? 0 : seconds < 10 ? 1 : seconds < 40 ? 2 : seconds < 70 ? 3 : 4;
+  throw new Error(`Unknown replay scenario ${String(scenario)}`);
 }
 
 /** Full effective inputs, including warmup; arrays never grow inside a callback. */
@@ -88,6 +94,100 @@ export class ReplayTrace {
     this.intensity[i] = intensity;
     this.measured[i] = Number(measured);
   }
+}
+
+/** One budget decision: the limit and brightness for steps starting at or after `time` (simulation s). */
+export interface BudgetDecision { time: number; limit: number; intensity: number }
+
+/** A CPU-discovered schedule, tied to the workload it was discovered on. */
+export interface RecordedSchedule { runId: string; scenario: ReplayScenario; motion: number; decisions: BudgetDecision[] }
+
+/**
+ * Preallocated budget decisions in simulation time; entry 0 is the initial state at time 0. Records
+ * a CPU adaptive discovery without allocating inside callbacks, and holds a schedule to replay.
+ */
+export class BudgetSchedule {
+  length = 0;
+  valid = true;
+  readonly time: Float64Array;
+  readonly limit: Uint32Array;
+  readonly intensity: Float64Array;
+
+  constructor(readonly capacity: number) {
+    if (!Number.isInteger(capacity) || capacity <= 0) throw new Error("Schedule capacity must be a positive integer");
+    this.time = new Float64Array(capacity);
+    this.limit = new Uint32Array(capacity);
+    this.intensity = new Float64Array(capacity);
+  }
+
+  /** Checked, preallocated copy of saved decisions, made before timing. */
+  static from(decisions: readonly BudgetDecision[]): BudgetSchedule {
+    if (!decisions.length) throw new Error("Schedule needs an initial decision");
+    const schedule = new BudgetSchedule(decisions.length);
+    for (const { time, limit, intensity } of decisions) schedule.record(time, limit, intensity);
+    return schedule;
+  }
+
+  record(time: number, limit: number, intensity: number): void {
+    if (this.length === this.capacity) {
+      this.valid = false;
+      throw new Error("Budget schedule overflow: run invalid");
+    }
+    const previous = this.length ? this.time[this.length - 1] : 0;
+    if (!Number.isFinite(time) || (this.length === 0 ? time !== 0 : time < previous)
+      || !Number.isInteger(limit) || limit <= 0 || limit > REPLAY_CAPACITY || !(intensity > 0) || !Number.isFinite(intensity)) {
+      this.valid = false;
+      throw new Error("Schedule decisions need nondecreasing times from 0, limits within the pool and positive intensity");
+    }
+    const i = this.length++;
+    this.time[i] = time;
+    this.limit[i] = limit;
+    this.intensity[i] = intensity;
+  }
+
+  decisions(): BudgetDecision[] {
+    return Array.from({ length: this.length }, (_, i) => ({ time: this.time[i], limit: this.limit[i], intensity: this.intensity[i] }));
+  }
+}
+
+/**
+ * Applies a schedule at its simulation-time boundaries: a decision recorded at time t, after the
+ * discovery step ending there, applies to every step starting at or after t, whatever the cadence.
+ */
+export class ScheduleCursor {
+  limit: number;
+  intensity: number;
+  /** Decisions applied so far, including the initial one. */
+  applied = 1;
+
+  constructor(private readonly schedule: BudgetSchedule) {
+    if (!schedule.valid || !schedule.length) throw new Error("Cannot replay an invalid schedule");
+    this.limit = schedule.limit[0];
+    this.intensity = schedule.intensity[0];
+  }
+
+  /** Moves to the decision in force for a step starting at `time` (simulation s). */
+  advance(time: number): void {
+    const { schedule } = this;
+    while (this.applied < schedule.length && schedule.time[this.applied] <= time) {
+      this.limit = schedule.limit[this.applied];
+      this.intensity = schedule.intensity[this.applied++];
+    }
+  }
+}
+
+/** The decisions a run applied, from its trace: each change with its callback and step start time. */
+export function effectiveDecisions(trace: ReplayTrace) {
+  const decisions: (BudgetDecision & { callback: number })[] = [];
+  let time = 0;
+  for (let i = 0; i < trace.length; i++) {
+    const previous = decisions.at(-1);
+    if (!previous || previous.limit !== trace.limit[i] || previous.intensity !== trace.intensity[i]) {
+      decisions.push({ callback: i, time, limit: trace.limit[i], intensity: trace.intensity[i] });
+    }
+    time += trace.dt[i];
+  }
+  return decisions;
 }
 
 /** CPU reference adapter; rendering and validation use the same effective schedule. */

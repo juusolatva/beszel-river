@@ -1,9 +1,10 @@
 import { LOOK } from "../src/config";
 import { Renderer } from "../src/render/renderer";
+import { ParticleBudget } from "../src/sim/budget";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
-import { compareGpuStates, CpuReplay, CPU_REFERENCE, fiveSecondWindows, GpuReplay, readGpuState, REPLAY_CAPACITY,
-  REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, validateCpuTrace, validateGpuTrace,
-  type ReplayScenario } from "./fixtures/gpu-replay";
+import { BudgetSchedule, compareGpuStates, CpuReplay, CPU_REFERENCE, effectiveDecisions, fiveSecondWindows, GpuReplay, readGpuState,
+  REPLAY_CAPACITY, REPLAY_SCENARIOS, REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, ScheduleCursor, validateCpuTrace,
+  validateGpuTrace, type RecordedSchedule, type ReplayScenario } from "./fixtures/gpu-replay";
 
 interface BenchmarkOptions {
   backend?: "cpu" | "gpu";
@@ -17,7 +18,18 @@ interface BenchmarkOptions {
   conditions: string;
   /** Also replay the trace through the other backend, untimed (default true). */
   crossValidate?: boolean;
+  /**
+   * "adaptive" records a CPU adaptive discovery: the unmodified `ParticleBudget` sets the limit from
+   * the exact CPU live count, callback work and intervals. CPU only; not a paired performance result.
+   */
+  budget?: "fixed" | "adaptive";
+  /** Replay a discovery's schedule at its simulation times with no budget (CPU-schedule replay), on either backend. */
+  schedule?: RecordedSchedule;
+  /** Room for decisions an adaptive discovery records (default 1024). */
+  scheduleCapacity?: number;
 }
+
+const BUDGET_LABELS = { fixed: "fixed limit", adaptive: "CPU adaptive discovery (not a paired performance result)", schedule: "CPU-schedule replay" };
 
 const usedCanvases = new WeakSet<HTMLCanvasElement>();
 
@@ -47,13 +59,30 @@ function gpuValidation(gl: WebGL2RenderingContext, trace: ReplayTrace) {
  * a GPU failure fails the run rather than switching to the CPU, and a CPU restart is a new run.
  */
 export async function runGpuBenchmark(options: BenchmarkOptions) {
-  const { backend = "cpu", scenario = "dense", limit = 10000, warmupSeconds = scenario === "drained" ? 60 : 30,
-    measureSeconds = 60, traceCapacity = 120000, motion = 1, refreshHz, conditions, crossValidate = true } = options;
+  const { backend = "cpu", schedule, budget: budgetOption = "fixed", scheduleCapacity = 1024, refreshHz, conditions, crossValidate = true } = options;
+  const { scenario = schedule?.scenario ?? "dense", motion = schedule?.motion ?? 1, limit = 10000 } = options;
+  const { warmupSeconds = scenario === "drained" ? 60 : 30, measureSeconds = 60, traceCapacity = 120000 } = options;
   if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
+  if (budgetOption !== "fixed" && budgetOption !== "adaptive") throw new Error("Budget must be fixed or adaptive");
+  // Native GPU adaptation needs exact live counts the GPU never reports; replay a CPU schedule instead.
+  if (budgetOption === "adaptive" && backend !== "cpu") throw new Error("Adaptive discovery runs on the CPU only; replay its schedule on the GPU");
+  // A saved schedule arrives as JSON: null or a non-object must not quietly become a fixed-limit run.
+  if (options.schedule !== undefined && (typeof schedule !== "object" || schedule === null || !Array.isArray(schedule.decisions) || typeof schedule.runId !== "string")) {
+    throw new Error("A schedule must be a recorded discovery schedule");
+  }
+  if (!REPLAY_SCENARIOS.includes(scenario)) throw new Error(`Scenario must be one of ${REPLAY_SCENARIOS.join(", ")}`);
+  if (budgetOption === "adaptive" && options.limit !== undefined) throw new Error("Adaptive discovery starts from the full pool; omit limit");
+  if (schedule && budgetOption === "adaptive") throw new Error("A schedule replay recalculates no budget");
+  if (schedule && options.limit !== undefined) throw new Error("A schedule replay takes its limits from the schedule");
+  if (schedule && (scenario !== schedule.scenario || motion !== schedule.motion)) throw new Error("Replay a schedule on the scenario and motion it was discovered with");
+  if (!Number.isInteger(scheduleCapacity) || scheduleCapacity <= 0) throw new Error("Schedule capacity must be a positive integer");
+  const mode = schedule ? "schedule" : budgetOption;
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
   if (!Number.isInteger(traceCapacity) || traceCapacity <= 0) throw new Error("Trace capacity must be a positive integer");
   if (![10000, 8000, 1000].includes(limit) || !(motion >= 0 && motion <= 1)) throw new Error("Invalid replay limit or motion");
+  // Checked and preallocated first, so a malformed saved schedule fails before the page or any GPU resource is used.
+  const cursor = schedule ? new ScheduleCursor(BudgetSchedule.from(schedule.decisions)) : null;
   const canvas = document.querySelector<HTMLCanvasElement>("#river");
   if (canvas && usedCanvases.has(canvas)) throw new Error("Reload the benchmark page before each run to reset GL resources");
   const gl = canvas?.getContext("webgl2", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "high-performance" });
@@ -80,6 +109,15 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     }
   }
   const trace = new ReplayTrace(traceCapacity);
+  const budget = mode === "adaptive" ? new ParticleBudget(REPLAY_CAPACITY, false) : null;
+  const discovered = budget ? new BudgetSchedule(scheduleCapacity) : null;
+  if (budget) discovered!.record(0, budget.limit, budget.intensityScale);
+  // In force for the next step; a budget change made after a callback's render applies to the following one, as in main.ts.
+  let stepLimit = cursor ? cursor.limit : budget ? budget.limit : limit;
+  let stepIntensity = cursor ? cursor.intensity : budget ? budget.intensityScale : 1;
+  // Simulation time at the start of the next step, the sum of the trace's effective steps: it picks
+  // the scenario's frame and the schedule's decision, so slow, clamped callbacks shift neither.
+  let simulationTime = 0;
   const work = new Float64Array(traceCapacity);
   const simulation = new Float64Array(traceCapacity);
   const submission = new Float64Array(traceCapacity);
@@ -128,7 +166,12 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
         const isMeasured = seconds >= warmupSeconds;
-        trace.append(interval, replayFrameIndex(scenario, seconds), width, height, pixelRatio, motion, false, limit, 1, isMeasured);
+        if (cursor) {
+          cursor.advance(simulationTime);
+          stepLimit = cursor.limit;
+          stepIntensity = cursor.intensity;
+        }
+        trace.append(interval, replayFrameIndex(scenario, simulationTime), width, height, pixelRatio, motion, false, stepLimit, stepIntensity, isMeasured);
         const i = trace.length - 1, dt = trace.dt[i];
         // Both backends must be able to replay every trace; the GPU rejects tiny positive steps.
         if (!replayableStep(dt)) {
@@ -148,6 +191,13 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           else renderer.renderGpu(gpu!.drawer, dt, width / height, pixelRatio, gpu!.particles.globalHue, gpu!.intensity);
         }
         const end = performance.now();
+        simulationTime += dt;
+        // Only exact CPU counts reach the budget; it sees simulation and render submission, as in main.ts.
+        if (budget && dt > 0 && budget.update(interval, cpu!.particles.count, (end - simBegin) / 1000)) {
+          stepLimit = budget.limit;
+          stepIntensity = budget.intensityScale;
+          discovered!.record(simulationTime, stepLimit, stepIntensity);
+        }
         if (isMeasured) {
           simulation[measured] = simEnd - simBegin;
           submission[measured] = end - simEnd;
@@ -207,7 +257,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   });
   return {
     runId,
-    metadata: { cpuReference: CPU_REFERENCE, effectiveStep: "Float32(clamp(interval, 0, LOOK.maxDt))", backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY, limit,
+    metadata: { cpuReference: CPU_REFERENCE, effectiveStep: "Float32(clamp(interval, 0, LOOK.maxDt))", backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY,
+      budget: BUDGET_LABELS[mode], limit: mode === "fixed" ? limit : "scheduled", scheduleSource: schedule?.runId,
       motion, refreshHz, conditions, userAgent: navigator.userAgent, renderer: rendererName, targetFormat,
       width, height, pixelRatio: trace.pixelRatio[trace.length - 1], warmupSeconds, measureSeconds },
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
@@ -220,6 +271,12 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
       cpu: cpuCheck === null ? { unavailable: "crossValidate: false" } : occupancy(cpuCheck),
       gpu: gpuCheck === null ? { unavailable: "crossValidate: false" } : "unavailable" in gpuCheck ? gpuCheck : occupancy(gpuCheck) },
     trace,
+    /** Limit and intensity changes this run applied, per callback; validation replayed exactly these. */
+    decisions: effectiveDecisions(trace),
+    /** An adaptive discovery's schedule, to pass back as `schedule` for CPU-schedule replays on both backends. */
+    schedule: discovered ? { runId, scenario, motion, decisions: discovered.decisions() } satisfies RecordedSchedule : undefined,
+    /** Of a replayed schedule: decisions this run reached; later ones lay beyond its simulated time. */
+    scheduleApplied: cursor ? { applied: cursor.applied, total: schedule!.decisions.length } : undefined,
     acceptance: "Correctness harness: timing from one backend, exact occupancy from untimed replays of the same trace through both. Paired target-device runs and the parity decision are Task 6.",
   };
 }
