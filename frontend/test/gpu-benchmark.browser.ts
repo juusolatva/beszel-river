@@ -105,6 +105,21 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (![10000, 8000, 1000].includes(limit) || !(motion >= 0 && motion <= 1)) throw new Error("Invalid replay limit or motion");
   // Checked and preallocated first, so a malformed saved schedule fails before the page or any GPU resource is used.
   const cursor = schedule ? new ScheduleCursor(BudgetSchedule.from(schedule.decisions)) : null;
+  // Everything that needs no GL is allocated before any GL resource, so a failure here leaks none.
+  const trace = new ReplayTrace(traceCapacity);
+  const budget = mode === "adaptive" ? new ParticleBudget(REPLAY_CAPACITY, false) : null;
+  const discovered = budget ? new BudgetSchedule(scheduleCapacity) : null;
+  if (budget) discovered!.record(0, budget.limit, budget.intensityScale);
+  // In force for the next step; a budget change made after a callback's render applies to the following one, as in main.ts.
+  let stepLimit = cursor ? cursor.limit : budget ? budget.limit : limit;
+  let stepIntensity = cursor ? cursor.intensity : budget ? budget.intensityScale : 1;
+  // Simulation time at the start of the next step, the sum of the trace's effective steps: it picks
+  // the scenario's frame and the schedule's decision, so slow, clamped callbacks shift neither.
+  let simulationTime = 0;
+  const work = new Float64Array(traceCapacity);
+  const simulation = new Float64Array(traceCapacity);
+  const submission = new Float64Array(traceCapacity);
+  const intervals = new Float64Array(traceCapacity);
   const canvas = document.querySelector<HTMLCanvasElement>("#river");
   if (canvas && usedCanvases.has(canvas)) throw new Error("Reload the benchmark page before each run to reset GL resources");
   const gl = canvas?.getContext("webgl2", { alpha: false, antialias: false, depth: false, stencil: false, powerPreference: "high-performance" });
@@ -113,6 +128,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
 
   usedCanvases.add(canvas);
   const runId = crypto.randomUUID();
+  const debug = gl.getExtension("WEBGL_debug_renderer_info");
+  const rendererName = gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
 
   // Instrument submission rather than GPU execution; method wrappers are cached on first use.
   const { gl: countedGl, counters } = createSubmissionCounter(gl);
@@ -139,27 +156,11 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     throw new Error(`GPU timer queries failed: ${String(error)}: run invalid`);
   }
   const gpuTimer = typeof timer === "string" ? null : timer;
-  const trace = new ReplayTrace(traceCapacity);
-  const budget = mode === "adaptive" ? new ParticleBudget(REPLAY_CAPACITY, false) : null;
-  const discovered = budget ? new BudgetSchedule(scheduleCapacity) : null;
-  if (budget) discovered!.record(0, budget.limit, budget.intensityScale);
-  // In force for the next step; a budget change made after a callback's render applies to the following one, as in main.ts.
-  let stepLimit = cursor ? cursor.limit : budget ? budget.limit : limit;
-  let stepIntensity = cursor ? cursor.intensity : budget ? budget.intensityScale : 1;
-  // Simulation time at the start of the next step, the sum of the trace's effective steps: it picks
-  // the scenario's frame and the schedule's decision, so slow, clamped callbacks shift neither.
-  let simulationTime = 0;
-  const work = new Float64Array(traceCapacity);
-  const simulation = new Float64Array(traceCapacity);
-  const submission = new Float64Array(traceCapacity);
-  const intervals = new Float64Array(traceCapacity);
   let measured = 0, measuredSteps = 0, missedPeriods = 0, totalUploads = 0, totalTextureUploads = 0, totalDraws = 0, totalDrawCapacity = 0;
   let last: number | undefined, start: number | undefined;
   let width = 0, height = 0, raf = 0;
   let targetFormat = "unknown";
   let stopped = false;
-  const debug = gl.getExtension("WEBGL_debug_renderer_info");
-  const rendererName = gl.getParameter(debug ? debug.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
 
   // A failed run releases the GPU replay's resources; the page still needs a reload before the next run.
   const timed = new Promise<void>((resolve, reject) => {
@@ -221,6 +222,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
         } else gpu!.step(trace, i);
         const simEnd = performance.now();
         if (timing) gpuTimer!.beginRender();
+        // Submission starts after the query switch, so neither span (nor the budget's input) includes query calls.
+        const renderBegin = performance.now();
         if (dt > 0) {
           if (cpu) renderer.render(cpu.particles.instances, count, dt, width / height);
           else renderer.renderGpu(gpu!.drawer, dt, width / height, pixelRatio, gpu!.particles.globalHue, gpu!.intensity);
@@ -230,14 +233,14 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
         if (isMeasured && dt > 0) measuredSteps++;
         simulationTime += dt;
         // Only exact CPU counts reach the budget; it sees simulation and render submission, as in main.ts.
-        if (budget && dt > 0 && budget.update(interval, cpu!.particles.count, (end - simBegin) / 1000)) {
+        if (budget && dt > 0 && budget.update(interval, cpu!.particles.count, (simEnd - simBegin + end - renderBegin) / 1000)) {
           stepLimit = budget.limit;
           stepIntensity = budget.intensityScale;
           discovered!.record(simulationTime, stepLimit, stepIntensity);
         }
         if (isMeasured) {
           simulation[measured] = simEnd - simBegin;
-          submission[measured] = end - simEnd;
+          submission[measured] = end - renderBegin;
           intervals[measured++] = interval * 1000;
           missedPeriods += Math.max(0, Math.round(interval * refreshHz) - 1);
           totalUploads += counters.uploadedBytes;

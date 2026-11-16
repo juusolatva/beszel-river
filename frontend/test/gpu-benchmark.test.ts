@@ -476,6 +476,42 @@ describe("GPU timer queries", () => {
     expect(result.timing.gpuTime).toBe("unavailable: EXT_disjoint_timer_query_webgl2 not supported");
   });
 
+  it("keeps query calls out of the simulation and submission spans and the budget's input", async () => {
+    // Each query call takes 100 ms of fake time; everything else takes none.
+    let clock = 0;
+    const slow = () => { clock += 100; };
+    const page = stubPage({ overrides: {
+      getExtension: (name) => (name === "EXT_disjoint_timer_query_webgl2" ? EXT : null),
+      getQueryParameter: (_query, pname) => (pname === "QUERY_RESULT_AVAILABLE" ? true : 2e6),
+      getParameter: (name) => (name === "GPU_DISJOINT_EXT" ? false : "test renderer"),
+      beginQuery: slow, endQuery: slow,
+    } });
+    vi.stubGlobal("performance", { now: () => clock });
+    const update = vi.spyOn(ParticleBudget.prototype, "update");
+    const run = runGpuBenchmark({ budget: "adaptive", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) page.state.callback?.(now);
+    const result = await run;
+    expect((result.timing.gpuTime as { samples: number }).samples).toBe(2);
+    expect(result.timing.simulationMs.p99).toBe(0);
+    expect(result.timing.submissionMs.p99).toBe(0);
+    // Callback work still includes the four query calls of each timed step.
+    expect(result.timing.callbackMs.p99).toBe(400);
+    expect(update.mock.calls.map(([, , work]) => work)).toEqual([0, 0]);
+    update.mockRestore();
+  });
+
+  it("allocates every non-GL array before creating queries or GPU resources", async () => {
+    const { calls, state } = timedPage({ ready: true });
+    // An oversized schedule cannot be allocated; the failure must leave no query or buffer behind and the page usable.
+    await expect(runGpuBenchmark({ budget: "adaptive", scheduleCapacity: 2 ** 40, refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(RangeError);
+    await expect(runGpuBenchmark({ backend: "gpu", traceCapacity: 2 ** 40, refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(RangeError);
+    expect(callsTo(calls, "createQuery")).toEqual([]);
+    expect(callsTo(calls, "createBuffer")).toEqual([]);
+    const run = runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05, crossValidate: false });
+    for (const now of [0, 20, 40, 60]) state.callback?.(now);
+    expect((await run).validation.finalStateMatches).toBe(true);
+  });
+
   it("fails the run, releasing the GPU replay, when the queries cannot be created", async () => {
     const { calls } = stubPage({ overrides: {
       getExtension: (name) => (name === "EXT_disjoint_timer_query_webgl2" ? EXT : null), createQuery: () => null,
