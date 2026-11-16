@@ -355,8 +355,10 @@ function main(): void {
   const tick = () => status(`Run ${state.next + 1}/${state.plan.length} (${spec.viewport}, ${spec.workload}, ${spec.backend}, repetition ${spec.repetition}) starts in ${remaining} s.${screenNote}`, screenNote !== "");
   // A refusal during the countdown shows at once; during a run the panel is hidden, but the next
   // page load asks again and its countdown reports a refusal that persists.
+  // Requests can overlap (the page became visible while one was pending), so a refusal warns only
+  // while no lock is held, whichever request settles last.
   const lock = (): void => void keepScreenOn(state, lock).then((reason) => {
-    screenNote = reason ? ` No screen wake lock (${reason}): keep the screen on yourself.` : "";
+    screenNote = reason && !screenLock ? ` No screen wake lock (${reason}): keep the screen on yourself.` : "";
     if (state.status === "running" && remaining > 0) tick();
   });
   lock();
