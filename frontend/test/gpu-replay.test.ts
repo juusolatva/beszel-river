@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { callsTo, createFakeGl } from "./fake-gl";
-import { compareGpuStates, CpuReplay, fiveSecondWindows, GpuReplay, MIN_GPU_STEP, REPLAY_CAPACITY, ReplayTrace, replayableStep,
-  replayFrames, replayFrameIndex, replayIds, summarizeOccupancy, validateCpuTrace, validateGpuTrace } from "./fixtures/gpu-replay";
+import { BudgetSchedule, compareGpuStates, CpuReplay, effectiveDecisions, fiveSecondWindows, GpuReplay, MIN_GPU_STEP, REPLAY_CAPACITY, ReplayTrace, replayableStep,
+  replayFrames, replayFrameIndex, replayIds, ScheduleCursor, summarizeOccupancy, validateCpuTrace, validateGpuTrace } from "./fixtures/gpu-replay";
 
 /** A short trace on the four-stream frame: one zero callback, then steady 30 Hz steps. */
 function shortTrace(length: number, motion = 1): ReplayTrace {
@@ -262,5 +262,59 @@ describe("GPU comparison replay foundation", () => {
     expect(windows[1].total).toBeCloseTo((100 * (72 * dt - 5) + 200 * (10 - 72 * dt)) / 5, 4);
     expect(windows[1].perSlot[0]).toBeCloseTo(windows[1].total, 9);
     expect(windows[11].total).toBeCloseTo(200, 4);
+  });
+});
+
+describe("budget schedules", () => {
+  it("checks and preallocates decisions, starting from the initial state at time 0", () => {
+    const decisions = [{ time: 0, limit: 10000, intensity: 1 }, { time: 2.5, limit: 8000, intensity: 1.1 }, { time: 2.5, limit: 6400, intensity: 1.25 }];
+    const schedule = BudgetSchedule.from(decisions);
+    expect(schedule.capacity).toBe(3);
+    expect(schedule.decisions()).toEqual(decisions);
+    expect(() => BudgetSchedule.from([])).toThrow(/initial decision/);
+    expect(() => new BudgetSchedule(0)).toThrow(/positive integer/);
+    for (const bad of [
+      [{ time: 0.1, limit: 10000, intensity: 1 }],
+      [{ time: 0, limit: 10000, intensity: 1 }, { time: -1, limit: 8000, intensity: 1 }],
+      [{ time: 0, limit: 10000, intensity: 1 }, { time: Infinity, limit: 8000, intensity: 1 }],
+      [{ time: 0, limit: 0, intensity: 1 }],
+      [{ time: 0, limit: REPLAY_CAPACITY + 1, intensity: 1 }],
+      [{ time: 0, limit: 2500.5, intensity: 1 }],
+      [{ time: 0, limit: 10000, intensity: 0 }],
+      [{ time: 0, limit: 10000, intensity: NaN }],
+    ]) expect(() => BudgetSchedule.from(bad)).toThrow(/nondecreasing times/);
+    const full = new BudgetSchedule(1);
+    full.record(0, 10000, 1);
+    expect(() => full.record(1, 8000, 1)).toThrow(/overflow/);
+    expect(full.valid).toBe(false);
+    expect(() => new ScheduleCursor(full)).toThrow(/invalid schedule/);
+  });
+
+  it("applies a decision to steps starting at or after its simulation time", () => {
+    const cursor = new ScheduleCursor(BudgetSchedule.from([
+      { time: 0, limit: 10000, intensity: 1 }, { time: 2, limit: 8000, intensity: 1.1 }, { time: 2, limit: 6400, intensity: 1.25 }, { time: 5, limit: 7040, intensity: 1.2 },
+    ]));
+    expect([cursor.limit, cursor.intensity, cursor.applied]).toEqual([10000, 1, 1]);
+    cursor.advance(1.999);
+    expect(cursor.limit).toBe(10000);
+    // Several decisions at one boundary: the last is in force.
+    cursor.advance(2);
+    expect([cursor.limit, cursor.intensity, cursor.applied]).toEqual([6400, 1.25, 3]);
+    cursor.advance(10);
+    expect([cursor.limit, cursor.applied]).toEqual([7040, 4]);
+  });
+
+  it("lists the decisions a trace applied with their callbacks and step start times", () => {
+    const trace = new ReplayTrace(5);
+    for (const [interval, limit, intensity] of [[0, 10000, 1], [1 / 30, 10000, 1], [1 / 30, 8000, 1.1], [1 / 30, 8000, 1.1], [1 / 30, 8000, 1.2]]) {
+      trace.append(interval, 2, 960, 640, 1, 1, false, limit, intensity, true);
+    }
+    const step = Math.fround(1 / 30);
+    expect(effectiveDecisions(trace)).toEqual([
+      { callback: 0, time: 0, limit: 10000, intensity: 1 },
+      { callback: 2, time: step, limit: 8000, intensity: 1.1 },
+      { callback: 4, time: 3 * step, limit: 8000, intensity: 1.2 },
+    ]);
+    expect(effectiveDecisions(new ReplayTrace(0))).toEqual([]);
   });
 });
