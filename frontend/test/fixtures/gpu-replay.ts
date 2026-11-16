@@ -433,7 +433,8 @@ export function parityBound(cpuMean: number): number {
  * Occupancy parity between a trace's untimed CPU and GPU replays, decided on 2026-11-16: in every
  * aligned five-second window of a steady scenario (`dense` at any limit, `empty`), the total
  * simulation-time mean live count must differ by no more than `max(5 particles, 5% of the CPU
- * mean)`. Per-stream differences are reported, not gated. Draining and rotation phases are not
+ * mean)`. Per-stream differences are reported, not gated: how many streams exceed the same bound,
+ * and the stream furthest outside it relative to its bound. Draining and rotation phases are not
  * gated (their curves are reported), and `drained` requires zero live particles in both replays
  * throughout the measurement. A failed gate makes the performance comparison inconclusive;
  * `passed: null` means the scenario is not gated or no complete window was measured.
@@ -451,14 +452,18 @@ export function occupancyParity(trace: ReplayTrace, scenario: ReplayScenario,
   const windows = cpuWindows.map((window, k) => {
     const other = gpuWindows[k];
     const bound = parityBound(window.total);
-    let worstSlot = -1, worstDifference = 0;
+    // Streams are ranked by difference relative to their own bound, so a small stream outside its
+    // 5-particle floor is not hidden by a larger absolute difference inside a wide bound.
+    let worstSlot = -1, worstRatio = 0, streamsOutsideBound = 0;
     for (let slot = 0; slot < MAX_STREAMS; slot++) {
-      const difference = Math.abs(window.perSlot[slot] - other.perSlot[slot]);
-      if (difference > worstDifference) { worstDifference = difference; worstSlot = slot; }
+      const ratio = Math.abs(window.perSlot[slot] - other.perSlot[slot]) / parityBound(window.perSlot[slot]);
+      if (ratio > 1) streamsOutsideBound++;
+      if (ratio > worstRatio) { worstRatio = ratio; worstSlot = slot; }
     }
     return { start: window.start, frames: window.frames, cpu: window.total, gpu: other.total, bound,
-      pass: Math.abs(window.total - other.total) <= bound,
-      worstStream: worstSlot < 0 ? null : { slot: worstSlot, cpu: window.perSlot[worstSlot], gpu: other.perSlot[worstSlot], withinBound: worstDifference <= parityBound(window.perSlot[worstSlot]) } };
+      pass: Math.abs(window.total - other.total) <= bound, streamsOutsideBound,
+      worstStream: worstSlot < 0 ? null : { slot: worstSlot, cpu: window.perSlot[worstSlot], gpu: other.perSlot[worstSlot],
+        bound: parityBound(window.perSlot[worstSlot]), withinBound: worstRatio <= 1 } };
   });
   const gated = scenario === "dense" || scenario === "empty";
   return { rule: gated ? rule : `${rule}; ${scenario} phases are reported, not gated`, gated,

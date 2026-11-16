@@ -358,7 +358,15 @@ describe("occupancy parity gate", () => {
     const trace = steadyTrace(5);
     const result = occupancyParity(trace, "dense", replay(trace, () => 1000, () => [600, 400]), replay(trace, () => 1000, () => [400, 600]));
     expect(result.passed).toBe(true);
-    expect(result.windows[0].worstStream).toEqual({ slot: 0, cpu: 600, gpu: 400, withinBound: false });
+    // Both are 200 off; slot 1 (CPU 400, bound 20) is further outside its bound than slot 0 (bound 30).
+    expect(result.windows[0].worstStream).toEqual({ slot: 1, cpu: 400, gpu: 600, bound: 20, withinBound: false });
+    expect(result.windows[0].streamsOutsideBound).toBe(2);
+    // Ranked against each stream's own bound: 6 off a 6-particle stream (bound 5) is worse than
+    // 49 off a 1,000-particle stream (bound 50), although the total stays within its bound.
+    const mixed = occupancyParity(trace, "dense", replay(trace, () => 1006, () => [1000, 6]), replay(trace, () => 1049, () => [1049, 0]));
+    expect(mixed.passed).toBe(true);
+    expect(mixed.windows[0].worstStream).toEqual({ slot: 1, cpu: 6, gpu: 0, bound: 5, withinBound: false });
+    expect(mixed.windows[0].streamsOutsideBound).toBe(1);
     expect(occupancyParity(trace, "dense", replay(trace, () => 0, () => []), replay(trace, () => 0, () => [])).windows[0].worstStream).toBeNull();
   });
 
