@@ -429,6 +429,12 @@ export function parityBound(cpuMean: number): number {
   return Math.max(5, 0.05 * cpuMean);
 }
 
+/** One aligned window of the parity gate. */
+export interface ParityWindow {
+  start: number; frames: number[]; cpu: number; gpu: number; bound: number; pass: boolean; streamsOutsideBound: number;
+  worstStream: { slot: number; cpu: number; gpu: number; bound: number; withinBound: boolean } | null;
+}
+
 /**
  * Occupancy parity between a trace's untimed CPU and GPU replays, decided on 2026-11-16: in every
  * aligned five-second window of a steady scenario (`dense` at any limit, `empty`), the total
@@ -445,11 +451,11 @@ export function occupancyParity(trace: ReplayTrace, scenario: ReplayScenario,
   if (scenario === "drained") {
     let nonzero = 0;
     for (let i = 0; i < trace.length; i++) if (trace.measured[i] && (cpu.counts[i] || gpu.counts[i])) nonzero++;
-    return { rule: "zero live particles in both replays throughout the measurement", gated: true, passed: nonzero === 0, nonzeroCallbacks: nonzero, windows: [] };
+    return { rule: "zero live particles in both replays throughout the measurement", gated: true, passed: nonzero === 0, nonzeroCallbacks: nonzero, windows: [] as ParityWindow[] };
   }
   const cpuWindows = fiveSecondWindows(trace, cpu.counts, cpu.perSlot);
   const gpuWindows = fiveSecondWindows(trace, gpu.counts, gpu.perSlot);
-  const windows = cpuWindows.map((window, k) => {
+  const windows = cpuWindows.map((window, k): ParityWindow => {
     const other = gpuWindows[k];
     const bound = parityBound(window.total);
     // Streams are ranked by difference relative to their own bound, so a small stream outside its
