@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>GPU comparison sequence</title>
+<style>
+  body { margin: 0; background: #000; color: #ccc; font: 14px/1.5 system-ui, sans-serif; }
+  canvas { display: none; }
+  body.running canvas { display: block; }
+  body.running.small canvas { width: 960px; height: 640px; }
+  body.running.full canvas { width: 100vw; height: 100vh; }
+  body.running #panel { display: none; }
+  #panel { padding: 16px; max-width: 60em; }
+  fieldset { border: 1px solid #444; margin: 0 0 12px; }
+  label { display: inline-block; margin-right: 1em; }
+  input[type="text"], input[type="number"] { background: #111; color: #ddd; border: 1px solid #555; padding: 2px 4px; }
+  input[type="text"] { width: 40em; max-width: 100%; }
+  button { margin: 4px 8px 4px 0; padding: 4px 12px; }
+  textarea { width: 100%; height: 14em; background: #111; color: #ddd; font: 12px ui-monospace, monospace; }
+  .note { color: #999; }
+  .warn { color: #e8b04a; }
+</style>
+<canvas id="river" aria-label="Synthetic river benchmark"></canvas>
+<main id="panel">
+  <h1>GPU comparison sequence</h1>
+  <p class="note">Local experiment harness: runs the CPU/GPU paired comparison (GPU plan, Task 6) one run per page load and keeps summaries in this browser's local storage. See README.</p>
+  <div id="status"></div>
+  <form id="setup" hidden>
+    <fieldset>
+      <legend>Conditions (recorded with every run)</legend>
+      <p><label>Device, power mode, browser, thermal and load notes<br><input type="text" name="conditions" required placeholder="X280, battery, balanced power, Chrome 157, idle desktop, cool start"></label></p>
+      <p><label>Display refresh rate (Hz) <input type="number" name="refreshHz" min="1" max="144" step="any" required></label> <span id="detected" class="note"></span></p>
+      <p><label>Commit (optional) <input type="text" name="commit" placeholder="git rev-parse --short HEAD" style="width: 12em"></label></p>
+    </fieldset>
+    <fieldset>
+      <legend>Runs</legend>
+      <p id="viewports"><label><input type="checkbox" name="viewport" value="960x640" checked> 960×640</label><label><input type="checkbox" name="viewport" value="full" checked> Full screen</label></p>
+      <p id="workloads"></p>
+      <p><label><input type="checkbox" name="scheduleReplays" checked> CPU adaptive discovery and CPU-schedule replays</label></p>
+      <p><label>Repetitions <input type="number" name="repetitions" min="1" max="9" value="3"></label><label>Warmup (s) <input type="number" name="warmupSeconds" min="0" value="30"></label><label>Measured (s) <input type="number" name="measureSeconds" min="1" value="60"></label></p>
+      <p id="estimate" class="note"></p>
+    </fieldset>
+    <button type="submit">Start</button>
+  </form>
+  <div id="actions"></div>
+  <div id="output" hidden>
+    <h2>Results</h2>
+    <p><button type="button" id="download-json">Download JSON</button><button type="button" id="download-ledger">Download ledger</button></p>
+    <h3>Ledger rows</h3>
+    <textarea id="ledger" readonly></textarea>
+    <h3>Summaries (JSON)</h3>
+    <textarea id="json" readonly></textarea>
+  </div>
+</main>
+<script type="module" src="./gpu-sequence.browser.ts"></script>
+</html>
