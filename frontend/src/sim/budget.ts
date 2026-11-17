@@ -54,19 +54,31 @@ export class ParticleBudget {
       this.candidateSamples = 0;
       return false;
     }
-    // Require a repeatable faster cadence; one short callback gap must not poison the budget.
-    if (interval < this.period) {
-      if (this.candidateSamples > 0 && Math.abs(interval - this.candidatePeriod) <= this.candidatePeriod * 0.1) this.candidateSamples++;
-      else {
-        this.candidatePeriod = interval;
-        this.candidateSamples = 1;
-      }
-      if (this.candidateSamples >= 3) {
-        this.period = Math.min(this.period, this.candidatePeriod);
-        this.candidateSamples = 0;
-      }
-    } else this.candidateSamples = 0;
+    this.trackCadence(interval);
+    this.trackLoad(interval, live, workSeconds);
+    return this.adjustLimit();
+  }
 
+  /** Lowers the display period once three similar faster intervals confirm it. */
+  private trackCadence(interval: number): void {
+    // Require a repeatable faster cadence; one short callback gap must not poison the budget.
+    if (interval >= this.period) {
+      this.candidateSamples = 0;
+      return;
+    }
+    if (this.candidateSamples > 0 && Math.abs(interval - this.candidatePeriod) <= this.candidatePeriod * 0.1) this.candidateSamples++;
+    else {
+      this.candidatePeriod = interval;
+      this.candidateSamples = 1;
+    }
+    if (this.candidateSamples >= 3) {
+      this.period = Math.min(this.period, this.candidatePeriod);
+      this.candidateSamples = 0;
+    }
+  }
+
+  /** Accumulates time spent overloaded or keeping up with headroom. */
+  private trackLoad(interval: number, live: number, workSeconds: number): void {
     if (workSeconds > WORK_SLOW * this.period || interval > Math.max(SLOW * this.period, SLOW_FLOOR)) {
       if (live <= this.limit) this.slowTime += interval;
       this.fastTime = 0;
@@ -74,7 +86,10 @@ export class ParticleBudget {
       this.slowTime = Math.max(0, this.slowTime - interval);
       this.fastTime = workSeconds < WORK_FAST * this.period && interval < Math.max(FAST * this.period, FAST_FLOOR) ? this.fastTime + interval : 0;
     }
+  }
 
+  /** Drops or raises the limit once a load window is long enough; reports a change. */
+  private adjustLimit(): boolean {
     const before = this.limit;
     if (this.slowTime > 2) {
       this.limit = Math.max(Math.round(this.limit * 0.8), Math.round(this.capacity / 4));
