@@ -110,6 +110,10 @@ export class ParticleSystem {
     const slots = streams.slots;
     const k = 1 - Math.exp(-dt / LOOK.inertia);
     const sizeScale = LOOK.sizePx * devicePixelRatio;
+    // Flow grid, read once per step: the same clamped bilinear interpolation as `FlowField.sample`,
+    // inlined with locals instead of a call that writes two properties per particle.
+    const flow = field.vectors, cols = field.gridCols, cell = field.gridCell;
+    const maxFx = cols - 1.001, maxFy = field.gridRows - 1.001;
     this.globalHue = fract(this.globalHue + LOOK.hueRotate * dt);
     let n = 0;
 
@@ -126,12 +130,25 @@ export class ParticleSystem {
 
       // Upward speed from the stream, sideways from curl noise plus a pull to the centre line (or lane).
       // The heading stays within ±maxSlope of vertical: data changes speed and wiggle, not direction.
-      field.sample(x[i], y[i]);
+      const fx = Math.min(Math.max(x[i] / cell, 0), maxFx);
+      const fy = Math.min(Math.max(y[i] / cell, 0), maxFy);
+      const c = Math.floor(fx);
+      const r = Math.floor(fy);
+      const tx = fx - c;
+      const ty = fy - r;
+      const i00 = (r * cols + c) * 2;
+      const i10 = i00 + cols * 2;
+      const w00 = (1 - tx) * (1 - ty);
+      const w01 = tx * (1 - ty);
+      const w10 = (1 - tx) * ty;
+      const w11 = tx * ty;
+      const flowX = flow[i00] * w00 + flow[i00 + 2] * w01 + flow[i10] * w10 + flow[i10 + 2] * w11;
+      const flowY = flow[i00 + 1] * w00 + flow[i00 + 3] * w01 + flow[i10 + 1] * w10 + flow[i10 + 3] * w11;
       const up = s.speed * this.speedJitter[i];
       const limit = LOOK.maxSlope * up;
-      const side = clamp(field.sx * s.turbulenceAmp * up + (s.centerAt(y[i]) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
+      const side = clamp(flowX * s.turbulenceAmp * up + (s.centerAt(y[i]) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
       vx[i] += (side - vx[i]) * k;
-      vy[i] += (up * (1 + 0.3 * field.sy * s.turbulenceAmp) - vy[i]) * k;
+      vy[i] += (up * (1 + 0.3 * flowY * s.turbulenceAmp) - vy[i]) * k;
       x[i] += vx[i] * dt;
       y[i] += vy[i] * dt;
 

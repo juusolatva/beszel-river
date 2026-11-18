@@ -69,10 +69,11 @@ For the paired CPU benchmark, open `http://localhost:5173/test/benchmark.html` w
 
 ```js
 const { runCpuBenchmark } = await import("/test/cpu-benchmark.browser.ts");
-await runCpuBenchmark();
+await runCpuBenchmark();        // braid centres: analytic vs cached
+await runCpuBenchmark("flow");  // flow sampling: a FlowField.sample call per particle vs inlined
 ```
 
-It compares analytic braid centres with the cache using fixed synthetic channel snapshots, seed, particle limit and simulated steps. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
+Each comparison runs both variants three times in ABBAAB order with fixed synthetic channel snapshots, seed, particle limit and simulated steps; `runs[].variant` names each run. The flow reference is the particle step as it was before inlining, kept in the benchmark file; both give identical particles. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
 
 The motion-only GPU prototype has a separate real-shader correctness check. With Vite running, open `http://localhost:5173/test/gpu-benchmark.html` and run:
 
