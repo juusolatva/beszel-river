@@ -75,15 +75,21 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
   return n;
 }
 
-type Variant = "analytic" | "cached" | "sampled" | "inlined";
+export type Variant = "analytic" | "cached" | "sampled" | "inlined";
 type Run = { variant: Variant; meanMs: number; p50Ms: number; p95Ms: number; live: number };
 
 /**
  * Paired CPU-only comparison; run in test/benchmark.html, separately from unit tests or live profiling.
  * `centres` (Task 3) compares analytic braid centres with the cache; `flow` (Task 4) compares a
  * `FlowField.sample` call per particle with the inlined sampling, both with cached centres.
+ *
+ * `order` replaces the default ABBAAB run order. Each variant swaps methods on fresh instances, and
+ * once a page has run both, the JIT keeps the call sites polymorphic: later runs of the first variant
+ * slow down (Firefox: analytic 0.70 → 0.95 ms on the 9600X desktop). Production has one implementation,
+ * so compare variants run alone, each in a fresh browser (`cpu-benchmark-run.mjs`), and never run a
+ * second comparison in the same page.
  */
-export async function runCpuBenchmark(compare: "centres" | "flow" = "centres"): Promise<{
+export async function runCpuBenchmark(compare: "centres" | "flow" = "centres", order?: readonly Variant[]): Promise<{
   userAgent: string; compare: "centres" | "flow"; seed: number; capacity: number; aspect: number; pixelRatio: number;
   warmupFrames: number; measuredFrames: number; runs: Run[];
 }> {
@@ -91,7 +97,11 @@ export async function runCpuBenchmark(compare: "centres" | "flow" = "centres"): 
   const warmupFrames = 600, measuredFrames = 1200, capacity = 20000, aspect = 1.5, pixelRatio = 1.5;
   const times = new Float64Array(measuredFrames);
   const [a, b]: Variant[] = compare === "centres" ? ["analytic", "cached"] : ["sampled", "inlined"];
-  for (const variant of [a, b, b, a, a, b]) {
+  const plan = order ?? [a, b, b, a, a, b];
+  if (plan.length === 0 || plan.some((variant) => variant !== a && variant !== b)) {
+    throw new Error(`order must list only ${a} and ${b}`);
+  }
+  for (const variant of plan) {
     const streams = new StreamSet(1);
     for (const slot of streams.slots) {
       slot.centerAt = variant === "analytic" ? analyticCenter : StreamSlot.prototype.centerAt;

@@ -65,15 +65,19 @@ runRendererBrowserChecks();
 
 This requires WebGL2 and `EXT_color_buffer_float`. It checks faint/full-intensity accumulation at 30/60/120/240 Hz, the forced 8-bit fallback, zero dt and fading to black. It runs shader readbacks synchronously; stop other CPU-heavy checks while it runs. Software WebGL checks correctness, not device performance.
 
-For the paired CPU benchmark, open `http://localhost:5173/test/benchmark.html` with Vite running, then run this in that page's console:
+For the paired CPU benchmark, run each variant alone in a fresh headless browser with `frontend/test/cpu-benchmark-run.mjs`. Install Playwright once in a directory outside the repository (it is not a dependency of the project), then, with `npm run dev:frontend` running:
 
-```js
-const { runCpuBenchmark } = await import("/test/cpu-benchmark.browser.ts");
-await runCpuBenchmark();        // braid centres: analytic vs cached
-await runCpuBenchmark("flow");  // flow sampling: a FlowField.sample call per particle vs inlined
+```sh
+npm install --prefix ~/river-bench --save-exact --ignore-scripts playwright@1.65.0
+npx --prefix ~/river-bench playwright install firefox chromium
+node frontend/test/cpu-benchmark-run.mjs --playwright ~/river-bench --browser firefox --out firefox.json
 ```
 
-Each comparison runs both variants three times in ABBAAB order with fixed synthetic channel snapshots, seed, particle limit and simulated steps; `runs[].variant` names each run. The flow reference is the particle step as it was before inlining, kept in the benchmark file; both give identical particles. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
+`--compare centres` (braid centres: analytic vs cached) or `--compare flow` (flow sampling: a `FlowField.sample` call per particle vs inlined) runs one comparison; the default runs both. Each of the five sessions (`--sessions`) runs every variant three times in its own browser, alternating which goes first, and the script prints the runs and a summary of mean CPU work per frame; `--out` writes the browser, host and every run as JSON. Playwright 1.65.0 brings Firefox 159 and Chromium 158.
+
+Every run uses fixed synthetic channel snapshots, seed, particle limit and simulated steps. The flow reference is the particle step as it was before inlining, kept in the benchmark file; both give identical particles. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
+
+`runCpuBenchmark(compare, order)` can also be called from the console of `http://localhost:5173/test/benchmark.html`, but only for one variant per page load (for example `runCpuBenchmark("flow", ["inlined", "inlined", "inlined"])`). Its default ABBAAB order runs both variants in one page, and the call sites the variants swap then stay polymorphic: later runs of the first variant slow down, which overstated the braid-centre cache in Firefox (`docs/PLAN.md`, Task 3).
 
 The motion-only GPU prototype has a separate real-shader correctness check. With Vite running, open `http://localhost:5173/test/gpu-benchmark.html` and run:
 
