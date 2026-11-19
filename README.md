@@ -9,7 +9,7 @@
 
 A web page that turns live metrics from a [Beszel](https://beszel.dev) hub into an abstract river of rainbow-coloured particles flowing upwards. The data steers the animation; it is not meant to be readable.
 
-Status: milestones M0–M7 done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`). M8, the standalone container image, is published as `ghcr.io/juusolatva/beszel-river` (releases since v1.0.0) and awaits its end-to-end check. Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
+Status: milestones M0–M8 done; deployed with live data, with an optional 1 s realtime source (`SOURCE=realtime`), and published as the standalone container image `ghcr.io/juusolatva/beszel-river` (releases since v1.0.0). Tested with Beszel v0.21.1. Design, message format and milestones are in [docs/PLAN.md](docs/PLAN.md).
 
 ## Screenshots
 
