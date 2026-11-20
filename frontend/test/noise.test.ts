@@ -112,6 +112,55 @@ describe("FlowField", () => {
   });
 });
 
+describe("FlowField vectors", () => {
+  it("interleaves vx, vy per grid point, matching samples at grid points", () => {
+    const field = new FlowField(mulberry32(3));
+    field.update(1.2, 1.5);
+    const { gridCols: cols, gridRows: rows, gridCell: cell, vectors } = field;
+    expect(vectors).toHaveLength(cols * rows * 2);
+    for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+      field.sample(c * cell, r * cell);
+      expect(vectors[(r * cols + c) * 2]).toBeCloseTo(field.sx, 6);
+      expect(vectors[(r * cols + c) * 2 + 1]).toBeCloseTo(field.sy, 6);
+    }
+  });
+
+  it("samples bilinearly: the cell centre is the mean of its corners, edges and outside clamp", () => {
+    const field = new FlowField(mulberry32(4));
+    field.update(0.7, 1.2);
+    const { gridCols: cols, gridRows: rows, gridCell: cell, vectors } = field;
+    const at = (c: number, r: number, k: number) => vectors[(r * cols + c) * 2 + k];
+    const [c, r] = [3, 5];
+    field.sample((c + 0.5) * cell, (r + 0.5) * cell);
+    for (const [k, value] of [[0, field.sx], [1, field.sy]]) {
+      expect(value).toBeCloseTo((at(c, r, k) + at(c + 1, r, k) + at(c, r + 1, k) + at(c + 1, r + 1, k)) / 4, 6);
+    }
+    // Below/left of the grid the weights collapse onto the first point exactly.
+    field.sample(-1, -1);
+    expect([field.sx, field.sy]).toEqual([at(0, 0, 0), at(0, 0, 1)]);
+    // Halfway along the left edge, between rows r and r + 1.
+    field.sample(-0.5, (r + 0.5) * cell);
+    expect(field.sx).toBeCloseTo((at(0, r, 0) + at(0, r + 1, 0)) / 2, 6);
+    // Beyond the far corner, the sample stays inside the last cell.
+    field.sample(100, 100);
+    expect(field.sx).toBeCloseTo(at(cols - 2, rows - 2, 0) * 0.001 * 0.001 + at(cols - 1, rows - 2, 0) * 0.999 * 0.001 + at(cols - 2, rows - 1, 0) * 0.001 * 0.999 + at(cols - 1, rows - 1, 0) * 0.999 * 0.999, 4);
+  });
+
+  it("keeps the vector storage while the grid size holds, and reallocates when the aspect changes it", () => {
+    const field = new FlowField(mulberry32(1));
+    field.update(0, 1.2);
+    const first = field.vectors;
+    const before = Array.from(first);
+    field.update(1, 1.2);
+    expect(field.vectors).toBe(first);
+    expect(Array.from(field.vectors)).not.toEqual(before);
+    field.update(2, 2);
+    expect(field.vectors).not.toBe(first);
+    expect(field.vectors).toHaveLength(field.gridCols * field.gridRows * 2);
+    expect(field.vectors.every(Number.isFinite)).toBe(true);
+  });
+});
+
 it("exports the exact velocity grid into caller storage", () => {
   const field = new FlowField(() => 0.5);
   field.update(0.3, 1.5);

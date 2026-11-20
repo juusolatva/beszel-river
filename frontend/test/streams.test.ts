@@ -1,7 +1,7 @@
 import type { Frame, Stream } from "@beszel-river/shared";
 import { describe, expect, it, vi } from "vitest";
 import { LOOK } from "../src/config";
-import { DRAIN_PRESENCE, DRAIN_TAPER_PRESENCE, FILAMENTS, MAX_STREAMS, StreamSet, StreamSlot, laneCenter } from "../src/sim/streams";
+import { CENTER_MAX_Y, CENTER_SAMPLES, DRAIN_PRESENCE, DRAIN_TAPER_PRESENCE, FILAMENTS, MAX_STREAMS, StreamSet, StreamSlot, laneCenter } from "../src/sim/streams";
 
 function stream(id: string, overrides: Partial<Stream> = {}): Stream {
   return { id, alive: true, width: 0.5, flow: 0.5, density: 0.5, turbulence: 0.5, pulse: 0, heat: 0.5, ...overrides };
@@ -405,4 +405,24 @@ it("copies cached centres without touching surrounding storage", () => {
   for (let i = 0; i < 64; i++) expect(out[i + 1]).toBeCloseTo(slot.centerAt(-0.02 + i * 1.1 / 63), 6);
   expect(out[0]).toBe(123);
   expect(out[65]).toBe(123);
+});
+
+it("keeps every slot's centre line in its own part of the shared table", () => {
+  const set = new StreamSet(1);
+  set.apply(frame(stream("a"), stream("b", { width: 0.9 })));
+  set.update(0.1, 1.5);
+  const a = slotOf(set, "a"), b = slotOf(set, "b");
+  const out = new Float32Array(CENTER_SAMPLES);
+  for (const slot of [a, b]) {
+    const start = set.slots.indexOf(slot) * CENTER_SAMPLES;
+    slot.writeCenters(out, 0);
+    expect(out).toEqual(Float32Array.from(set.centers.subarray(start, start + CENTER_SAMPLES)));
+    expect(set.centers[start + CENTER_SAMPLES - 1]).toBeCloseTo(slot.centerAt(CENTER_MAX_Y), 12);
+  }
+  // Untouched slots stay zero: a rebuild never writes outside its own range.
+  const used = new Set([a, b].map((slot) => set.slots.indexOf(slot)));
+  for (let i = 0; i < set.slots.length; i++) {
+    if (used.has(i)) continue;
+    expect(set.centers.subarray(i * CENTER_SAMPLES, (i + 1) * CENTER_SAMPLES).every((v) => v === 0)).toBe(true);
+  }
 });

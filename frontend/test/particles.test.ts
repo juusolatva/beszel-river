@@ -5,6 +5,7 @@ import { FlowField } from "../src/sim/noise";
 import { INSTANCE_FLOATS, ParticleSystem } from "../src/sim/particles";
 import { DRAIN_PRESENCE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
+import { calledStep } from "./cpu-benchmark.browser";
 
 const ASPECT = 1.6;
 const DT = 1 / 60;
@@ -39,11 +40,47 @@ describe("ParticleSystem", () => {
   it.each([undefined, [0.1, 0.2, 0.9, 0.3, 0.1, 0]])("keeps cached-centre trajectories close to the analytic reference (%s)", (filaments) => {
     const actual = setup(1000, stream("a", { filaments }));
     const reference = setup(1000, stream("a", { filaments }));
-    for (const slot of reference.set.slots) slot.centerAt = (y) => slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+    // The production step reads the centre table inline; the reference steers every particle through
+    // `centerAt`, overridden with the sine, so the comparison covers accumulated motion, not only spawns.
+    let analyticCalls = 0;
+    for (const slot of reference.set.slots) {
+      slot.centerAt = (y) => {
+        analyticCalls++;
+        return slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+      };
+    }
+    reference.particles.step = calledStep;
     const count = actual.run(2);
     expect(reference.run(2)).toBe(count);
+    // Two seconds of steps, each steering every live particle: far more calls than spawns alone make.
+    expect(analyticCalls).toBeGreaterThan(30 * count);
     // The centre approximation is bounded by 0.001*half; allow 0.001 world units for accumulated motion.
     for (let i = 0; i < count * INSTANCE_FLOATS; i++) expect(Math.abs(actual.particles.instances[i] - reference.particles.instances[i])).toBeLessThan(0.001);
+  });
+
+  // Recorded with the step that called `FlowField.sample` per particle (before inlined sampling). The
+  // inlined interpolation keeps its arithmetic, so trajectories must stay bit-identical, through grid
+  // resizes from aspect changes.
+  it.each([
+    [undefined, 666, "938973b2"],
+    [[0.1, 0.2, 0.9, 0.3, 0.1, 0], 629, "7b0724a4"],
+  ])("reproduces the recorded trajectories exactly across aspect changes (%s)", (filaments, count, hash) => {
+    const random = mulberry32(7);
+    const set = new StreamSet(1);
+    set.apply({ v: 1, t: 0, streams: [0.3, 0.6, 1].map((width, i) => stream("abc"[i], { width, flow: 0.6, density: 0.8, turbulence: 0.9, filaments })) });
+    const field = new FlowField(random);
+    const particles = new ParticleSystem(3000, random);
+    let n = 0, t = 0;
+    for (let frame = 0; frame < 480; frame++, t += DT) {
+      const aspect = frame < 160 ? 1.6 : frame < 320 ? 2.4 : 0.6;
+      set.update(DT, aspect);
+      particles.spawn(DT, set);
+      field.update(t, aspect);
+      n = particles.step(DT, set, field, aspect, 2);
+    }
+    let h = 0x811c9dc5;
+    for (const word of new Uint32Array(particles.instances.buffer, 0, n * INSTANCE_FLOATS)) h = Math.imul(h ^ word, 0x01000193) >>> 0;
+    expect([n, h.toString(16)]).toEqual([count, hash]);
   });
 
   it("starts empty and spawns nothing without streams", () => {

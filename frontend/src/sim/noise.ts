@@ -91,8 +91,7 @@ export class FlowField {
   private readonly rows = LOOK.field.rows;
   private readonly cell = 1 / (LOOK.field.rows - 1);
   private psi = new Float32Array(0);
-  private vx = new Float32Array(0);
-  private vy = new Float32Array(0);
+  private v = new Float32Array(0);
   private readonly noise: (x: number, y: number, z: number) => number;
 
   constructor(random: Random) {
@@ -104,11 +103,10 @@ export class FlowField {
     if (cols !== this.cols) {
       this.cols = cols;
       this.psi = new Float32Array(cols * this.rows);
-      this.vx = new Float32Array(cols * this.rows);
-      this.vy = new Float32Array(cols * this.rows);
+      this.v = new Float32Array(cols * this.rows * 2);
     }
     const { frequency, scroll, evolve } = LOOK.field;
-    const { rows, cell, psi, vx, vy } = this;
+    const { rows, cell, psi, v } = this;
 
     for (let r = 0; r < rows; r++) {
       // Sampling at y - t * scroll moves the eddies upwards with the river.
@@ -127,8 +125,8 @@ export class FlowField {
         const c0 = Math.max(c - 1, 0);
         const c1 = Math.min(c + 1, cols - 1);
         const i = r * cols + c;
-        vx[i] = ((psi[r1 * cols + c] - psi[r0 * cols + c]) / ((r1 - r0) * cell)) * scale;
-        vy[i] = -((psi[r * cols + c1] - psi[r * cols + c0]) / ((c1 - c0) * cell)) * scale;
+        v[i * 2] = ((psi[r1 * cols + c] - psi[r0 * cols + c]) / ((r1 - r0) * cell)) * scale;
+        v[i * 2 + 1] = -((psi[r * cols + c1] - psi[r * cols + c0]) / ((c1 - c0) * cell)) * scale;
       }
     }
   }
@@ -136,18 +134,23 @@ export class FlowField {
   get gridCols(): number { return this.cols; }
   get gridRows(): number { return this.rows; }
   get gridCell(): number { return this.cell; }
+  /**
+   * Grid velocities interleaved as vx, vy per point, row-major (`gridCols` per row). Read-only for
+   * callers; replaced when `update` changes the grid size, so read it after each update.
+   */
+  get vectors(): Float32Array { return this.v; }
 
   /** Copies exact cell velocities into caller-owned interleaved storage. */
   writeVelocityGrid(out: Float32Array): void {
-    for (let i = 0; i < this.vx.length; i++) {
-      out[i * 2] = this.vx[i];
-      out[i * 2 + 1] = this.vy[i];
-    }
+    out.set(this.v);
   }
 
-  /** Bilinear sample at world position (x, y); writes `sx`, `sy`. */
+  /**
+   * Bilinear sample at world position (x, y); writes `sx`, `sy`. A reference for tests: the particle
+   * step inlines the same arithmetic.
+   */
   sample(x: number, y: number): void {
-    const { cols, rows, cell, vx, vy } = this;
+    const { cols, rows, cell, v } = this;
     const fx = Math.min(Math.max(x / cell, 0), cols - 1.001);
     const fy = Math.min(Math.max(y / cell, 0), rows - 1.001);
     const c = Math.floor(fx);
@@ -162,7 +165,7 @@ export class FlowField {
     const w01 = tx * (1 - ty);
     const w10 = (1 - tx) * ty;
     const w11 = tx * ty;
-    this.sx = vx[i00] * w00 + vx[i01] * w01 + vx[i10] * w10 + vx[i11] * w11;
-    this.sy = vy[i00] * w00 + vy[i01] * w01 + vy[i10] * w10 + vy[i11] * w11;
+    this.sx = v[i00 * 2] * w00 + v[i01 * 2] * w01 + v[i10 * 2] * w10 + v[i11 * 2] * w11;
+    this.sy = v[i00 * 2 + 1] * w00 + v[i01 * 2 + 1] * w01 + v[i10 * 2 + 1] * w10 + v[i11 * 2 + 1] * w11;
   }
 }

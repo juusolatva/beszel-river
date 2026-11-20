@@ -1,0 +1,573 @@
+{
+  "date": "2026-11-20T05:56:20.696Z",
+  "browser": "firefox",
+  "browserVersion": "159.0",
+  "playwrightVersion": "1.65.0",
+  "host": {
+    "cpu": "AMD Ryzen 5 9600X 6-Core Processor",
+    "platform": "linux",
+    "release": "6.18.58.1-microsoft-standard-WSL2"
+  },
+  "summary": [
+    {
+      "compare": "centres",
+      "reference": {
+        "variant": "analytic",
+        "meanMs": 0.700462962962963,
+        "minMs": 0.6941666666666667,
+        "maxMs": 0.7108333333333333,
+        "runs": 9
+      },
+      "candidates": [
+        {
+          "variant": "called",
+          "meanMs": 0.6987962962962962,
+          "minMs": 0.6875,
+          "maxMs": 0.715,
+          "runs": 9,
+          "change": -0.002379378717779268
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.4847222222222222,
+          "minMs": 0.4775,
+          "maxMs": 0.4925,
+          "runs": 9,
+          "change": -0.3079973562458691
+        }
+      ]
+    },
+    {
+      "compare": "flow",
+      "reference": {
+        "variant": "sampled",
+        "meanMs": 0.7337037037037037,
+        "minMs": 0.7233333333333334,
+        "maxMs": 0.7441666666666666,
+        "runs": 9
+      },
+      "candidates": [
+        {
+          "variant": "inlined",
+          "meanMs": 0.48509259259259263,
+          "minMs": 0.47833333333333333,
+          "maxMs": 0.49083333333333334,
+          "runs": 9,
+          "change": -0.3388440181726401
+        }
+      ]
+    }
+  ],
+  "results": [
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 0.6983333333333334,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.7016666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.7058333333333333,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "called",
+          "meanMs": 0.6941666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.6916666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.705,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inline",
+          "meanMs": 0.4775,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.4866666666666667,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.4825,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 0.7333333333333333,
+          "p50Ms": 1,
+          "p95Ms": 2,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.7258333333333333,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.7358333333333333,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 0.4825,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.4866666666666667,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.4866666666666667,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "called",
+          "meanMs": 0.6875,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.6991666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.71,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inline",
+          "meanMs": 0.4791666666666667,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.48333333333333334,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.49,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 0.695,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.6941666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.7108333333333333,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 0.47833333333333333,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.47833333333333333,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.49,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 0.7283333333333334,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.735,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.7441666666666666,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inline",
+          "meanMs": 0.485,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.48583333333333334,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inline",
+          "meanMs": 0.4925,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 0.6983333333333334,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.7,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 0.7,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "called",
+          "meanMs": 0.6891666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.6975,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "called",
+          "meanMs": 0.715,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 0.7233333333333334,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.7366666666666667,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 0.7408333333333333,
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 0.4825,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.49,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 0.49083333333333334,
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "live": 16661
+        }
+      ]
+    }
+  ]
+}
