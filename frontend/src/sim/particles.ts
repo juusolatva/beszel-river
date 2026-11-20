@@ -1,7 +1,7 @@
 import { LOOK } from "../config";
 import { clamp, fract, gaussian, lerp, type Random } from "../util/math";
 import type { FlowField } from "./noise";
-import { MIN_SHARE, laneCenter, type StreamSet } from "./streams";
+import { CENTER_MAX_Y, CENTER_MIN_Y, CENTER_SAMPLES, CENTER_SCALE, MIN_SHARE, laneCenter, type StreamSet } from "./streams";
 
 /**
  * Per-instance floats written by `step`, in attribute order:
@@ -114,12 +114,15 @@ export class ParticleSystem {
     // inlined with locals instead of a call that writes two properties per particle.
     const flow = field.vectors, cols = field.gridCols, cell = field.gridCell;
     const maxFx = cols - 1.001, maxFy = field.gridRows - 1.001;
+    // Centre lines, likewise: `StreamSlot.centerAt`'s interpolation over the shared table.
+    const centers = streams.centers;
     this.globalHue = fract(this.globalHue + LOOK.hueRotate * dt);
     let n = 0;
 
     for (let i = 0; i < this.capacity; i++) {
       if (!this.active[i]) continue;
-      const s = slots[this.slot[i]];
+      const slotIndex = this.slot[i];
+      const s = slots[slotIndex];
       age[i] += dt;
       if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
         this.active[i] = 0;
@@ -144,9 +147,19 @@ export class ParticleSystem {
       const w11 = tx * ty;
       const flowX = flow[i00] * w00 + flow[i00 + 2] * w01 + flow[i10] * w10 + flow[i10 + 2] * w11;
       const flowY = flow[i00 + 1] * w00 + flow[i00 + 3] * w01 + flow[i10 + 1] * w10 + flow[i10 + 3] * w11;
+      const py = y[i];
+      let center: number;
+      if (py < CENTER_MIN_Y || py > CENTER_MAX_Y) {
+        center = s.centerAt(py);
+      } else {
+        const position = (py - CENTER_MIN_Y) * CENTER_SCALE;
+        const sample = Math.min(Math.floor(position), CENTER_SAMPLES - 2);
+        const c = slotIndex * CENTER_SAMPLES + sample;
+        center = centers[c] + (centers[c + 1] - centers[c]) * (position - sample);
+      }
       const up = s.speed * this.speedJitter[i];
       const limit = LOOK.maxSlope * up;
-      const side = clamp(flowX * s.turbulenceAmp * up + (s.centerAt(y[i]) + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
+      const side = clamp(flowX * s.turbulenceAmp * up + (center + this.offset[i] * s.half - x[i]) * LOOK.steer, -limit, limit);
       vx[i] += (side - vx[i]) * k;
       vy[i] += (up * (1 + 0.3 * flowY * s.turbulenceAmp) - vy[i]) * k;
       x[i] += vx[i] * dt;

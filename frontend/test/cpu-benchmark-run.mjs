@@ -6,7 +6,7 @@
 //     [--compare centres|flow|both] [--sessions 5] [--url http://localhost:5173/] [--out results.json]
 //
 // Each session runs every variant of the chosen comparisons three times in its own browser; the
-// variant order alternates between sessions. It prints each browser's runs and a summary and, with
+// variant order rotates between sessions. It prints each browser's runs and a summary and, with
 // --out, writes the full results as JSON.
 
 import { createRequire } from "node:module";
@@ -31,7 +31,7 @@ const playwright = require("playwright");
 const browserType = playwright[args.browser];
 if (!["firefox", "chromium"].includes(args.browser) || !browserType) throw new Error("--browser firefox|chromium");
 const comparisons = {
-  centres: ["analytic", "cached"],
+  centres: ["analytic", "called", "inline"],
   flow: ["sampled", "inlined"],
 };
 const chosen = args.compare === "both" ? ["centres", "flow"] : [args.compare];
@@ -45,7 +45,7 @@ let browserVersion;
 for (let session = 0; session < sessions; session++) {
   for (const compare of chosen) {
     const variants = comparisons[compare];
-    for (const variant of session % 2 === 0 ? variants : [...variants].reverse()) {
+    for (const variant of variants.map((_, k) => variants[(k + session) % variants.length])) {
       const browser = await browserType.launch({ headless: true });
       try {
         browserVersion = browser.version();
@@ -66,19 +66,22 @@ for (let session = 0; session < sessions; session++) {
 }
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+// The first variant of each comparison is the reference; every other one is compared with it.
 const summary = chosen.map((compare) => {
-  const [a, b] = comparisons[compare].map((variant) => {
+  const [reference, ...rest] = comparisons[compare].map((variant) => {
     const means = results.filter((result) => result.compare === compare)
       .flatMap((result) => result.runs).filter((run) => run.variant === variant).map((run) => run.meanMs);
     return { variant, meanMs: mean(means), minMs: Math.min(...means), maxMs: Math.max(...means), runs: means.length };
   });
-  return { compare, reference: a, candidate: b, change: b.meanMs / a.meanMs - 1 };
+  return { compare, reference, candidates: rest.map((c) => ({ ...c, change: c.meanMs / reference.meanMs - 1 })) };
 });
 console.log(`\n${args.browser} ${browserVersion}, ${cpus()[0]?.model}, ${platform()} ${release()}`);
-for (const { compare, reference: a, candidate: b, change } of summary) {
-  const range = (v) => `${v.meanMs.toFixed(3)} (${v.minMs.toFixed(3)}–${v.maxMs.toFixed(3)})`;
-  console.log(`${compare}: ${a.variant} ${range(a)} → ${b.variant} ${range(b)} ms, ` +
-    `${(change * 100).toFixed(1)} %, ${a.runs} runs each`);
+const range = (v) => `${v.meanMs.toFixed(3)} (${v.minMs.toFixed(3)}–${v.maxMs.toFixed(3)})`;
+for (const { compare, reference: a, candidates } of summary) {
+  for (const b of candidates) {
+    console.log(`${compare}: ${a.variant} ${range(a)} → ${b.variant} ${range(b)} ms, ` +
+      `${(b.change * 100).toFixed(1)} %, ${a.runs} runs each`);
+  }
 }
 if (args.out) {
   const host = { cpu: cpus()[0]?.model, platform: platform(), release: release() };

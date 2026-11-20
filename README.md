@@ -73,7 +73,7 @@ npx --prefix ~/river-bench playwright install firefox chromium
 node frontend/test/cpu-benchmark-run.mjs --playwright ~/river-bench --browser firefox --out firefox.json
 ```
 
-`--compare centres` (braid centres: analytic vs cached) or `--compare flow` (flow sampling: a `FlowField.sample` call per particle vs inlined) runs one comparison; the default runs both. Each of the five sessions (`--sessions`) runs every variant three times in its own browser, alternating which goes first, and the script prints the runs and a summary of mean CPU work per frame; `--out` writes the browser, host and every run as JSON. Playwright 1.65.0 brings Firefox 159 and Chromium 158.
+`--compare centres` (braid centres: the sine per particle, the cached table through a `centerAt` call per particle, and the table inlined in the step) or `--compare flow` (flow sampling: a `FlowField.sample` call per particle vs inlined) runs one comparison; the default runs both. Each of the five sessions (`--sessions`) runs every variant three times in its own browser, rotating which goes first, and the script prints the runs and a summary of mean CPU work per frame, each variant against the comparison's first; `--out` writes the browser, host and every run as JSON. Playwright 1.65.0 brings Firefox 159 and Chromium 158.
 
 Every run uses fixed synthetic channel snapshots, seed, particle limit and simulated steps. The flow reference is the particle step as it was before inlining, kept in the benchmark file; both give identical particles. It reports CPU simulation time and live counts; it does not draw or measure frame cadence, upload or GPU time. Run it separately from rendering/profiling and other heavy work, and record the browser and power conditions when comparing results.
 

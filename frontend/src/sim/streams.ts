@@ -15,10 +15,13 @@ export const DRAIN_TAPER_PRESENCE = 0.05;
 /** Backend-specific proof that a draining slot has no remaining owners. */
 export type StreamReleasePolicy = (slot: StreamSlot, index: number) => boolean;
 const cpuCanRelease: StreamReleasePolicy = slot => slot.particles === 0;
-const CENTER_MIN_Y = -0.02;
-const CENTER_MAX_Y = 1.08;
-const CENTER_SAMPLES = 64;
-const CENTER_SCALE = (CENTER_SAMPLES - 1) / (CENTER_MAX_Y - CENTER_MIN_Y);
+/** Heights covered by the cached centre lines; `centerAt` falls back to the sine outside them. */
+export const CENTER_MIN_Y = -0.02;
+export const CENTER_MAX_Y = 1.08;
+/** Samples per cached centre line; slot `i`'s line starts at `i * CENTER_SAMPLES` in `StreamSet.centers`. */
+export const CENTER_SAMPLES = 64;
+/** Samples per unit of height. */
+export const CENTER_SCALE = (CENTER_SAMPLES - 1) / (CENTER_MAX_Y - CENTER_MIN_Y);
 
 /** Centre of filament lane `j`, in band half-widths from the centre line. */
 export function laneCenter(j: number): number {
@@ -77,7 +80,9 @@ export class StreamSlot {
   brightness = 0;
   chroma = 0;
   streakSeconds = 0;
-  private readonly centers = new Float64Array(CENTER_SAMPLES);
+
+  /** `centers` is this slot's view into `StreamSet.centers`; standalone slots get their own. */
+  constructor(private readonly centers = new Float64Array(CENTER_SAMPLES)) {}
 
   /** Lane index for a uniform random number `u` in [0, 1), weighted by lane activity. */
   pickLane(u: number): number {
@@ -111,7 +116,13 @@ export class StreamSlot {
 }
 
 export class StreamSet {
-  readonly slots: StreamSlot[] = Array.from({ length: MAX_STREAMS }, () => new StreamSlot());
+  /**
+   * Every slot's cached centre line, `CENTER_SAMPLES` per slot in slot order. `ParticleSystem.step`
+   * interpolates it inline: one array and no call per particle, which Firefox runs much faster.
+   */
+  readonly centers = new Float64Array(MAX_STREAMS * CENTER_SAMPLES);
+  readonly slots: StreamSlot[] = Array.from({ length: MAX_STREAMS },
+    (_, i) => new StreamSlot(this.centers.subarray(i * CENTER_SAMPLES, (i + 1) * CENTER_SAMPLES)));
   /** Scratch list for `layout`. */
   private readonly ordered: StreamSlot[] = [...this.slots];
   private readonly byId = new Map<string, StreamSlot>();
