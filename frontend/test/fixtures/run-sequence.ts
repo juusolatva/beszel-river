@@ -14,6 +14,11 @@ export interface SequenceConfig {
   repetitions: number;
   /** A CPU adaptive discovery per viewport, then CPU-schedule replays on both backends. */
   scheduleReplays: boolean;
+  /**
+   * CPU runs only, without their untimed GPU replay: for comparing CPU changes between commits.
+   * Absent in sequences stored before it existed, which ran both backends.
+   */
+  cpuOnly?: boolean;
   warmupSeconds: number;
   measureSeconds: number;
 }
@@ -40,6 +45,10 @@ export function backendOrder(repetition: number): Backend[] {
   return repetition % 2 === 1 ? ["cpu", "gpu"] : ["gpu", "cpu"];
 }
 
+function backends(config: SequenceConfig, repetition: number): Backend[] {
+  return config.cpuOnly ? ["cpu"] : backendOrder(repetition);
+}
+
 /**
  * The run order: viewports one after another (switching to full screen needs the person), each
  * starting with the CPU adaptive discovery its replays need, then every workload per repetition as a
@@ -55,12 +64,12 @@ export function buildRunPlan(config: SequenceConfig): RunSpec[] {
     for (let repetition = 1; repetition <= config.repetitions; repetition++) {
       for (const workload of config.workloads) {
         const [scenario, limit] = SCENARIO[workload];
-        for (const backend of backendOrder(repetition)) add({ viewport, kind: "fixed", workload, backend, repetition, scenario, limit });
+        for (const backend of backends(config, repetition)) add({ viewport, kind: "fixed", workload, backend, repetition, scenario, limit });
       }
     }
     if (config.scheduleReplays) {
       for (let repetition = 1; repetition <= config.repetitions; repetition++) {
-        for (const backend of backendOrder(repetition)) add({ viewport, kind: "schedule", workload: "schedule-replay", backend, repetition, scenario: "dense", limit: 10000 });
+        for (const backend of backends(config, repetition)) add({ viewport, kind: "schedule", workload: "schedule-replay", backend, repetition, scenario: "dense", limit: 10000 });
       }
     }
   }

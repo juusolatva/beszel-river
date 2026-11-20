@@ -38,6 +38,14 @@ describe("run plan", () => {
     expect(small.find((spec) => spec.workload === "rotation")).toEqual(expect.objectContaining({ scenario: "rotation", limit: 10000 }));
   });
 
+  it("runs only the CPU, once per repetition, when asked", () => {
+    const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], cpuOnly: true });
+    // 1 discovery + 6 workloads × 3 repetitions + 3 replays.
+    expect(plan).toHaveLength(1 + 18 + 3);
+    expect(plan.every((spec) => spec.backend === "cpu")).toBe(true);
+    expect(plan.filter((spec) => spec.workload === "dense-1000").map((spec) => spec.repetition)).toEqual([1, 2, 3]);
+  });
+
   it("builds subsets and rejects empty or invalid plans", () => {
     expect(buildRunPlan({ ...CONFIG, viewports: ["full"], workloads: ["dense-10000"], repetitions: 1, scheduleReplays: false })).toHaveLength(2);
     expect(buildRunPlan({ ...CONFIG, workloads: [], viewports: ["full"], repetitions: 1 }).map((spec) => spec.kind)).toEqual(["discovery", "schedule", "schedule"]);

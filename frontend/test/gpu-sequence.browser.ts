@@ -225,6 +225,7 @@ async function runNext(state: SequenceState): Promise<void> {
       backend: spec.backend, scenario: spec.scenario, refreshHz: state.refreshHz, conditions: state.conditions,
       warmupSeconds: spec.scenario === "drained" ? Math.max(60, state.config.warmupSeconds) : state.config.warmupSeconds,
       measureSeconds: state.config.measureSeconds,
+      crossValidate: !state.config.cpuOnly,
       ...(spec.kind === "fixed" ? { limit: spec.limit } : spec.kind === "discovery" ? { budget: "adaptive" as const } : { schedule, scenario: undefined }),
     });
     if (spec.kind === "discovery" && result.schedule) state.schedules[spec.viewport] = result.schedule;
@@ -301,6 +302,7 @@ function setup(): void {
       workloads: data.getAll("workload") as SequenceConfig["workloads"],
       repetitions: Number(data.get("repetitions")),
       scheduleReplays: data.get("scheduleReplays") === "on",
+      cpuOnly: data.get("gpu") !== "on",
       warmupSeconds: Number(data.get("warmupSeconds")),
       measureSeconds: Number(data.get("measureSeconds")),
     };
