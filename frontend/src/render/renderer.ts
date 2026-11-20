@@ -1,5 +1,5 @@
 import { LOOK } from "../config";
-import { INSTANCE_FLOATS } from "../sim/particles";
+import { INSTANCE_FLOATS, METADATA_FLOATS } from "../sim/particles";
 import { createProgram, createTarget, deleteTarget, type Program, type Target } from "./gl";
 import fadeFrag from "./shaders/fade.frag?raw";
 import fullscreenVert from "./shaders/fullscreen.vert?raw";
@@ -16,7 +16,26 @@ export interface GpuDrawSource {
   draw(aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number, depositScale: number, pixel: number): void;
 }
 
-const NO_INSTANCES = new Float32Array(0);
+/**
+ * A particle pool as the renderer reads it (`ParticleSystem`): per-slot `instances` drawn up to
+ * `drawCount`, and `metadata` uploaded only where flagged, after which the renderer clears the flags.
+ */
+export interface ParticleInstances {
+  readonly instances: Float32Array;
+  readonly metadata: Float32Array;
+  readonly metadataDirty: Uint8Array;
+  readonly dirtyStart: number;
+  readonly dirtyEnd: number;
+  readonly drawCount: number;
+  clearMetadataDirty(): void;
+}
+
+/**
+ * Dirty metadata slots at most this far apart share one upload, resending the clean ones between:
+ * 1 KiB of metadata, a guess at what an extra `bufferSubData` call costs. Births land in freed slots
+ * all over the pool, so a few per frame go as a few small uploads and many merge into one span.
+ */
+export const METADATA_MERGE_GAP = 1024 / (METADATA_FLOATS * 4);
 const TRAIL_STEP = 1 / 60;
 const REFERENCE_DEPOSIT = -Math.expm1(-TRAIL_STEP / LOOK.trailTau);
 
@@ -31,6 +50,12 @@ export class Renderer {
   private readonly particleVao: WebGLVertexArrayObject;
   private readonly emptyVao: WebGLVertexArrayObject;
   private readonly instanceBuffer: WebGLBuffer;
+  private readonly metadataBuffer: WebGLBuffer;
+  // The CPU pool of the current `render` call, uploaded at its first deposit; null in GPU frames.
+  private pool: ParticleInstances | null = null;
+  private chroma: Float32Array | null = null;
+  private sizeScale = 0;
+  private uploaded = false;
   private half: boolean;
   private targets: [Target, Target] | null = null;
   private width = 0;
@@ -60,20 +85,22 @@ export class Renderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    this.instanceBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
-    const stride = INSTANCE_FLOATS * 4;
-    const attributes: [location: number, size: number, offset: number][] = [
-      [1, 4, 0],
-      [2, 4, 16],
-      [3, 1, 32],
-    ];
-    for (const [location, size, offset] of attributes) {
+    const attribute = (location: number, size: number, stride: number, offset: number): void => {
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, size, gl.FLOAT, false, stride, offset);
       gl.vertexAttribDivisor(location, 1);
-    }
+    };
+    // Rewritten every frame: segment, then hue and intensity.
+    this.instanceBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
+    attribute(1, 4, INSTANCE_FLOATS * 4, 0);
+    attribute(2, 2, INSTANCE_FLOATS * 4, 16);
+    // Written on spawn: stream index and size jitter.
+    this.metadataBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.metadataBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, capacity * METADATA_FLOATS * 4, gl.DYNAMIC_DRAW);
+    attribute(3, 2, METADATA_FLOATS * 4, 0);
     gl.bindVertexArray(null);
   }
 
@@ -104,8 +131,22 @@ export class Renderer {
     this.trailTime = 0;
   }
 
-  render(instances: Float32Array, count: number, dt: number, aspect: number): void {
-    this.frame(dt, aspect, instances, count, null);
+  /**
+   * Draws the CPU pool. `chroma` is each stream slot's current chroma (`StreamSet.chroma`); half-widths
+   * scale with `devicePixelRatio`. The pool is uploaded once, at the first deposit: a callback without
+   * one (8-bit trails above 60 Hz) uploads nothing and leaves its metadata flagged for the next.
+   */
+  render(particles: ParticleInstances, chroma: Float32Array, devicePixelRatio: number, dt: number, aspect: number): void {
+    this.pool = particles;
+    this.chroma = chroma;
+    this.sizeScale = LOOK.sizePx * devicePixelRatio;
+    this.uploaded = false;
+    try {
+      this.frame(dt, aspect, null);
+    } finally {
+      this.pool = null;
+      this.chroma = null;
+    }
   }
 
   /**
@@ -116,23 +157,23 @@ export class Renderer {
     this.gpuPixelRatio = devicePixelRatio;
     this.gpuHue = globalHue;
     this.gpuIntensity = intensityScale;
-    this.frame(dt, aspect, NO_INSTANCES, 0, source);
+    this.frame(dt, aspect, source);
   }
 
-  private frame(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
+  private frame(dt: number, aspect: number, source: GpuDrawSource | null): void {
     const { gl, targets } = this;
     if (!targets) return;
     gl.viewport(0, 0, this.width, this.height);
 
     try {
-      if (this.half) this.accumulate(dt, aspect, instances, count, source);
+      if (this.half) this.accumulate(dt, aspect, source);
       else {
         this.trailTime += dt;
         // Retain fractional time, allowing a tiny tolerance at exact display-period boundaries.
         // Each step is consumed before it is drawn, so a failed deposit is not repeated next frame.
         while (this.trailTime + 1e-9 >= TRAIL_STEP) {
           this.trailTime = Math.max(0, this.trailTime - TRAIL_STEP);
-          this.accumulate(TRAIL_STEP, aspect, instances, count, source);
+          this.accumulate(TRAIL_STEP, aspect, source);
         }
       }
     } finally {
@@ -151,7 +192,7 @@ export class Renderer {
     gl.bindVertexArray(null);
   }
 
-  private accumulate(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
+  private accumulate(dt: number, aspect: number, source: GpuDrawSource | null): void {
     const { gl } = this;
     const targets = this.targets!;
     const [previous, next] = targets;
@@ -178,22 +219,54 @@ export class Renderer {
       } finally {
         gl.disable(gl.BLEND);
       }
-    } else if (count > 0) {
+    } else if (this.pool && this.pool.drawCount > 0) {
+      const pool = this.pool;
+      if (!this.uploaded) {
+        this.upload(pool);
+        this.uploaded = true;
+      }
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.useProgram(this.particles.program);
       gl.uniform1f(this.particles.uniform("u_aspect"), aspect);
       gl.uniform1f(this.particles.uniform("u_pixel"), 1 / this.height);
+      gl.uniform1f(this.particles.uniform("u_sizeScale"), this.sizeScale);
+      gl.uniform1f(this.particles.uniform("u_lightness"), LOOK.lightness);
+      gl.uniform1fv(this.particles.uniform("u_chroma"), this.chroma!);
       // Match the trail decay at any frame rate, retaining the original deposit at 60 Hz.
       gl.uniform1f(this.particles.uniform("u_depositScale"), depositScale);
       gl.bindVertexArray(this.particleVao);
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, instances, 0, count * INSTANCE_FLOATS);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, pool.drawCount);
       gl.disable(gl.BLEND);
     }
 
     targets[0] = next;
     targets[1] = previous;
+  }
+
+  /** The drawn prefix of `instances`, then the flagged metadata in merged runs. */
+  private upload(pool: ParticleInstances): void {
+    const { gl } = this;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, pool.instances, 0, pool.drawCount * INSTANCE_FLOATS);
+    const { metadataDirty: dirty, dirtyStart: start, dirtyEnd: end } = pool;
+    if (start >= end) return;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.metadataBuffer);
+    // `start` is flagged by construction, so the first run starts there.
+    let runStart = start, last = start;
+    for (let i = start + 1; i < end; i++) {
+      if (!dirty[i]) continue;
+      if (i - last > METADATA_MERGE_GAP) {
+        this.uploadMetadata(pool.metadata, runStart, last + 1);
+        runStart = i;
+      }
+      last = i;
+    }
+    this.uploadMetadata(pool.metadata, runStart, last + 1);
+    pool.clearMetadataDirty();
+  }
+
+  private uploadMetadata(metadata: Float32Array, from: number, to: number): void {
+    this.gl.bufferSubData(this.gl.ARRAY_BUFFER, from * METADATA_FLOATS * 4, metadata, from * METADATA_FLOATS, (to - from) * METADATA_FLOATS);
   }
 }

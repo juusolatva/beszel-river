@@ -121,6 +121,8 @@ export class StreamSet {
    * interpolates it inline: one array and no call per particle, which Firefox runs much faster.
    */
   readonly centers = new Float64Array(MAX_STREAMS * CENTER_SAMPLES);
+  /** Every slot's eased chroma by slot index, for the renderer's per-stream uniform. */
+  readonly chroma = new Float32Array(MAX_STREAMS);
   readonly slots: StreamSlot[] = Array.from({ length: MAX_STREAMS },
     (_, i) => new StreamSlot(this.centers.subarray(i * CENTER_SAMPLES, (i + 1) * CENTER_SAMPLES)));
   /** Scratch list for `layout`. */
@@ -164,6 +166,7 @@ export class StreamSet {
       this.easeLanes(slot, slot.latest.filaments, dt);
       this.easeLayout(slot, dt);
       this.derive(slot);
+      this.chroma[index] = slot.chroma;
       slot.rebuildCenters();
       if (!slot.inFrame && slot.presence < DRAIN_PRESENCE && this.canRelease(slot, index)) {
         this.release(slot);

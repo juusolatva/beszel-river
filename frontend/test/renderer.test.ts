@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { Renderer, type GpuDrawSource } from "../src/render/renderer";
-import { INSTANCE_FLOATS } from "../src/sim/particles";
+import { METADATA_MERGE_GAP, Renderer, type GpuDrawSource, type ParticleInstances } from "../src/render/renderer";
+import { INSTANCE_FLOATS, METADATA_FLOATS } from "../src/sim/particles";
+import { MAX_STREAMS } from "../src/sim/streams";
 import { callsTo, createFakeGl, type Call } from "./fake-gl";
 
 /** Texture each frame's present pass reads, and the framebuffer its fade pass writes. */
@@ -9,6 +10,30 @@ function passes(calls: Call[]): { read: unknown; wrote: unknown } {
   const binds = callsTo(calls, "bindFramebuffer").filter(([, framebuffer]) => framebuffer !== null);
   const textures = callsTo(calls, "bindTexture").filter(([, texture]) => texture !== null);
   return { wrote: binds.at(-1)?.[1], read: textures.at(-1)?.[1] };
+}
+
+const CHROMA = new Float32Array(MAX_STREAMS);
+
+/** A pool as the renderer reads it: `drawCount` slots drawn, `dirty` metadata slots awaiting upload. */
+function pool(drawCount: number, capacity = Math.max(drawCount, 1), dirty: readonly number[] = []): ParticleInstances & { clears: number } {
+  const flags = new Uint8Array(capacity);
+  for (const i of dirty) flags[i] = 1;
+  const fake = {
+    instances: new Float32Array(capacity * INSTANCE_FLOATS),
+    metadata: new Float32Array(capacity * METADATA_FLOATS),
+    metadataDirty: flags,
+    dirtyStart: dirty.length ? Math.min(...dirty) : capacity,
+    dirtyEnd: dirty.length ? Math.max(...dirty) + 1 : 0,
+    drawCount,
+    clears: 0,
+    clearMetadataDirty() {
+      this.metadataDirty.fill(0);
+      this.dirtyStart = capacity;
+      this.dirtyEnd = 0;
+      this.clears++;
+    },
+  };
+  return fake;
 }
 
 /** Records every deposit pass; may leave another texture unit active, as a GPU pass could. */
@@ -28,11 +53,10 @@ describe("Renderer", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     const renderer = new Renderer(gl, 1);
     renderer.resize(100, 100);
-    const instances = new Float32Array(INSTANCE_FLOATS);
-    const referenceBrightness = (1 - 0.0005) / (1 - Math.exp(-(1 / 60) / LOOK.trailTau));
+        const referenceBrightness = (1 - 0.0005) / (1 - Math.exp(-(1 / 60) / LOOK.trailTau));
     for (const dt of [0, 1 / 240, 1 / 60, 1 / 30, LOOK.maxDt]) {
       calls.length = 0;
-      renderer.render(instances, 1, dt, 1);
+      renderer.render(pool(1), CHROMA, 1, dt, 1);
       const uniforms = new Map(callsTo(calls, "uniform1f").map(([location, value]) => [(location as { uniform: string }).uniform, value as number]));
       const scale = uniforms.get("u_depositScale");
       expect(scale).toBeDefined();
@@ -55,10 +79,9 @@ describe("Renderer", () => {
     const { gl, calls } = createFakeGl();
     const renderer = new Renderer(gl, 1);
     renderer.resize(100, 100);
-    const instances = new Float32Array(INSTANCE_FLOATS);
-    for (let frame = 0; frame < 4; frame++) {
+        for (let frame = 0; frame < 4; frame++) {
       calls.length = 0;
-      renderer.render(instances, 1, 1 / 240, 1);
+      renderer.render(pool(1), CHROMA, 1, 1 / 240, 1);
       expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(frame === 3 ? 1 : 0);
       expect(callsTo(calls, "drawArrays")).toHaveLength(frame === 3 ? 2 : 1);
     }
@@ -72,8 +95,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 1);
     renderer.resize(100, 100);
     calls.length = 0;
-    const instances = new Float32Array(INSTANCE_FLOATS);
-    for (let i = 0; i < hz; i++) renderer.render(instances, 1, 1 / hz, 1);
+        for (let i = 0; i < hz; i++) renderer.render(pool(1), CHROMA, 1, 1 / hz, 1);
     expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(60);
     const deposits = callsTo(calls, "uniform1f").filter(([location]) => (location as { uniform: string }).uniform === "u_depositScale");
     expect(deposits).toHaveLength(60);
@@ -84,14 +106,13 @@ describe("Renderer", () => {
     const { gl, calls } = createFakeGl();
     const renderer = new Renderer(gl, 1);
     renderer.resize(100, 100);
-    const instances = new Float32Array(INSTANCE_FLOATS);
-    renderer.render(instances, 1, 1 / 120, 1);
+        renderer.render(pool(1), CHROMA, 1, 1 / 120, 1);
     renderer.resize(200, 100);
     calls.length = 0;
-    renderer.render(instances, 1, 1 / 120, 2);
+    renderer.render(pool(1), CHROMA, 1, 1 / 120, 2);
     expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
     calls.length = 0;
-    renderer.render(instances, 1, 1 / 120, 2);
+    renderer.render(pool(1), CHROMA, 1, 1 / 120, 2);
     expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(1);
   });
 
@@ -100,7 +121,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 1);
     renderer.resize(100, 100);
     calls.length = 0;
-    renderer.render(new Float32Array(INSTANCE_FLOATS), 1, 0, 1);
+    renderer.render(pool(1), CHROMA, 1, 0, 1);
     expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
     expect(callsTo(calls, "drawArrays")).toHaveLength(1);
   });
@@ -112,7 +133,7 @@ describe("Renderer", () => {
     // Another user of the context, such as a GPU simulation pass, may leave a different unit active.
     gl.activeTexture(gl.TEXTURE1);
     calls.length = 0;
-    renderer.render(new Float32Array(INSTANCE_FLOATS), 1, dt, 1);
+    renderer.render(pool(1), CHROMA, 1, dt, 1);
     expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(0);
     const present = calls.findIndex(([name, , texture]) => name === "bindTexture" && texture !== null);
     const select = calls.findLastIndex(([name, unit]) => name === "activeTexture" && unit === gl.TEXTURE0);
@@ -123,27 +144,121 @@ describe("Renderer", () => {
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     new Renderer(gl, 1000);
-    expect(callsTo(calls, "bufferData")[1]).toEqual(["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"]);
+    expect(callsTo(calls, "bufferData").slice(1)).toEqual([
+      ["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"],
+      ["ARRAY_BUFFER", 1000 * METADATA_FLOATS * 4, "DYNAMIC_DRAW"],
+    ]);
     expect(callsTo(calls, "vertexAttribDivisor")).toEqual([
       [1, 1],
       [2, 1],
       [3, 1],
     ]);
-    const stride = INSTANCE_FLOATS * 4;
+    // Six floats per slot rewritten every frame; stream index and size jitter in their own buffer.
     expect(callsTo(calls, "vertexAttribPointer").slice(1)).toEqual([
-      [1, 4, "FLOAT", false, stride, 0],
-      [2, 4, "FLOAT", false, stride, 16],
-      [3, 1, "FLOAT", false, stride, 32],
+      [1, 4, "FLOAT", false, 24, 0],
+      [2, 2, "FLOAT", false, 24, 16],
+      [3, 2, "FLOAT", false, 8, 0],
     ]);
     // Three programs: particles, fade and present.
     expect(callsTo(calls, "linkProgram")).toHaveLength(3);
+  });
+
+  describe("stable slots", () => {
+    it("uploads dirty metadata in merged runs after the dynamic prefix, then clears it", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 500);
+      renderer.resize(100, 100);
+      const gap = METADATA_MERGE_GAP;
+      const second = 5 + gap + 1, third = second + gap + gap + 1;
+      const particles = pool(400, 500, [3, 4, 5, second, second + gap, third]);
+      calls.length = 0;
+      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      const m = METADATA_FLOATS;
+      expect(callsTo(calls, "bufferSubData")).toEqual([
+        ["ARRAY_BUFFER", 0, particles.instances, 0, 400 * INSTANCE_FLOATS],
+        // One past the gap starts another upload; exactly `gap` apart shares one, resending the slots between.
+        ["ARRAY_BUFFER", 3 * m * 4, particles.metadata, 3 * m, 3 * m],
+        ["ARRAY_BUFFER", second * m * 4, particles.metadata, second * m, (gap + 1) * m],
+        ["ARRAY_BUFFER", third * m * 4, particles.metadata, third * m, m],
+      ]);
+      expect(particles.clears).toBe(1);
+      // The dynamic upload binds its own buffer; metadata runs bind the other one, once.
+      const binds = callsTo(calls, "bindBuffer").filter(([target]) => target === "ARRAY_BUFFER").map(([, buffer]) => buffer);
+      expect(binds).toHaveLength(2);
+      expect(new Set(binds).size).toBe(2);
+
+      calls.length = 0;
+      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 400 * INSTANCE_FLOATS]]);
+    });
+
+    it("merges births close together into one span", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 2000);
+      renderer.resize(100, 100);
+      const dirty = Array.from({ length: 50 }, (_, k) => 10 + k * METADATA_MERGE_GAP);
+      const inPool = dirty.filter((i) => i < 2000), last = inPool.at(-1)!;
+      const particles = pool(2000, 2000, inPool);
+      calls.length = 0;
+      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      const m = METADATA_FLOATS;
+      expect(callsTo(calls, "bufferSubData").slice(1)).toEqual([["ARRAY_BUFFER", 10 * m * 4, particles.metadata, 10 * m, (last - 10 + 1) * m]]);
+    });
+
+    it("keeps metadata dirty through callbacks without a deposit and uploads once per callback", () => {
+      const { gl, calls } = createFakeGl();
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      const particles = pool(4, 10, [2]);
+      calls.length = 0;
+      // 8-bit trails at 240 Hz: no deposit in this callback, so nothing is uploaded or cleared.
+      renderer.render(particles, CHROMA, 1, 1 / 240, 1);
+      expect(callsTo(calls, "bufferSubData")).toEqual([]);
+      expect(particles.clears).toBe(0);
+      // At 30 Hz the callback deposits twice, drawing one upload of the state.
+      calls.length = 0;
+      renderer.render(particles, CHROMA, 1, 1 / 30, 1);
+      expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(2);
+      expect(callsTo(calls, "bufferSubData")).toHaveLength(2);
+      expect(particles.clears).toBe(1);
+    });
+
+    it("leaves dirty metadata for later when nothing is drawn", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      const particles = pool(0, 10, [1]);
+      calls.length = 0;
+      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      expect(callsTo(calls, "bufferSubData")).toEqual([]);
+      expect(particles.clears).toBe(0);
+    });
+
+    it("sends per-stream chroma, lightness and the size scale as uniforms every deposit", () => {
+      const { gl, calls } = createFakeGl({ halfFloat: true });
+      const renderer = new Renderer(gl, 10);
+      renderer.resize(100, 100);
+      const particles = pool(5, 10);
+      const chroma = new Float32Array(MAX_STREAMS);
+      for (const [pixelRatio, value] of [[1, 0.1], [2, 0.05]]) {
+        chroma[3] = value;
+        calls.length = 0;
+        renderer.render(particles, chroma, pixelRatio, 1 / 60, 1);
+        const uniforms = new Map(callsTo(calls, "uniform1f").map(([location, v]) => [(location as { uniform: string }).uniform, v]));
+        expect(uniforms.get("u_sizeScale")).toBe(LOOK.sizePx * pixelRatio);
+        expect(uniforms.get("u_lightness")).toBe(LOOK.lightness);
+        expect(callsTo(calls, "uniform1fv")).toEqual([[{ uniform: "u_chroma" }, chroma]]);
+        // A colour change is a uniform, not a metadata upload.
+        expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 5 * INSTANCE_FLOATS]]);
+      }
+    });
   });
 
   it("draws nothing before the first resize", () => {
     const { gl, calls } = createFakeGl();
     const renderer = new Renderer(gl, 10);
     calls.length = 0;
-    renderer.render(new Float32Array(10 * INSTANCE_FLOATS), 5, 1 / 60, 1);
+    renderer.render(pool(5), CHROMA, 1, 1 / 60, 1);
     expect(calls).toEqual([]);
   });
 
@@ -179,7 +294,7 @@ describe("Renderer", () => {
 
     // The fade floor follows the 8-bit precision.
     calls.length = 0;
-    renderer.render(new Float32Array(0), 0, 1 / 60, 1);
+    renderer.render(pool(0), CHROMA, 1, 1 / 60, 1);
     expect(callsTo(calls, "uniform1f")).toContainEqual([{ uniform: "u_floor" }, 1.5 / 255]);
   });
 
@@ -193,13 +308,13 @@ describe("Renderer", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     const renderer = new Renderer(gl, 100);
     renderer.resize(800, 600);
-    const instances = new Float32Array(100 * INSTANCE_FLOATS);
+    const particles = pool(40, 100);
 
     calls.length = 0;
-    renderer.render(instances, 40, 0.02, 4 / 3);
+    renderer.render(particles, CHROMA, 1, 0.02, 4 / 3);
     const first = passes(calls);
     expect(callsTo(calls, "viewport")).toEqual([[0, 0, 800, 600]]);
-    expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, instances, 0, 40 * INSTANCE_FLOATS]]);
+    expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 40 * INSTANCE_FLOATS]]);
     expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 40]]);
     expect(callsTo(calls, "drawArrays")).toHaveLength(2);
     expect(callsTo(calls, "blendFunc")).toEqual([["ONE", "ONE"]]);
@@ -213,13 +328,13 @@ describe("Renderer", () => {
     expect(callsTo(calls, "bindFramebuffer").at(-1)).toEqual(["FRAMEBUFFER", null]);
 
     calls.length = 0;
-    renderer.render(instances, 40, 0.02, 4 / 3);
+    renderer.render(particles, CHROMA, 1, 0.02, 4 / 3);
     const second = passes(calls);
     expect(second.wrote).not.toBe(first.wrote);
     expect(second.read).not.toBe(first.read);
 
     calls.length = 0;
-    renderer.render(instances, 40, 0.02, 4 / 3);
+    renderer.render(particles, CHROMA, 1, 0.02, 4 / 3);
     expect(passes(calls)).toEqual(first);
   });
 
@@ -228,7 +343,7 @@ describe("Renderer", () => {
     const renderer = new Renderer(gl, 10);
     renderer.resize(100, 100);
     calls.length = 0;
-    renderer.render(new Float32Array(10 * INSTANCE_FLOATS), 0, 1 / 60, 1);
+    renderer.render(pool(0), CHROMA, 1, 1 / 60, 1);
     expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
     expect(callsTo(calls, "bufferSubData")).toEqual([]);
     expect(callsTo(calls, "drawArrays")).toHaveLength(2);
@@ -347,9 +462,9 @@ describe("Renderer", () => {
       renderer.resize(100, 100);
       renderer.renderGpu(recordingSource(), 1 / 60, 1, 1, 0, 1);
       calls.length = 0;
-      const instances = new Float32Array(10 * INSTANCE_FLOATS);
-      renderer.render(instances, 3, 1 / 60, 1);
-      expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, instances, 0, 3 * INSTANCE_FLOATS]]);
+      const particles = pool(3, 10);
+      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 3 * INSTANCE_FLOATS]]);
       expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 3]]);
     });
   });

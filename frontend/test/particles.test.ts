@@ -2,13 +2,40 @@ import type { Stream } from "@beszel-river/shared";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { FlowField } from "../src/sim/noise";
-import { INSTANCE_FLOATS, ParticleSystem } from "../src/sim/particles";
+import { INSTANCE_FLOATS, METADATA_FLOATS, ParticleSystem } from "../src/sim/particles";
 import { DRAIN_PRESENCE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
 import { calledStep } from "./cpu-benchmark.browser";
 
 const ASPECT = 1.6;
 const DT = 1 / 60;
+const PIXEL_RATIO = 2;
+
+/** The pool's private liveness flags, which the renderer never needs. */
+const liveFlags = (particles: ParticleSystem): Uint8Array => (particles as unknown as { active: Uint8Array }).active;
+
+/**
+ * The live particles as the renderer draws them, in slot order, rebuilt into the former nine-float
+ * records (tail.xy, head.xy, hue, chroma, lightness, intensity, half-width in device px), so the
+ * hashes recorded with the compacted layout still check every value the shader receives.
+ */
+function drawn(particles: ParticleSystem, streams: StreamSet, pixelRatio = PIXEL_RATIO): Float32Array {
+  const live = liveFlags(particles);
+  const out = new Float32Array(particles.count * 9);
+  let n = 0;
+  for (let i = 0; i < particles.drawCount; i++) {
+    if (!live[i]) continue;
+    const d = i * INSTANCE_FLOATS, m = i * METADATA_FLOATS, o = n++ * 9;
+    out.set(particles.instances.subarray(d, d + 4), o);
+    out[o + 4] = particles.instances[d + 4];
+    out[o + 5] = streams.chroma[particles.metadata[m]];
+    out[o + 6] = LOOK.lightness;
+    out[o + 7] = particles.instances[d + 5];
+    out[o + 8] = particles.metadata[m + 1] * LOOK.sizePx * pixelRatio;
+  }
+  expect(n).toBe(particles.count);
+  return out;
+}
 
 function stream(id: string, overrides: Partial<Stream> = {}): Stream {
   return { id, alive: true, width: 0.5, flow: 0.5, density: 0.5, turbulence: 0.5, pulse: 0, heat: 0.5, ...overrides };
@@ -29,11 +56,11 @@ function setup(capacity: number, ...streams: Stream[]) {
       particles.spawn(DT, set);
       // The field depends only on time/aspect; no particle can sample it while the pool is empty.
       if (particles.count > 0) field.update(t, ASPECT);
-      n = particles.step(DT, set, field, ASPECT, 2);
+      n = particles.step(DT, set, field, ASPECT);
     }
     return n;
   };
-  return { set, particles, run };
+  return { set, particles, run, drawn: () => drawn(particles, set) };
 }
 
 describe("ParticleSystem", () => {
@@ -55,12 +82,14 @@ describe("ParticleSystem", () => {
     // Two seconds of steps, each steering every live particle: far more calls than spawns alone make.
     expect(analyticCalls).toBeGreaterThan(30 * count);
     // The centre approximation is bounded by 0.001*half; allow 0.001 world units for accumulated motion.
-    for (let i = 0; i < count * INSTANCE_FLOATS; i++) expect(Math.abs(actual.particles.instances[i] - reference.particles.instances[i])).toBeLessThan(0.001);
+    const a = actual.drawn(), b = reference.drawn();
+    for (let i = 0; i < count * 9; i++) expect(Math.abs(a[i] - b[i])).toBeLessThan(0.001);
   });
 
-  // Recorded with the step that called `FlowField.sample` per particle (before inlined sampling). The
-  // inlined interpolation keeps its arithmetic, so trajectories must stay bit-identical, through grid
-  // resizes from aspect changes.
+  // Recorded with the step that called `FlowField.sample` per particle (before inlined sampling) and
+  // wrote nine compacted floats per live particle. The inlined interpolation keeps its arithmetic, and
+  // `drawn` rebuilds those records from stable slots, so every drawn value must stay bit-identical,
+  // through grid resizes from aspect changes.
   it.each([
     [undefined, 666, "938973b2"],
     [[0.1, 0.2, 0.9, 0.3, 0.1, 0], 629, "7b0724a4"],
@@ -76,10 +105,10 @@ describe("ParticleSystem", () => {
       set.update(DT, aspect);
       particles.spawn(DT, set);
       field.update(t, aspect);
-      n = particles.step(DT, set, field, aspect, 2);
+      n = particles.step(DT, set, field, aspect);
     }
     let h = 0x811c9dc5;
-    for (const word of new Uint32Array(particles.instances.buffer, 0, n * INSTANCE_FLOATS)) h = Math.imul(h ^ word, 0x01000193) >>> 0;
+    for (const word of new Uint32Array(drawn(particles, set).buffer)) h = Math.imul(h ^ word, 0x01000193) >>> 0;
     expect([n, h.toString(16)]).toEqual([count, hash]);
   });
 
@@ -112,13 +141,14 @@ describe("ParticleSystem", () => {
   });
 
   it("writes finite instances on screen, moving upwards within the stream's band", () => {
-    const { set, particles, run } = setup(1000, stream("a", { filaments: [0.1, 0.2, 0.9, 0.3, 0.1, 0] }));
+    const { set, run, drawn } = setup(1000, stream("a", { filaments: [0.1, 0.2, 0.9, 0.3, 0.1, 0] }));
     const n = run(5);
     expect(n).toBeGreaterThan(0);
     const a = set.slots[0];
+    const records = drawn();
     for (let i = 0; i < n; i++) {
-      const o = i * INSTANCE_FLOATS;
-      const values = Array.from(particles.instances.subarray(o, o + INSTANCE_FLOATS));
+      const o = i * 9;
+      const values = Array.from(records.subarray(o, o + 9));
       expect(values.every(Number.isFinite)).toBe(true);
       const [tailX, tailY, x, y, hue, chroma, lightness, intensity, size] = values;
       expect(y).toBeGreaterThanOrEqual(tailY);
@@ -194,7 +224,91 @@ describe("ParticleSystem", () => {
     two.particles.intensityScale = 2;
     const n = one.run(3);
     expect(two.run(3)).toBe(n);
-    const intensity = (p: ParticleSystem): number => p.instances[7];
+    const intensity = (p: ParticleSystem): number => p.instances[5];
     expect(intensity(two.particles)).toBeCloseTo(2 * intensity(one.particles));
+  });
+
+  describe("stable slots", () => {
+    /** Dirty metadata slots, from the flags the renderer reads. */
+    const dirty = (p: ParticleSystem): number[] => {
+      const out: number[] = [];
+      for (let i = p.dirtyStart; i < p.dirtyEnd; i++) if (p.metadataDirty[i]) out.push(i);
+      return out;
+    };
+
+    it("writes each spawn's stream and size once, marks only those slots dirty, and keeps them while it lives", () => {
+      const { set, particles, run } = setup(400, stream("a"), stream("b"));
+      run(DT);
+      const spawned = dirty(particles);
+      expect(spawned.length).toBe(particles.count);
+      const live = liveFlags(particles);
+      for (const i of spawned) {
+        expect(live[i]).toBe(1);
+        expect(set.slots[particles.metadata[i * METADATA_FLOATS]].used).toBe(true);
+        expect(particles.metadata[i * METADATA_FLOATS + 1]).toBeGreaterThan(0);
+      }
+      particles.clearMetadataDirty();
+      expect(dirty(particles)).toEqual([]);
+      expect(particles.dirtyStart).toBeGreaterThanOrEqual(particles.dirtyEnd);
+
+      // Survivors keep their slot and metadata; only births are dirty.
+      const before = Float32Array.from(particles.metadata);
+      const survivors = spawned.filter((i) => live[i]);
+      run(0.5);
+      const births = new Set(dirty(particles));
+      for (const i of survivors) {
+        if (!live[i] || births.has(i)) continue;
+        expect(particles.metadata.subarray(i * METADATA_FLOATS, (i + 1) * METADATA_FLOATS)).toEqual(before.subarray(i * METADATA_FLOATS, (i + 1) * METADATA_FLOATS));
+      }
+      for (const i of births) expect(live[i]).toBe(1);
+    });
+
+    it("zeroes a dead slot's intensity, reuses freed slots and trims the draw count", () => {
+      const { particles, run } = setup(300, stream("a", { density: 1 }));
+      particles.limit = 150;
+      run(LOOK.turnoverSeconds * 2);
+      const live = liveFlags(particles);
+      const check = (): void => {
+        let highest = -1, count = 0;
+        for (let i = 0; i < particles.capacity; i++) {
+          if (live[i]) { highest = i; count++; } else if (i < particles.drawCount) expect(particles.instances[i * INSTANCE_FLOATS + 5]).toBe(0);
+        }
+        expect(particles.drawCount).toBe(highest + 1);
+        expect(particles.count).toBe(count);
+      };
+      check();
+      // Freed slots are taken again before untouched ones: the pool never holds more than `limit`, so
+      // through many turnovers the drawn prefix stays within it rather than creeping up to capacity.
+      for (let k = 0; k < 20; k++) {
+        run(0.5);
+        check();
+        expect(particles.drawCount).toBeLessThanOrEqual(particles.limit);
+      }
+      // Lowering the limit leaves holes; draining every particle empties the drawn prefix.
+      particles.limit = 20;
+      run(LOOK.lifeRange[1] + 1);
+      check();
+      particles.limit = 0;
+      run(LOOK.lifeRange[1] + 1);
+      check();
+      expect(particles.drawCount).toBe(0);
+    });
+
+    it("gives a slot taken by a new stream that stream's index", () => {
+      const { set, particles, run } = setup(300, stream("a"), stream("b"));
+      run(LOOK.turnoverSeconds);
+      // Daily rotation: both IDs replaced; new streams claim slots once the old ones drain.
+      set.apply({ v: 1, t: 0, streams: [stream("c"), stream("d")] });
+      run(LOOK.lifeRange[1] + 30);
+      const live = liveFlags(particles);
+      const ids = new Set<string>();
+      for (let i = 0; i < particles.drawCount; i++) {
+        if (!live[i]) continue;
+        const slot = set.slots[particles.metadata[i * METADATA_FLOATS]];
+        expect(slot.used).toBe(true);
+        ids.add(slot.id);
+      }
+      expect([...ids].sort()).toEqual(["c", "d"]);
+    });
   });
 });

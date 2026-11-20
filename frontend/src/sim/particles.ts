@@ -4,14 +4,29 @@ import type { FlowField } from "./noise";
 import { CENTER_MAX_Y, CENTER_MIN_Y, CENTER_SAMPLES, CENTER_SCALE, MIN_SHARE, laneCenter, type StreamSet } from "./streams";
 
 /**
- * Per-instance floats written by `step`, in attribute order:
- * tail x, tail y, head x, head y, hue (turns), chroma, lightness, intensity, half-width (device px).
+ * Per-slot floats rewritten by `step`, in attribute order: tail x, tail y, head x, head y, hue (turns),
+ * intensity. A dead slot keeps intensity 0, which the vertex shader clips.
  */
-export const INSTANCE_FLOATS = 9;
+export const INSTANCE_FLOATS = 6;
+/** Per-slot floats written on spawn: stream slot index, size jitter (half-width in `LOOK.sizePx`). */
+export const METADATA_FLOATS = 2;
 
-/** Fixed-size particle pool simulated on the CPU. */
+/**
+ * Fixed-size particle pool simulated on the CPU. Particles keep their slot for life, so `instances`
+ * and `metadata` are indexed by slot: the renderer uploads the first `drawCount` slots of `instances`
+ * every frame, and of `metadata` only the slots flagged in `metadataDirty`.
+ */
 export class ParticleSystem {
   readonly instances: Float32Array;
+  readonly metadata: Float32Array;
+  /** 1 for each slot whose metadata changed since `clearMetadataDirty`, all within `dirtyStart`..`dirtyEnd`. */
+  readonly metadataDirty: Uint8Array;
+  /** First flagged slot, or `capacity` when none is. */
+  dirtyStart: number;
+  /** One past the last flagged slot, or 0 when none is. */
+  dirtyEnd = 0;
+  /** Highest live slot plus one; every live particle lies below it. */
+  drawCount = 0;
   private readonly x: Float32Array;
   private readonly y: Float32Array;
   private readonly vx: Float32Array;
@@ -38,6 +53,9 @@ export class ParticleSystem {
     private readonly random: Random,
   ) {
     this.instances = new Float32Array(capacity * INSTANCE_FLOATS);
+    this.metadata = new Float32Array(capacity * METADATA_FLOATS);
+    this.metadataDirty = new Uint8Array(capacity);
+    this.dirtyStart = capacity;
     this.x = new Float32Array(capacity);
     this.y = new Float32Array(capacity);
     this.vx = new Float32Array(capacity);
@@ -57,6 +75,31 @@ export class ParticleSystem {
 
   get count(): number {
     return this.capacity - this.freeTop;
+  }
+
+  /** Called by the renderer once it has uploaded the flagged metadata. */
+  clearMetadataDirty(): void {
+    if (this.dirtyStart < this.dirtyEnd) this.metadataDirty.fill(0, this.dirtyStart, this.dirtyEnd);
+    this.dirtyStart = this.capacity;
+    this.dirtyEnd = 0;
+  }
+
+  /**
+   * Rebuilds `drawCount`, metadata and dead slots' intensity from the particle state, flagging every
+   * slot. For test fixtures that write the state directly instead of spawning.
+   */
+  resync(): void {
+    this.drawCount = 0;
+    for (let i = 0; i < this.capacity; i++) {
+      if (this.active[i]) {
+        this.metadata[i * METADATA_FLOATS] = this.slot[i];
+        this.metadata[i * METADATA_FLOATS + 1] = this.size[i];
+        this.drawCount = i + 1;
+      } else this.instances[i * INSTANCE_FLOATS + 5] = 0;
+    }
+    this.metadataDirty.fill(1);
+    this.dirtyStart = 0;
+    this.dirtyEnd = this.capacity;
   }
 
   /** Spawns along the bottom edge; rates are normalized so `limit` particles turn over every `turnoverSeconds`. */
@@ -100,16 +143,22 @@ export class ParticleSystem {
         this.hueJitter[i] = (random() - 0.5) * 2 * LOOK.hueJitter;
         this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
         s.particles++;
+        const m = i * METADATA_FLOATS;
+        this.metadata[m] = slotIndex;
+        this.metadata[m + 1] = this.size[i];
+        this.metadataDirty[i] = 1;
+        if (i < this.dirtyStart) this.dirtyStart = i;
+        if (i >= this.dirtyEnd) this.dirtyEnd = i + 1;
+        if (i >= this.drawCount) this.drawCount = i + 1;
       }
     }
   }
 
-  /** Advances every particle and writes the live ones to `instances`; returns the instance count. */
-  step(dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
+  /** Advances every particle and writes its slot of `instances`; returns the live count. */
+  step(dt: number, streams: StreamSet, field: FlowField, aspect: number): number {
     const { x, y, vx, vy, age, life, instances } = this;
     const slots = streams.slots;
     const k = 1 - Math.exp(-dt / LOOK.inertia);
-    const sizeScale = LOOK.sizePx * devicePixelRatio;
     // Flow grid, read once per step: the same clamped bilinear interpolation as `FlowField.sample`,
     // inlined with locals instead of a call that writes two properties per particle.
     const flow = field.vectors, cols = field.gridCols, cell = field.gridCell;
@@ -117,9 +166,10 @@ export class ParticleSystem {
     // Centre lines, likewise: `StreamSlot.centerAt`'s interpolation over the shared table.
     const centers = streams.centers;
     this.globalHue = fract(this.globalHue + LOOK.hueRotate * dt);
-    let n = 0;
+    const end = this.drawCount;
+    let highest = -1;
 
-    for (let i = 0; i < this.capacity; i++) {
+    for (let i = 0; i < end; i++) {
       if (!this.active[i]) continue;
       const slotIndex = this.slot[i];
       const s = slots[slotIndex];
@@ -128,8 +178,10 @@ export class ParticleSystem {
         this.active[i] = 0;
         this.free[this.freeTop++] = i;
         s.particles--;
+        instances[i * INSTANCE_FLOATS + 5] = 0;
         continue;
       }
+      highest = i;
 
       // Upward speed from the stream, sideways from curl noise plus a pull to the centre line (or lane).
       // The heading stays within ±maxSlope of vertical: data changes speed and wiggle, not direction.
@@ -166,18 +218,16 @@ export class ParticleSystem {
       y[i] += vy[i] * dt;
 
       const fade = Math.min(age[i] / LOOK.fadeIn, (life[i] - age[i]) / LOOK.fadeOut, 1);
-      const o = n * INSTANCE_FLOATS;
+      const o = i * INSTANCE_FLOATS;
       instances[o] = x[i] - vx[i] * s.streakSeconds;
       instances[o + 1] = y[i] - vy[i] * s.streakSeconds;
       instances[o + 2] = x[i];
       instances[o + 3] = y[i];
       instances[o + 4] = fract(this.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + this.hueJitter[i]);
-      instances[o + 5] = s.chroma;
-      instances[o + 6] = LOOK.lightness;
-      instances[o + 7] = LOOK.intensity * this.intensityScale * fade * s.brightness;
-      instances[o + 8] = this.size[i] * sizeScale;
-      n++;
+      instances[o + 5] = LOOK.intensity * this.intensityScale * fade * s.brightness;
     }
-    return n;
+    // Slots above the highest survivor are all dead now: stop drawing them.
+    this.drawCount = highest + 1;
+    return this.count;
   }
 }

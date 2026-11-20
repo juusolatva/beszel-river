@@ -72,7 +72,7 @@ export async function runGpuOccupancyInvestigation() {
               beforeMotion = Object.fromEntries((["x", "y", "vx", "vy", "age", "life", "speedJitter"] as const)
                 .map(key => [key, c.storage[key].slice()]));
             }
-            c.particles.step(dt, c.streams, field, aspect, 1);
+            c.particles.step(dt, c.streams, field, aspect);
           }
           const totalRequests = requests.reduce((a, b) => a + b, 0);
           const accepted = Math.min(totalRequests, capacity - live);

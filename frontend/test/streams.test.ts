@@ -426,3 +426,16 @@ it("keeps every slot's centre line in its own part of the shared table", () => {
     expect(set.centers.subarray(i * CENTER_SAMPLES, (i + 1) * CENTER_SAMPLES).every((v) => v === 0)).toBe(true);
   }
 });
+
+it("publishes every used slot's eased chroma for the renderer, by slot index", () => {
+  const set = new StreamSet(1);
+  set.apply(frame(stream("a"), stream("b", { alive: false })));
+  for (let k = 0; k < 30; k++) set.update(0.1, 1.5);
+  expect(set.chroma).toHaveLength(MAX_STREAMS);
+  for (const id of ["a", "b"]) {
+    const slot = slotOf(set, id);
+    expect(set.chroma[set.slots.indexOf(slot)]).toBe(Math.fround(slot.chroma));
+  }
+  // Vitality dims the stopped host's colour every frame.
+  expect(slotOf(set, "b").chroma).toBeLessThan(slotOf(set, "a").chroma);
+});

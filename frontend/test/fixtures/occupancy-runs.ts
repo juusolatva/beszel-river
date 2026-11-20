@@ -42,7 +42,7 @@ export function runCpuOccupancy(scenario: OccupancyScenario, seed: number, pcg: 
     streams.update(dt, aspect);
     field.update(time, aspect);
     spawn(dt);
-    particles.step(dt, streams, field, aspect, 1);
+    particles.step(dt, streams, field, aspect);
     windows.add(time, dt, particles.count, (s) => streams.slots[s].particles);
   }
   return { scenario, seed, starts: windows.starts, means: windows.means };

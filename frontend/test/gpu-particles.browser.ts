@@ -55,7 +55,7 @@ export function runGpuMotionBrowserChecks(): { cases: number; maxOneStepError: n
           const aspect = j >= 60 ? 1.2 : 1.5;
           field.update(0.3 + j * dt, aspect);
           gpu.step(dt, streams, field, aspect);
-          if (dt > 0) cpu.step(dt, streams, field, aspect, 1);
+          if (dt > 0) cpu.step(dt, streams, field, aspect);
           gl.bindBuffer(gl.ARRAY_BUFFER, gpu.stateBuffer);
           gl.getBufferSubData(gl.ARRAY_BUFFER, 0, new Uint8Array(readback));
           gl.bindBuffer(gl.ARRAY_BUFFER, null);

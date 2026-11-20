@@ -225,7 +225,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
         // Submission starts after the query switch, so neither span (nor the budget's input) includes query calls.
         const renderBegin = performance.now();
         if (dt > 0) {
-          if (cpu) renderer.render(cpu.particles.instances, count, dt, width / height);
+          if (cpu) renderer.render(cpu.particles, cpu.streams.chroma, pixelRatio, dt, width / height);
           else renderer.renderGpu(gpu!.drawer, dt, width / height, pixelRatio, gpu!.particles.globalHue, gpu!.intensity);
         }
         const end = performance.now();

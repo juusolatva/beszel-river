@@ -1,13 +1,36 @@
 import { LOOK } from "../src/config";
 import { GpuParticleDrawer } from "../src/render/gpu-particle-drawer";
-import { Renderer } from "../src/render/renderer";
+import { Renderer, type ParticleInstances } from "../src/render/renderer";
 import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
 import { ParticleSystem } from "../src/sim/particles";
-import { StreamSet } from "../src/sim/streams";
+import { MAX_STREAMS, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
 import { replayFrames } from "./fixtures/gpu-replay";
 import { preloadCpuState, preloadGpuState } from "./fixtures/gpu-state";
+
+const NO_CHROMA = new Float32Array(MAX_STREAMS);
+
+/**
+ * One stationary grey streak at the centre, half-width 2 device px at pixel ratio 1, or an empty pool;
+ * its metadata is flagged, so each new renderer uploads it.
+ */
+function streak(intensity: number, drawn = true): ParticleInstances {
+  const pool = {
+    instances: new Float32Array([0.5, 0.5, 0.5, 0.5, 0, intensity]),
+    metadata: new Float32Array([0, 2 / LOOK.sizePx]),
+    metadataDirty: new Uint8Array([1]),
+    dirtyStart: 0,
+    dirtyEnd: 1,
+    drawCount: drawn ? 1 : 0,
+    clearMetadataDirty() {
+      pool.metadataDirty[0] = 0;
+      pool.dirtyStart = 1;
+      pool.dirtyEnd = 0;
+    },
+  };
+  return pool;
+}
 
 /** Real-shader regression checks; with Vite running, import this module in the browser console. */
 export function runRendererBrowserChecks(RendererClass = Renderer): { half: boolean; intensity: number; red: number[] }[] {
@@ -31,14 +54,14 @@ export function runRendererBrowserChecks(RendererClass = Renderer): { half: bool
         const renderer = new RendererClass(gl, 1);
         renderer.resize(32, 32);
         assert(renderer.halfFloat === half, `${half}: renderer fell back to RGBA8`);
-        const instances = new Float32Array([0.5, 0.5, 0.5, 0.5, 0, 0, 0.75, intensity, 2]);
-        for (let frame = 0; frame < hz * 2; frame++) renderer.render(instances, 1, 1 / hz, 1);
+        const pool = streak(intensity), empty = streak(0, false);
+        for (let frame = 0; frame < hz * 2; frame++) renderer.render(pool, NO_CHROMA, 1, 1 / hz, 1);
         gl.readPixels(16, 16, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
         assert(pixel[0] > 0, `${half}/${hz}: stationary streak disappeared`);
         red.push(pixel[0]);
 
         // Empty pools must fade all the way to black, including low-precision targets.
-        for (let frame = 0; frame < 100; frame++) renderer.render(instances, 0, LOOK.maxDt, 1);
+        for (let frame = 0; frame < 100; frame++) renderer.render(empty, NO_CHROMA, 1, LOOK.maxDt, 1);
         gl.readPixels(16, 16, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
         assert(pixel[0] === 0, `${half}/${hz}: trail left a ghost`);
       }
@@ -48,7 +71,7 @@ export function runRendererBrowserChecks(RendererClass = Renderer): { half: bool
     }
     const zero = new RendererClass(gl, 1);
     zero.resize(32, 32);
-    zero.render(new Float32Array([0.5, 0.5, 0.5, 0.5, 0, 0, 0.75, 0.3, 2]), 1, 0, 1);
+    zero.render(streak(0.3), NO_CHROMA, 1, 0, 1);
     gl.readPixels(16, 16, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
     assert(pixel[0] === 0, `${half}: zero dt added energy`);
     assert(gl.getError() === gl.NO_ERROR, `${half}: WebGL error`);
@@ -140,9 +163,9 @@ export function runGpuDrawBrowserChecks(tolerance = 1): { half: boolean; hz: num
         const frames = Math.round(hz / 2);
         for (let frame = 0; frame < frames; frame++) {
           field.update(frame * dt, DRAW_ASPECT);
-          const n = cpu.step(dt, streams, field, DRAW_ASPECT, pixelRatio);
+          cpu.step(dt, streams, field, DRAW_ASPECT);
           gpu.step(dt, streams, field, DRAW_ASPECT);
-          cpuRenderer.render(cpu.instances, n, dt, DRAW_ASPECT);
+          cpuRenderer.render(cpu, streams.chroma, pixelRatio, dt, DRAW_ASPECT);
           if (frame === frames - 1) gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, cpuPixels);
           gpuRenderer.renderGpu(drawer, dt, DRAW_ASPECT, pixelRatio, gpu.globalHue, intensityScale);
           if (frame === frames - 1) gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, gpuPixels);
@@ -255,13 +278,13 @@ export function captureGpuRiverComparison(options: { width?: number; height?: nu
         cpuStreams.update(dt, aspect);
         cpuField.update(time, aspect);
         cpu.spawn(dt, cpuStreams);
-        const n = cpu.step(dt, cpuStreams, cpuField, aspect, 1);
+        cpu.step(dt, cpuStreams, cpuField, aspect);
         gpu.lifecycle.advanceTime(dt);
         gpuStreams.update(dt, aspect);
         gpuField.update(time, aspect);
         gpu.step(dt, gpuStreams, gpuField, aspect);
         const at = captureAt.includes(step / 60);
-        cpuRenderer.render(cpu.instances, n, dt, aspect);
+        cpuRenderer.render(cpu, cpuStreams.chroma, 1, dt, aspect);
         if (at) capture(scene, step / 60, "cpu");
         gpuRenderer.renderGpu(drawer, dt, aspect, 1, gpu.globalHue, 1);
         if (at) capture(scene, step / 60, "gpu");

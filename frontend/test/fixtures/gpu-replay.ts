@@ -221,7 +221,7 @@ export class CpuReplay {
     this.streams.update(dt, aspect);
     this.field.update(this.time, aspect);
     this.particles.spawn(dt, this.streams);
-    return this.particles.step(dt, this.streams, this.field, aspect, trace.pixelRatio[i]);
+    return this.particles.step(dt, this.streams, this.field, aspect);
   }
 }
 

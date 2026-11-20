@@ -27,6 +27,7 @@ interface Pool {
   capacity: number; instances: Float32Array; x: Float32Array; y: Float32Array; vx: Float32Array; vy: Float32Array;
   age: Float32Array; life: Float32Array; hueJitter: Float32Array; size: Float32Array; speedJitter: Float32Array;
   offset: Float32Array; slot: Uint8Array; active: Uint8Array; free: Int32Array; freeTop: number; globalHue: number; intensityScale: number;
+  drawCount: number; count: number;
 }
 
 /**
@@ -35,17 +36,17 @@ interface Pool {
  * as production. Also the analytic reference of `particles.test.ts`, which needs every particle steered
  * through `centerAt`.
  */
-export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
+export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number): number {
   const p = this as unknown as Pool;
   const { x, y, vx, vy, age, life, instances } = p;
   const slots = streams.slots;
   const k = 1 - Math.exp(-dt / LOOK.inertia);
-  const sizeScale = LOOK.sizePx * devicePixelRatio;
   const flow = field.vectors, cols = field.gridCols, cell = field.gridCell;
   const maxFx = cols - 1.001, maxFy = field.gridRows - 1.001;
   p.globalHue = fract(p.globalHue + LOOK.hueRotate * dt);
-  let n = 0;
-  for (let i = 0; i < p.capacity; i++) {
+  const end = p.drawCount;
+  let highest = -1;
+  for (let i = 0; i < end; i++) {
     if (!p.active[i]) continue;
     const s = slots[p.slot[i]];
     age[i] += dt;
@@ -53,8 +54,10 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
       p.active[i] = 0;
       p.free[p.freeTop++] = i;
       s.particles--;
+      instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;
     }
+    highest = i;
     const fx = Math.min(Math.max(x[i] / cell, 0), maxFx);
     const fy = Math.min(Math.max(y[i] / cell, 0), maxFy);
     const c = Math.floor(fx);
@@ -77,19 +80,16 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
     x[i] += vx[i] * dt;
     y[i] += vy[i] * dt;
     const fade = Math.min(age[i] / LOOK.fadeIn, (life[i] - age[i]) / LOOK.fadeOut, 1);
-    const o = n * INSTANCE_FLOATS;
+    const o = i * INSTANCE_FLOATS;
     instances[o] = x[i] - vx[i] * s.streakSeconds;
     instances[o + 1] = y[i] - vy[i] * s.streakSeconds;
     instances[o + 2] = x[i];
     instances[o + 3] = y[i];
     instances[o + 4] = fract(p.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + p.hueJitter[i]);
-    instances[o + 5] = s.chroma;
-    instances[o + 6] = LOOK.lightness;
-    instances[o + 7] = LOOK.intensity * p.intensityScale * fade * s.brightness;
-    instances[o + 8] = p.size[i] * sizeScale;
-    n++;
+    instances[o + 5] = LOOK.intensity * p.intensityScale * fade * s.brightness;
   }
-  return n;
+  p.drawCount = highest + 1;
+  return p.count;
 }
 
 /**
@@ -97,16 +97,16 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
  * through `sx`/`sy`. Same results bit for bit (see particles.test.ts); kept only as the benchmark's reference.
  * Centre lines are interpolated inline as in production, so only the flow sampling differs.
  */
-function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
+function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number): number {
   const p = this as unknown as Pool;
   const { x, y, vx, vy, age, life, instances } = p;
   const slots = streams.slots;
   const k = 1 - Math.exp(-dt / LOOK.inertia);
-  const sizeScale = LOOK.sizePx * devicePixelRatio;
   const centers = streams.centers;
   p.globalHue = fract(p.globalHue + LOOK.hueRotate * dt);
-  let n = 0;
-  for (let i = 0; i < p.capacity; i++) {
+  const end = p.drawCount;
+  let highest = -1;
+  for (let i = 0; i < end; i++) {
     if (!p.active[i]) continue;
     const slotIndex = p.slot[i];
     const s = slots[slotIndex];
@@ -115,8 +115,10 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
       p.active[i] = 0;
       p.free[p.freeTop++] = i;
       s.particles--;
+      instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;
     }
+    highest = i;
     field.sample(x[i], y[i]);
     const py = y[i];
     let center: number;
@@ -136,19 +138,16 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
     x[i] += vx[i] * dt;
     y[i] += vy[i] * dt;
     const fade = Math.min(age[i] / LOOK.fadeIn, (life[i] - age[i]) / LOOK.fadeOut, 1);
-    const o = n * INSTANCE_FLOATS;
+    const o = i * INSTANCE_FLOATS;
     instances[o] = x[i] - vx[i] * s.streakSeconds;
     instances[o + 1] = y[i] - vy[i] * s.streakSeconds;
     instances[o + 2] = x[i];
     instances[o + 3] = y[i];
     instances[o + 4] = fract(p.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + p.hueJitter[i]);
-    instances[o + 5] = s.chroma;
-    instances[o + 6] = LOOK.lightness;
-    instances[o + 7] = LOOK.intensity * p.intensityScale * fade * s.brightness;
-    instances[o + 8] = p.size[i] * sizeScale;
-    n++;
+    instances[o + 5] = LOOK.intensity * p.intensityScale * fade * s.brightness;
   }
-  return n;
+  p.drawCount = highest + 1;
+  return p.count;
 }
 
 export type Variant = "analytic" | "called" | "inline" | "sampled" | "inlined";
@@ -200,7 +199,7 @@ export async function runCpuBenchmark(compare: "centres" | "flow" = "centres", o
       streams.update(1 / 60, aspect);
       field.update(frame / 60, aspect);
       particles.spawn(1 / 60, streams);
-      count = particles.step(1 / 60, streams, field, aspect, pixelRatio);
+      count = particles.step(1 / 60, streams, field, aspect);
       if (frame >= warmupFrames) times[frame - warmupFrames] = performance.now() - start;
     }
     const meanMs = times.reduce((sum, n) => sum + n, 0) / measuredFrames;
