@@ -5,6 +5,7 @@ import { FlowField } from "../src/sim/noise";
 import { INSTANCE_FLOATS, ParticleSystem } from "../src/sim/particles";
 import { DRAIN_PRESENCE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
+import { calledStep } from "./cpu-benchmark.browser";
 
 const ASPECT = 1.6;
 const DT = 1 / 60;
@@ -39,9 +40,20 @@ describe("ParticleSystem", () => {
   it.each([undefined, [0.1, 0.2, 0.9, 0.3, 0.1, 0]])("keeps cached-centre trajectories close to the analytic reference (%s)", (filaments) => {
     const actual = setup(1000, stream("a", { filaments }));
     const reference = setup(1000, stream("a", { filaments }));
-    for (const slot of reference.set.slots) slot.centerAt = (y) => slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+    // The production step reads the centre table inline; the reference steers every particle through
+    // `centerAt`, overridden with the sine, so the comparison covers accumulated motion, not only spawns.
+    let analyticCalls = 0;
+    for (const slot of reference.set.slots) {
+      slot.centerAt = (y) => {
+        analyticCalls++;
+        return slot.center + slot.half * LOOK.braid * Math.sin(2 * Math.PI * (y * LOOK.braidWaves + slot.phase) + slot.braidAngle);
+      };
+    }
+    reference.particles.step = calledStep;
     const count = actual.run(2);
     expect(reference.run(2)).toBe(count);
+    // Two seconds of steps, each steering every live particle: far more calls than spawns alone make.
+    expect(analyticCalls).toBeGreaterThan(30 * count);
     // The centre approximation is bounded by 0.001*half; allow 0.001 world units for accumulated motion.
     for (let i = 0; i < count * INSTANCE_FLOATS; i++) expect(Math.abs(actual.particles.instances[i] - reference.particles.instances[i])).toBeLessThan(0.001);
   });

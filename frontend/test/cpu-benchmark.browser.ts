@@ -32,9 +32,10 @@ interface Pool {
 /**
  * `ParticleSystem.step` with a `StreamSlot.centerAt` call per particle, as it was before the centre
  * table was inlined; with `analyticCenter` as `centerAt`, as it was before Task 3. Same flow sampling
- * as production.
+ * as production. Also the analytic reference of `particles.test.ts`, which needs every particle steered
+ * through `centerAt`.
  */
-function calledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
+export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet, field: FlowField, aspect: number, devicePixelRatio: number): number {
   const p = this as unknown as Pool;
   const { x, y, vx, vy, age, life, instances } = p;
   const slots = streams.slots;
