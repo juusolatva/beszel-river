@@ -1,0 +1,731 @@
+{
+  "date": "2026-11-20T05:42:06.844Z",
+  "browser": "chromium",
+  "browserVersion": "158.0.8127.18",
+  "playwrightVersion": "1.65.0",
+  "host": {
+    "cpu": "Intel(R) Core(TM) i5-8350U CPU @ 1.70GHz",
+    "platform": "linux",
+    "release": "7.3.3-200.fc44.x86_64"
+  },
+  "summary": [
+    {
+      "compare": "centres",
+      "reference": {
+        "variant": "analytic",
+        "meanMs": 2.4934333333306844,
+        "minMs": 2.3731666666269304,
+        "maxMs": 2.637833333313465,
+        "runs": 15
+      },
+      "candidate": {
+        "variant": "cached",
+        "meanMs": 1.956638888900479,
+        "minMs": 1.8377499999850988,
+        "maxMs": 2.137583333402872,
+        "runs": 15
+      },
+      "change": -0.21528325512243185
+    },
+    {
+      "compare": "flow",
+      "reference": {
+        "variant": "sampled",
+        "meanMs": 1.9860722222212288,
+        "minMs": 1.8577499999850988,
+        "maxMs": 2.0729166666915018,
+        "runs": 15
+      },
+      "candidate": {
+        "variant": "inlined",
+        "meanMs": 1.9558500000039736,
+        "minMs": 1.808499999990066,
+        "maxMs": 2.1559166666368643,
+        "runs": 15
+      },
+      "change": -0.01521708117112408
+    }
+  ],
+  "results": [
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 2.3731666666269304,
+          "p50Ms": 2.300000011920929,
+          "p95Ms": 2.699999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.4312500000745056,
+          "p50Ms": 2.4000000059604645,
+          "p95Ms": 2.899999976158142,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.416833333323399,
+          "p50Ms": 2.4000000059604645,
+          "p95Ms": 2.7000000178813934,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "cached",
+          "meanMs": 1.9756666666766007,
+          "p50Ms": 2,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.9885833334177732,
+          "p50Ms": 2,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.9818333333233993,
+          "p50Ms": 2,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 1.933250000004967,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.9735000000149012,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 2.0729166666915018,
+          "p50Ms": 2,
+          "p95Ms": 2.699999988079071,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 0,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 2.0338333332538605,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.800000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.9383333333581687,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.9055000000447035,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "cached",
+          "meanMs": 1.9494166666766009,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.9589999999850989,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 2.0260000000397365,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.5,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 2.4164166666567324,
+          "p50Ms": 2.300000011920929,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.414250000019868,
+          "p50Ms": 2.399999976158142,
+          "p95Ms": 2.899999976158142,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.6154999999701976,
+          "p50Ms": 2.5999999940395355,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 2.036416666706403,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.600000023841858,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 2.1559166666368643,
+          "p50Ms": 2,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.9716666666418314,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.4000000059604645,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 1,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 2.011416666681568,
+          "p50Ms": 2,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.9429166666666666,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.937749999910593,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 2.3957500000298024,
+          "p50Ms": 2.300000011920929,
+          "p95Ms": 2.800000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.4721666666368645,
+          "p50Ms": 2.399999976158142,
+          "p95Ms": 3.0999999940395355,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.6106666666269303,
+          "p50Ms": 2.5999999940395355,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "cached",
+          "meanMs": 1.943499999990066,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.300000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 2.0060833333184322,
+          "p50Ms": 2,
+          "p95Ms": 2.300000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 2.137583333402872,
+          "p50Ms": 2,
+          "p95Ms": 2.7999999821186066,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 2.054583333308498,
+          "p50Ms": 2,
+          "p95Ms": 2.4000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.9746666666616997,
+          "p50Ms": 2,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.9358333333333333,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 2,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 1.8924166666219633,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.0999999940395355,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.8207500000298023,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.0999999940395355,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.808499999990066,
+          "p50Ms": 1.7999999821186066,
+          "p95Ms": 2.0999999940395355,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 3,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "cached",
+          "meanMs": 1.8434166666865348,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.8377499999850988,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.2000000178813934,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.8717500000198681,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.300000011920929,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 3,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 2.5935833333432674,
+          "p50Ms": 2.5999999940395355,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.4941666666666666,
+          "p50Ms": 2.5,
+          "p95Ms": 2.7999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.5756666666517654,
+          "p50Ms": 2.5,
+          "p95Ms": 3,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 3,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 1.869249999995033,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.8385833332935968,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 1.8904166666666666,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.399999976158142,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 3,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 2.046249999975165,
+          "p50Ms": 2,
+          "p95Ms": 2.4000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 2.046916666676601,
+          "p50Ms": 2,
+          "p95Ms": 2.300000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 2.0122500000149013,
+          "p50Ms": 2,
+          "p95Ms": 2.2999999821186066,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 4,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "analytic",
+          "meanMs": 2.5272499999900657,
+          "p50Ms": 2.4000000059604645,
+          "p95Ms": 3.300000011920929,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.4270000000298024,
+          "p50Ms": 2.399999976158142,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "analytic",
+          "meanMs": 2.637833333313465,
+          "p50Ms": 2.5999999940395355,
+          "p95Ms": 2.9000000059604645,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 4,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "centres",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "cached",
+          "meanMs": 1.9400833333283662,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.9472500000149011,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "cached",
+          "meanMs": 1.9416666666418314,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 4,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "sampled",
+          "meanMs": 1.8577499999850988,
+          "p50Ms": 1.800000011920929,
+          "p95Ms": 2.199999988079071,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 1.9556666667262712,
+          "p50Ms": 1.9000000059604645,
+          "p95Ms": 2.4000000059604645,
+          "live": 16661
+        },
+        {
+          "variant": "sampled",
+          "meanMs": 2.035416666666667,
+          "p50Ms": 2,
+          "p95Ms": 2.4000000059604645,
+          "live": 16661
+        }
+      ]
+    },
+    {
+      "session": 4,
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/158.0.8127.18 Safari/537.36",
+      "compare": "flow",
+      "seed": 42,
+      "capacity": 20000,
+      "aspect": 1.5,
+      "pixelRatio": 1.5,
+      "warmupFrames": 600,
+      "measuredFrames": 1200,
+      "runs": [
+        {
+          "variant": "inlined",
+          "meanMs": 2.1058333334326744,
+          "p50Ms": 2,
+          "p95Ms": 2.600000023841858,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 2.060166666706403,
+          "p50Ms": 2,
+          "p95Ms": 2.5,
+          "live": 16661
+        },
+        {
+          "variant": "inlined",
+          "meanMs": 2.0101666666815676,
+          "p50Ms": 2,
+          "p95Ms": 2.300000011920929,
+          "live": 16661
+        }
+      ]
+    }
+  ]
+}
