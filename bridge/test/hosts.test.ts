@@ -52,7 +52,7 @@ describe("HostTable", () => {
     table.upsertSystem(system("a", "down"));
     expect(table.frame(day1Later).streams[0]).toMatchObject({ id: idA, alive: false });
     table.upsertSystem(system("p", "paused"));
-    expect(table.removeSystem("p")).toBe(true);
+    expect(table.removeSystem("p")).toBe(false);
     expect(table.removeSystem("unknown")).toBe(false);
     expect(table.frame(day1Later).streams).toHaveLength(1);
     expect(idSpy).toHaveBeenCalledTimes(1);
@@ -115,6 +115,22 @@ describe("HostTable", () => {
     expect(table.upsertSystem(system("a", "down"))).toBe(true);
     expect(table.removeSystem("a")).toBe(true);
     expect(table.frame(now).streams).toHaveLength(0);
+  });
+
+  it("does not report changes confined to paused hosts, which would time hidden inventory changes", () => {
+    const table = new HostTable(salt, mix);
+    // Adding, editing and removing a paused host leaves the frame alone, even with no visible hosts.
+    expect(table.upsertSystem(system("p", "paused"))).toBe(false);
+    expect(table.upsertSystem(system("p", "paused", { t: 8, cpu: 10, mp: 20 }))).toBe(false);
+    expect(table.removeSystem("p")).toBe(false);
+    // Moving into and out of the visible set does change it.
+    expect(table.upsertSystem(system("q", "paused"))).toBe(false);
+    expect(table.upsertSystem(system("q", "up"))).toBe(true);
+    expect(table.upsertSystem(system("q", "up", { t: 8, cpu: 10, mp: 20 }))).toBe(true);
+    expect(table.upsertSystem(system("q", "paused"))).toBe(true);
+    expect(table.frame(now).streams).toHaveLength(0);
+    // A paused host's stats stay quiet too.
+    expect(table.addStats(stats("q", "2026-10-22 11:59:00.000Z", 50), now.getTime())).toBe(false);
   });
 
   it("mixes stats in time order and ignores older or unknown records", () => {

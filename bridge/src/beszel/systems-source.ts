@@ -48,7 +48,7 @@ export class SystemsSource {
       (event) => {
         if (event.action !== "create") return;
         if (heldStats) heldStats.push(event.record);
-        else this.handlers.stats(event.record);
+        else this.deliver("stats", event.record);
       },
       { filter: 'type = "1m"', fields: STATS_FIELDS },
     );
@@ -60,10 +60,10 @@ export class SystemsSource {
       batch: 1000,
     });
     this.applySystems(systems);
-    for (const record of history) this.handlers.history(record);
+    for (const record of history) this.deliver("history", record);
     const live = heldStats.toSorted((a, b) => a.created.localeCompare(b.created));
     heldStats = null;
-    for (const record of live) this.handlers.stats(record);
+    for (const record of live) this.deliver("stats", record);
 
     log("info", `Loaded ${systems.length} systems and ${history.length} history records`);
   }
@@ -101,6 +101,18 @@ export class SystemsSource {
       this.handlers.system(system);
     }
     this.flushHeldSystems();
+  }
+
+  /**
+   * Passes one stats record on, skipping it if the pipeline throws: one host's malformed record must
+   * not fail the startup replay, and with it every host's updates, on each reconnect.
+   */
+  private deliver(kind: "history" | "stats", record: SystemStatsRecord): void {
+    try {
+      this.handlers[kind](record);
+    } catch (error) {
+      log("warn", "Skipping a stats record that could not be processed", error);
+    }
   }
 
   private flushHeldSystems(): void {

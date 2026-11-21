@@ -23,8 +23,12 @@ export function sampleFromStats(s: SystemStats): Sample {
   const cpu = s.cpu ?? 0;
   const tx = s.b?.[0] ?? (s.ns ?? 0) * MB;
   const rx = s.b?.[1] ?? (s.nr ?? 0) * MB;
-  // Agents report 0 for sensors they cannot read.
-  const temps = Object.values(s.t ?? {}).filter((t) => t > 0);
+  // Agents report 0 for sensors they cannot read. A loop, not Math.max(...temps): spreading a large
+  // sensor map would exceed the engine's argument limit and throw.
+  let tempMax: number | null = null;
+  for (const t of Object.values(s.t ?? {})) {
+    if (t > 0 && (tempMax === null || t > tempMax)) tempMax = t;
+  }
   return {
     cpu,
     cpuPeak: s.cpum ?? cpu,
@@ -36,7 +40,7 @@ export function sampleFromStats(s: SystemStats): Sample {
     diskRead: s.dio?.[0] ?? (s.dr ?? 0) * MB,
     diskWrite: s.dio?.[1] ?? (s.dw ?? 0) * MB,
     load1: s.la?.[0] ?? 0,
-    tempMax: temps.length > 0 ? Math.max(...temps) : null,
+    tempMax,
     cores: s.cpus && s.cpus.length > 0 ? s.cpus : null,
   };
 }

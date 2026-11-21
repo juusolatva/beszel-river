@@ -2,6 +2,7 @@ import type PocketBase from "pocketbase";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SystemsSource, type SystemsHandlers } from "../src/beszel/systems-source.js";
 import type { SystemRecord, SystemStatsRecord } from "../src/beszel/types.js";
+import { log } from "../src/log.js";
 
 vi.mock("../src/log.js", () => ({ log: vi.fn() }));
 
@@ -83,6 +84,32 @@ describe("SystemsSource", () => {
     lists.system_stats.resolve([record("h1", "2026-10-26 11:00:00"), record("h2", "2026-10-26 11:01:00")]);
     await started;
     expect(calls).toEqual(["system a up", "system b up", "system a down", "removed b", "history h1", "history h2", "stats live1", "stats live2"]);
+  });
+
+  it("skips a stats record the pipeline cannot process and carries on with the rest", async () => {
+    const { pb, lists, emit } = createPb();
+    const { calls, handlers } = recorder();
+    const reject = (r: SystemStatsRecord, push: () => number): void => {
+      if (r.id.startsWith("bad")) throw new RangeError("Maximum call stack size exceeded");
+      push();
+    };
+    const source = new SystemsSource(pb, {
+      ...handlers,
+      history: (r) => reject(r, () => calls.push(`history ${r.id}`)),
+      stats: (r) => reject(r, () => calls.push(`stats ${r.id}`)),
+    });
+    const started = source.start();
+    await settle();
+    lists.systems.resolve([]);
+    await settle();
+    emit("system_stats", { action: "create", record: record("bad-held", "2026-10-26 12:00:01") });
+    emit("system_stats", { action: "create", record: record("held", "2026-10-26 12:00:02") });
+    lists.system_stats.resolve([record("h1", "2026-10-26 11:00:00"), record("bad-h", "2026-10-26 11:01:00"), record("h2", "2026-10-26 11:02:00")]);
+    await started;
+    emit("system_stats", { action: "create", record: record("bad-live", "2026-10-26 12:00:03") });
+    emit("system_stats", { action: "create", record: record("live", "2026-10-26 12:00:04") });
+    expect(calls).toEqual(["history h1", "history h2", "stats held", "stats live"]);
+    expect(vi.mocked(log)).toHaveBeenCalledWith("warn", "Skipping a stats record that could not be processed", expect.any(RangeError));
   });
 
   it("passes changes straight through once loaded, and ignores stats updates and deletes", async () => {
