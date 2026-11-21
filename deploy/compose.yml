@@ -26,7 +26,8 @@ services:
     volumes:
       # Required. create_host_path: false makes a missing file an error at Compose setup instead of
       # Docker creating an empty directory in its place. The container (uid and gid 1000) must be able to
-      # read it: chown root:1000, chmod 440, so no host account but root can change it.
+      # read it: chown root:1000, chmod 440, so only root can change it in place; whoever can write this
+      # directory can still replace it, so keep the directory yours alone.
       - type: bind
         source: ./mix.json
         target: /config/mix.json

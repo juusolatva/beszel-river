@@ -295,7 +295,7 @@ docker compose ps                          # "(healthy)" once logged in to the h
 ```
 
 - `install -m 600`: copies a template readable only by you, before any secret goes in. `cp` followed by `chmod` would leave what you type readable by other accounts until the `chmod`.
-- `chown root:1000 mix.json`: the container runs as uid and gid 1000 (the image's `node` user) and reads the bind-mounted recipe through the group; otherwise startup stops with an "unreadable recipe" error. `chmod 440`: root and group 1000 can read it and nobody can write it. Because root owns it, no host account, including whoever has uid 1000 on the host, can change its mode or contents; edit it later with `sudo`. Members of host group 1000 can read it, so on a shared host check that the group holds only trusted accounts.
+- `chown root:1000 mix.json`: the container runs as uid and gid 1000 (the image's `node` user) and reads the bind-mounted recipe through the group; otherwise startup stops with an "unreadable recipe" error. `chmod 440`: root and group 1000 can read it and nobody can write it. Because root owns it, no other host account, including whoever has uid 1000 on the host, can change its mode or contents in place; edit it later with `sudo`. Whoever can write the deployment directory can still replace the file, so keep the directory writable only by you (the default for one you clone or create). Members of host group 1000 can read it, so on a shared host check that the group holds only trusted accounts.
 - `up -d`: pulls the image and starts the container in the background. `ps` lists it with its health.
 
 Once it is healthy, open `http://127.0.0.1:8787`. If it stays `(health: starting)` or turns `(unhealthy)`, `docker compose logs river` says why.
