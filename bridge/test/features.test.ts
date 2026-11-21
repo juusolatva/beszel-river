@@ -29,6 +29,12 @@ describe("sampleFromStats", () => {
     expect(sampleFromStats({ t: { a: 0, b: 0 } }).tempMax).toBeNull();
     expect(sampleFromStats({ t: { a: 0, b: 42 } }).tempMax).toBe(42);
   });
+
+  it("finds the hottest of more sensors than a function call can take as arguments", () => {
+    const t = Object.fromEntries(Array.from({ length: 300_000 }, (_, i) => [`s${i}`, 20 + (i % 50)]));
+    t.s123 = 99;
+    expect(sampleFromStats({ t }).tempMax).toBe(99);
+  });
 });
 
 describe("coreProfile", () => {
