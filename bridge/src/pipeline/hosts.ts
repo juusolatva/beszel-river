@@ -52,7 +52,10 @@ export class HostTable {
     private readonly random: () => number = Math.random,
   ) {}
 
-  /** Adds or updates a host from its `systems` record; returns whether the frame changed. */
+  /**
+   * Adds or updates a host from its `systems` record; returns whether the frame changed. Changes
+   * confined to paused hosts do not count: a broadcast for them would time hidden inventory changes.
+   */
   upsertSystem(record: SystemRecord): boolean {
     const host = this.hosts.get(record.id);
     const threads = record.info?.t || host?.threads || null;
@@ -69,10 +72,12 @@ export class HostTable {
         realtimeAt: null,
         fromRealtime: false,
       });
-      if (record.status !== "paused") this.layout = null;
+      if (record.status === "paused") return false;
+      this.layout = null;
       return true;
     }
-    const changed = host.status !== record.status || host.threads !== threads;
+    const visible = host.status !== "paused" || record.status !== "paused";
+    const changed = visible && (host.status !== record.status || host.threads !== threads);
     if ((host.status === "paused") !== (record.status === "paused")) this.layout = null;
     // A stream that is drying up should not flash with pulses scattered from its last record.
     if (record.status !== "up") host.mixer.dropPulses();
@@ -82,11 +87,13 @@ export class HostTable {
     return changed;
   }
 
+  /** Forgets a host; returns whether the frame changed, which removing a paused host does not. */
   removeSystem(systemId: string): boolean {
     const host = this.hosts.get(systemId);
     if (!host) return false;
     this.hosts.delete(systemId);
-    if (host.status !== "paused") this.layout = null;
+    if (host.status === "paused") return false;
+    this.layout = null;
     return true;
   }
 
