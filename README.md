@@ -243,11 +243,12 @@ It throws on the first failure. `outage` checks that a single stream dries up wh
 ### Bridge setup
 
 1. In Beszel, create a user for the bridge with the `readonly` role and add it to every system that should appear (or run the hub with `SHARE_ALL_SYSTEMS=true`).
-2. `cp bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge. It must use `http:` or `https:` without embedded credentials; use the authentication variables instead.
+2. `install -m 600 bridge/.env.example bridge/.env` and fill in `BESZEL_EMAIL`, `BESZEL_PASSWORD` and `STREAM_SALT` (at least 16 characters; generate one with `openssl rand -hex 32`). Set `BESZEL_URL` if the hub is not at `http://127.0.0.1:8090` as reached from the bridge. It must use `http:` or `https:` without embedded credentials; use the authentication variables instead.
+   - `install -m 600` copies the template readable only by you. Create secret files that way before filling them in: `cp` gives them the usual world-readable mode, and a later `chmod` cannot take back what another account already read.
    - If the hub has password auth disabled (OIDC only, `DISABLE_PASSWORD_AUTH=true`), the bridge cannot log in with a password. Leave `BESZEL_EMAIL` and `BESZEL_PASSWORD` empty and set `BESZEL_TOKEN` instead. To make one, open the hub's PocketBase dashboard (`<hub URL>/_/`) as a superuser, then Collections → `users` → the bridge user → the `⋯` menu → **Impersonate**. In the "Generate nonrenewable auth token" dialog, give a duration in seconds, e.g. `31536000` for a year.
    - The bridge cannot renew such a token. It logs a warning from 14 days before expiry; then make a new one and restart the bridge (Deployment, "Maintenance").
    - To revoke it, use **Reset issued tokens** in the same menu.
-3. `cp bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored and required. A missing, unreadable or invalid recipe stops the bridge before it listens or authenticates to the hub. Omit `filaments` or set it to `null` to disable per-core profiles. Enabling them requires all four fields (`bias`, `center`, `weight`, `tau`); incomplete sections fail startup. `pulseScatter` and `glide` are optional; fields left out take their defaults (see `docs/PLAN.md`, "Bridge configuration"). For local development only, explicitly set `MIX_FILE=mix.example.json` to use the public example without copying it.
+3. `install -m 600 bridge/mix.example.json bridge/mix.json` and tune the weights; `mix.json` is git-ignored and required. A missing, unreadable or invalid recipe stops the bridge before it listens or authenticates to the hub. Omit `filaments` or set it to `null` to disable per-core profiles. Enabling them requires all four fields (`bias`, `center`, `weight`, `tau`); incomplete sections fail startup. `pulseScatter` and `glide` are optional; fields left out take their defaults (see `docs/PLAN.md`, "Bridge configuration"). For local development only, explicitly set `MIX_FILE=mix.example.json` to use the public example without copying it.
    - An enabled filament recipe publishes a transformed per-core CPU profile; mixing, jitter and daily shuffling can still reveal sustained CPU levels. Leave `filaments` omitted or `null` if those levels must remain private. Change the example's public weights before production use.
 4. Optionally set `SOURCE=realtime` for 1 s updates instead of 60 s ones. The bridge then asks the hub for each up host's live metrics while at least one page is open, and for 30 s after the last one closes; meanwhile the hub fetches from those agents every second, as it does while someone watches a system's 1-minute chart in Beszel.
 5. `npm run dev:bridge`, then watch the frames with `curl -N http://127.0.0.1:8787/stream` (`-N` turns off curl's output buffering so events print as they arrive).
@@ -286,15 +287,15 @@ The image is published on GitHub's container registry for amd64 and arm64. A dep
 
 ```sh
 git clone https://github.com/juusolatva/beszel-river.git && cd beszel-river/deploy
-cp .env.example .env && chmod 600 .env     # then fill it in (below) before going on
-cp ../bridge/mix.example.json mix.json     # then change the weights: the template is public
-sudo chown 1000:1000 mix.json && sudo chmod 400 mix.json
+install -m 600 .env.example .env                    # then fill it in (below) before going on
+install -m 600 ../bridge/mix.example.json mix.json  # then change the weights: the template is public
+sudo chown root:1000 mix.json && sudo chmod 440 mix.json
 docker compose up -d
 docker compose ps                          # "(healthy)" once logged in to the hub
 ```
 
-- `chmod 600 .env`: only you can read the secrets.
-- `chown 1000:1000 mix.json`: the container runs as the `node` user (uid 1000), which must read the bind-mounted recipe; otherwise startup stops with an "unreadable recipe" error. `chmod 400`: only that user can read it, and nobody can write it; edit it later with `sudo`, which can.
+- `install -m 600`: copies a template readable only by you, before any secret goes in. `cp` followed by `chmod` would leave what you type readable by other accounts until the `chmod`.
+- `chown root:1000 mix.json`: the container runs as uid and gid 1000 (the image's `node` user) and reads the bind-mounted recipe through the group; otherwise startup stops with an "unreadable recipe" error. `chmod 440`: root and group 1000 can read it and nobody can write it. Because root owns it, no host account, including whoever has uid 1000 on the host, can change its mode or contents; edit it later with `sudo`. Members of host group 1000 can read it, so on a shared host check that the group holds only trusted accounts.
 - `up -d`: pulls the image and starts the container in the background. `ps` lists it with its health.
 
 Once it is healthy, open `http://127.0.0.1:8787`. If it stays `(health: starting)` or turns `(unhealthy)`, `docker compose logs river` says why.
@@ -376,11 +377,11 @@ This does not combine with `compose.host-network.yml`. nginx looks up `river` wh
 ```sh
 sudo install -d -o "$USER" /opt/beszel-river
 git clone https://github.com/juusolatva/beszel-river.git /opt/beszel-river && cd /opt/beszel-river
-cp bridge/.env.example bridge/.env           # set BESZEL_EMAIL and BESZEL_PASSWORD (or BESZEL_TOKEN), STREAM_SALT
-cp bridge/mix.example.json bridge/mix.json   # then change the weights: the template is public
+install -m 600 bridge/.env.example bridge/.env           # set BESZEL_EMAIL and BESZEL_PASSWORD (or BESZEL_TOKEN), STREAM_SALT
+install -m 600 bridge/mix.example.json bridge/mix.json   # then change the weights: the template is public
 ```
 
-`install -d -o "$USER"` creates `/opt/beszel-river` owned by you, so the clone and the builds below need no `sudo`. The systemd unit expects the checkout there. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
+`install -d -o "$USER"` creates `/opt/beszel-river` owned by you, so the clone and the builds below need no `sudo`. `install -m 600` copies each template readable only by you, so the secrets you fill in stay private until step 2 hands them to the service user. The systemd unit expects the checkout there. Keep `BESZEL_URL=http://127.0.0.1:8090` if the hub runs on the same host.
 
 #### 2. Bridge under systemd
 
@@ -458,10 +459,11 @@ The bridge restarts by itself (`restart: unless-stopped` in compose, `Restart=on
 - **From v1.0.0** (port 8095): the container now listens on 8787, the bridge's usual port, because 8095 clashed with other services. After `docker compose pull && docker compose up -d` the page is at `http://127.0.0.1:8787`. A proxy config copied from v1.0.0 still points at 8095: change it to 8787 (or `river:8787` on a shared network), or set `RIVER_PORT=8095` in `deploy/.env` to keep the old host port. Under `compose.host-network.yml` the default `RIVER_PORT` moves the same way.
 - **From an image built from a checkout** (before the image was published): `compose.yml` now pulls the published image. Run `docker compose up -d` once; `docker image rm beszel-river-river` then removes the old local build.
 - **From the bridge-only container** (`deploy/bridge.Dockerfile`, the `bridge` service on port 8787), which this image replaces:
-  - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by uid 1000.
+  - Settings move from `bridge/.env` to `deploy/.env` and the recipe from `bridge/mix.json` to `deploy/mix.json`. Put secrets in single quotes ("Quoting" above) and make `mix.json` readable by the container (`sudo chown root:1000 mix.json && sudo chmod 440 mix.json`, "Container" above).
   - The service is now `river`, and the port is still 8787, now serving the page as well as the stream. An nginx with `river.conf` or `river-path.conf` that proxies `/stream` to `127.0.0.1:8787` keeps working unchanged: nginx still serves the page itself, and `/stream` responses carry the security headers from both, which is harmless. To let the container serve the page too, switch to `river-container.conf` or `river-container-path.conf` ("Reverse proxy" above).
   - A hub with `network_mode: host`: use the adapted `compose.host-network.yml` (table above).
   - Before the first `up`, run `docker compose down --remove-orphans` in `deploy/` (with the same `-f` options as before, if any): it removes the old `bridge` container, which would otherwise keep port 8787.
+- **Secret files set up with earlier instructions:** they copied `.env` and `mix.json` with `cp` and restricted them only after they were filled in, and gave the container's recipe to uid 1000 (`chown 1000:1000`). On a host where other people have accounts, check the modes (`ls -l`) and set them as above (`chown root:1000` and `chmod 440` for a container's `mix.json`). If other accounts could read `.env` while you set it up, rotate the hub password or token and `STREAM_SALT`; if they could read `mix.json`, change its weights.
 - **Token expiry** (`BESZEL_TOKEN` only): the bridge logs the expiry date every time it starts.
   ```sh
   docker compose logs river | grep 'valid until'                # Docker, in the deployment directory
