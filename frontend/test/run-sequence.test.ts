@@ -87,7 +87,7 @@ describe("run summaries and ledger", () => {
       runId,
       metadata: { conditions: "X280, battery", renderer: "Intel", targetFormat: "RGBA16F", width: 1920, height: 1080, pixelRatio: 1.25, limit: 10000, budget: "fixed limit" },
       timing: { callbacks: 3600, callbackMs: { median: callbackMedian, p95: callbackMedian + 2, p99: callbackMedian + 4 }, intervalMs: { median: 16.7, p95: 17.5, p99: 18 },
-        missedPeriods: 3, drawCapacity: 10000, gpuTime },
+        missedPeriods: 3, simulatedSlotsPerPositiveStep: 10000, drawCapacity: 10000, gpuTime },
       validation: { finalStateMatches: true, cpu: check, gpu: check,
         parity: { rule: "draining", gated: parityPassed !== null, passed: parityPassed, windows: [{ pass: parityPassed !== false, streamsOutsideBound: 2 }] } },
       trace: t,
@@ -123,7 +123,9 @@ describe("run summaries and ledger", () => {
   it("groups repetitions into ledger rows with medians and ranges, and lists failures", () => {
     const runs = [7, 9, 8].map((median, k) => summarizeRun(spec({ repetition: k + 1, workload: "dense-10000", scenario: "dense" }),
       result(`run${k}aaaaaaaa`, median, k !== 1, { samples: 1, totalMs: { median: 3 + k, p95: 0, p99: 0 } }), env));
-    const cpu = summarizeRun(spec({ backend: "cpu", workload: "dense-10000", scenario: "dense" }), result("cpurun00", 12, true), { ...env, battery: null, memory: null });
+    const cpuResult = result("cpurun00", 12, true);
+    Object.assign(cpuResult.timing, { simulatedSlotsPerPositiveStep: "drawCount (highest live slot + 1)", drawCapacity: "drawCount (highest live slot + 1)" });
+    const cpu = summarizeRun(spec({ backend: "cpu", workload: "dense-10000", scenario: "dense" }), cpuResult, { ...env, battery: null, memory: null });
     const failed: FailedRun = { spec: spec({ index: 9, backend: "cpu" }), ok: false, error: "Error: Hidden tab: run invalid", startedAt: env.startedAt };
     const ledger = ledgerMarkdown([...runs, cpu, failed], "abc1234").split("\n");
     expect(ledger[0]).toMatch(/^\| Variant \/ commit \| Device \/ power \/ browser \|/);
@@ -135,6 +137,8 @@ describe("run summaries and ledger", () => {
     expect(ledger[2]).toContain("run0aaaa, run1aaaa, run2aaaa");
     expect(ledger[2]).toContain("| Pending / pass, FAIL, pass |");
     expect(ledger[3]).toContain("| CPU / abc1234 |");
+    expect(ledger[2]).toContain(" / 10000 / 10000 / run0aaaa");
+    expect(ledger[3]).toContain(" / drawCount (highest live slot + 1) / drawCount (highest live slot + 1) / cpurun00");
     expect(ledger[3]).toContain("unavailable: EXT_disjoint_timer_query_webgl2 not supported / heap – MiB / unknown");
     expect(ledger.slice(5)).toEqual(["Failed runs:", "- #9 full draining cpu rep 1: Error: Hidden tab: run invalid"]);
     expect(ledgerMarkdown([], "")).not.toContain("Failed runs");

@@ -34,6 +34,9 @@ it("includes canvas layout reads in callback work and replays the final rendered
   expect(result.validation.finalStateMatches).toBe(true);
   expect(result.trace).toHaveLength(3);
   expect(result.metadata.effectiveStep).toBe("Float32(clamp(interval, 0, LOOK.maxDt))");
+  // The CPU steps and draws its slots through drawCount, not the whole pool or only the live ones.
+  expect(result.timing.simulatedSlotsPerPositiveStep).toBe("drawCount (highest live slot + 1)");
+  expect(result.timing.drawCapacity).toBe("drawCount (highest live slot + 1)");
   await expect(runGpuBenchmark({ refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/Reload/);
   // CPU runs replay the trace through the GPU too, untimed.
   expect(result.validation.cpu).toEqual(expect.objectContaining({ counts: expect.any(Uint32Array) }));
@@ -73,6 +76,7 @@ describe("GPU backend", () => {
     const result = await run;
     expect(result.metadata.backend).toBe("gpu");
     expect(result.timing.drawCapacity).toBe(10000);
+    expect(result.timing.simulatedSlotsPerPositiveStep).toBe(10000);
     // Every positive step drew the full pool and uploaded no particle instances.
     const draws = callsTo(calls, "drawArraysInstanced");
     expect(draws.length).toBeGreaterThan(0);
