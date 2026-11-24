@@ -11,25 +11,9 @@ import { preloadCpuState, preloadGpuState } from "./fixtures/gpu-state";
 
 const NO_CHROMA = new Float32Array(MAX_STREAMS);
 
-/**
- * One stationary grey streak at the centre, half-width 2 device px at pixel ratio 1, or an empty pool;
- * its metadata is flagged, so each new renderer uploads it.
- */
+/** One stationary grey streak at the centre, half-width 2 device px at pixel ratio 1, or an empty pool. */
 function streak(intensity: number, drawn = true): ParticleInstances {
-  const pool = {
-    instances: new Float32Array([0.5, 0.5, 0.5, 0.5, 0, intensity]),
-    metadata: new Float32Array([0, 2 / LOOK.sizePx]),
-    metadataDirty: new Uint8Array([1]),
-    dirtyStart: 0,
-    dirtyEnd: 1,
-    drawCount: drawn ? 1 : 0,
-    clearMetadataDirty() {
-      pool.metadataDirty[0] = 0;
-      pool.dirtyStart = 1;
-      pool.dirtyEnd = 0;
-    },
-  };
-  return pool;
+  return { instances: new Float32Array([0.5, 0.5, 0.5, 0.5, 0, intensity, 0, 2 / LOOK.sizePx]), drawCount: drawn ? 1 : 0 };
 }
 
 /** Real-shader regression checks; with Vite running, import this module in the browser console. */

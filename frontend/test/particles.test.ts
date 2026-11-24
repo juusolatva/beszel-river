@@ -2,7 +2,7 @@ import type { Stream } from "@beszel-river/shared";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { FlowField } from "../src/sim/noise";
-import { INSTANCE_FLOATS, METADATA_FLOATS, ParticleSystem } from "../src/sim/particles";
+import { INSTANCE_FLOATS, ParticleSystem } from "../src/sim/particles";
 import { DRAIN_PRESENCE, StreamSet } from "../src/sim/streams";
 import { mulberry32 } from "../src/util/math";
 import { calledStep } from "./cpu-benchmark.browser";
@@ -25,13 +25,13 @@ function drawn(particles: ParticleSystem, streams: StreamSet, pixelRatio = PIXEL
   let n = 0;
   for (let i = 0; i < particles.drawCount; i++) {
     if (!live[i]) continue;
-    const d = i * INSTANCE_FLOATS, m = i * METADATA_FLOATS, o = n++ * 9;
+    const d = i * INSTANCE_FLOATS, o = n++ * 9;
     out.set(particles.instances.subarray(d, d + 4), o);
     out[o + 4] = particles.instances[d + 4];
-    out[o + 5] = streams.chroma[particles.metadata[m]];
+    out[o + 5] = streams.chroma[particles.instances[d + 6]];
     out[o + 6] = LOOK.lightness;
     out[o + 7] = particles.instances[d + 5];
-    out[o + 8] = particles.metadata[m + 1] * LOOK.sizePx * pixelRatio;
+    out[o + 8] = particles.instances[d + 7] * LOOK.sizePx * pixelRatio;
   }
   expect(n).toBe(particles.count);
   return out;
@@ -229,38 +229,36 @@ describe("ParticleSystem", () => {
   });
 
   describe("stable slots", () => {
-    /** Dirty metadata slots, from the flags the renderer reads. */
-    const dirty = (p: ParticleSystem): number[] => {
-      const out: number[] = [];
-      for (let i = p.dirtyStart; i < p.dirtyEnd; i++) if (p.metadataDirty[i]) out.push(i);
-      return out;
-    };
+    /** The pool's private particle ages, which tell a survivor from a newborn in the same slot. */
+    const ages = (p: ParticleSystem): Float32Array => (p as unknown as { age: Float32Array }).age;
+    /** A slot's spawn-time floats: stream slot index and size jitter. */
+    const spawnFloats = (p: ParticleSystem, i: number): number[] => [p.instances[i * INSTANCE_FLOATS + 6], p.instances[i * INSTANCE_FLOATS + 7]];
 
-    it("writes each spawn's stream and size once, marks only those slots dirty, and keeps them while it lives", () => {
+    it("writes each spawn's stream and size into its record and keeps them while it lives", () => {
       const { set, particles, run } = setup(400, stream("a"), stream("b"));
-      run(DT);
-      const spawned = dirty(particles);
-      expect(spawned.length).toBe(particles.count);
+      run(1);
       const live = liveFlags(particles);
+      const spawned: number[] = [];
+      for (let i = 0; i < particles.drawCount; i++) if (live[i]) spawned.push(i);
+      expect(spawned.length).toBe(particles.count);
+      expect(spawned.length).toBeGreaterThan(0);
       for (const i of spawned) {
-        expect(live[i]).toBe(1);
-        expect(set.slots[particles.metadata[i * METADATA_FLOATS]].used).toBe(true);
-        expect(particles.metadata[i * METADATA_FLOATS + 1]).toBeGreaterThan(0);
+        const [slotIndex, size] = spawnFloats(particles, i);
+        expect(set.slots[slotIndex].used).toBe(true);
+        expect(size).toBeGreaterThanOrEqual(LOOK.sizeJitter[0]);
+        expect(size).toBeLessThanOrEqual(LOOK.sizeJitter[1]);
       }
-      particles.clearMetadataDirty();
-      expect(dirty(particles)).toEqual([]);
-      expect(particles.dirtyStart).toBeGreaterThanOrEqual(particles.dirtyEnd);
 
-      // Survivors keep their slot and metadata; only births are dirty.
-      const before = Float32Array.from(particles.metadata);
-      const survivors = spawned.filter((i) => live[i]);
+      // Steps rewrite only the dynamic floats: a particle that lived through them keeps its stream and size.
+      const before = spawned.map((i) => spawnFloats(particles, i));
       run(0.5);
-      const births = new Set(dirty(particles));
-      for (const i of survivors) {
-        if (!live[i] || births.has(i)) continue;
-        expect(particles.metadata.subarray(i * METADATA_FLOATS, (i + 1) * METADATA_FLOATS)).toEqual(before.subarray(i * METADATA_FLOATS, (i + 1) * METADATA_FLOATS));
-      }
-      for (const i of births) expect(live[i]).toBe(1);
+      let kept = 0;
+      spawned.forEach((i, k) => {
+        if (!live[i] || ages(particles)[i] < 0.5) return;
+        expect(spawnFloats(particles, i)).toEqual(before[k]);
+        kept++;
+      });
+      expect(kept).toBeGreaterThan(0);
     });
 
     it("zeroes a dead slot's intensity, reuses freed slots and trims the draw count", () => {
@@ -304,7 +302,7 @@ describe("ParticleSystem", () => {
       const ids = new Set<string>();
       for (let i = 0; i < particles.drawCount; i++) {
         if (!live[i]) continue;
-        const slot = set.slots[particles.metadata[i * METADATA_FLOATS]];
+        const slot = set.slots[particles.instances[i * INSTANCE_FLOATS + 6]];
         expect(slot.used).toBe(true);
         ids.add(slot.id);
       }

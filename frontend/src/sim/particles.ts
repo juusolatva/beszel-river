@@ -4,27 +4,18 @@ import type { FlowField } from "./noise";
 import { CENTER_MAX_Y, CENTER_MIN_Y, CENTER_SAMPLES, CENTER_SCALE, MIN_SHARE, laneCenter, type StreamSet } from "./streams";
 
 /**
- * Per-slot floats rewritten by `step`, in attribute order: tail x, tail y, head x, head y, hue (turns),
- * intensity. A dead slot keeps intensity 0, which the vertex shader clips.
+ * Floats per slot of `instances`, in attribute order. `step` rewrites the first six: tail x, tail y,
+ * head x, head y, hue (turns), intensity. `spawn` writes the last two: stream slot index and size
+ * jitter (half-width in `LOOK.sizePx`). A dead slot keeps intensity 0, which the vertex shader clips.
  */
-export const INSTANCE_FLOATS = 6;
-/** Per-slot floats written on spawn: stream slot index, size jitter (half-width in `LOOK.sizePx`). */
-export const METADATA_FLOATS = 2;
+export const INSTANCE_FLOATS = 8;
 
 /**
  * Fixed-size particle pool simulated on the CPU. Particles keep their slot for life, so `instances`
- * and `metadata` are indexed by slot: the renderer uploads the first `drawCount` slots of `instances`
- * every frame, and of `metadata` only the slots flagged in `metadataDirty`.
+ * is indexed by slot, and the renderer uploads its first `drawCount` slots every frame in one call.
  */
 export class ParticleSystem {
   readonly instances: Float32Array;
-  readonly metadata: Float32Array;
-  /** 1 for each slot whose metadata changed since `clearMetadataDirty`, all within `dirtyStart`..`dirtyEnd`. */
-  readonly metadataDirty: Uint8Array;
-  /** First flagged slot, or `capacity` when none is. */
-  dirtyStart: number;
-  /** One past the last flagged slot, or 0 when none is. */
-  dirtyEnd = 0;
   /** Highest live slot plus one; every live particle lies below it. */
   drawCount = 0;
   private readonly x: Float32Array;
@@ -53,9 +44,6 @@ export class ParticleSystem {
     private readonly random: Random,
   ) {
     this.instances = new Float32Array(capacity * INSTANCE_FLOATS);
-    this.metadata = new Float32Array(capacity * METADATA_FLOATS);
-    this.metadataDirty = new Uint8Array(capacity);
-    this.dirtyStart = capacity;
     this.x = new Float32Array(capacity);
     this.y = new Float32Array(capacity);
     this.vx = new Float32Array(capacity);
@@ -77,29 +65,20 @@ export class ParticleSystem {
     return this.capacity - this.freeTop;
   }
 
-  /** Called by the renderer once it has uploaded the flagged metadata. */
-  clearMetadataDirty(): void {
-    if (this.dirtyStart < this.dirtyEnd) this.metadataDirty.fill(0, this.dirtyStart, this.dirtyEnd);
-    this.dirtyStart = this.capacity;
-    this.dirtyEnd = 0;
-  }
-
   /**
-   * Rebuilds `drawCount`, metadata and dead slots' intensity from the particle state, flagging every
-   * slot. For test fixtures that write the state directly instead of spawning.
+   * Rebuilds `drawCount`, each live slot's stream index and size and dead slots' intensity from the
+   * particle state. For test fixtures that write the state directly instead of spawning.
    */
   resync(): void {
     this.drawCount = 0;
     for (let i = 0; i < this.capacity; i++) {
+      const o = i * INSTANCE_FLOATS;
       if (this.active[i]) {
-        this.metadata[i * METADATA_FLOATS] = this.slot[i];
-        this.metadata[i * METADATA_FLOATS + 1] = this.size[i];
+        this.instances[o + 6] = this.slot[i];
+        this.instances[o + 7] = this.size[i];
         this.drawCount = i + 1;
-      } else this.instances[i * INSTANCE_FLOATS + 5] = 0;
+      } else this.instances[o + 5] = 0;
     }
-    this.metadataDirty.fill(1);
-    this.dirtyStart = 0;
-    this.dirtyEnd = this.capacity;
   }
 
   /** Spawns along the bottom edge; rates are normalized so `limit` particles turn over every `turnoverSeconds`. */
@@ -143,18 +122,15 @@ export class ParticleSystem {
         this.hueJitter[i] = (random() - 0.5) * 2 * LOOK.hueJitter;
         this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
         s.particles++;
-        const m = i * METADATA_FLOATS;
-        this.metadata[m] = slotIndex;
-        this.metadata[m + 1] = this.size[i];
-        this.metadataDirty[i] = 1;
-        if (i < this.dirtyStart) this.dirtyStart = i;
-        if (i >= this.dirtyEnd) this.dirtyEnd = i + 1;
+        const o = i * INSTANCE_FLOATS;
+        this.instances[o + 6] = slotIndex;
+        this.instances[o + 7] = this.size[i];
         if (i >= this.drawCount) this.drawCount = i + 1;
       }
     }
   }
 
-  /** Advances every particle and writes its slot of `instances`; returns the live count. */
+  /** Advances every particle and rewrites the dynamic floats of its slot of `instances`; returns the live count. */
   step(dt: number, streams: StreamSet, field: FlowField, aspect: number): number {
     const { x, y, vx, vy, age, life, instances } = this;
     const slots = streams.slots;

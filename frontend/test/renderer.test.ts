@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { METADATA_MERGE_GAP, Renderer, type GpuDrawSource, type ParticleInstances } from "../src/render/renderer";
-import { INSTANCE_FLOATS, METADATA_FLOATS } from "../src/sim/particles";
+import { Renderer, type GpuDrawSource, type ParticleInstances } from "../src/render/renderer";
+import { INSTANCE_FLOATS } from "../src/sim/particles";
 import { MAX_STREAMS } from "../src/sim/streams";
 import { callsTo, createFakeGl, type Call } from "./fake-gl";
 
@@ -14,26 +14,9 @@ function passes(calls: Call[]): { read: unknown; wrote: unknown } {
 
 const CHROMA = new Float32Array(MAX_STREAMS);
 
-/** A pool as the renderer reads it: `drawCount` slots drawn, `dirty` metadata slots awaiting upload. */
-function pool(drawCount: number, capacity = Math.max(drawCount, 1), dirty: readonly number[] = []): ParticleInstances & { clears: number } {
-  const flags = new Uint8Array(capacity);
-  for (const i of dirty) flags[i] = 1;
-  const fake = {
-    instances: new Float32Array(capacity * INSTANCE_FLOATS),
-    metadata: new Float32Array(capacity * METADATA_FLOATS),
-    metadataDirty: flags,
-    dirtyStart: dirty.length ? Math.min(...dirty) : capacity,
-    dirtyEnd: dirty.length ? Math.max(...dirty) + 1 : 0,
-    drawCount,
-    clears: 0,
-    clearMetadataDirty() {
-      this.metadataDirty.fill(0);
-      this.dirtyStart = capacity;
-      this.dirtyEnd = 0;
-      this.clears++;
-    },
-  };
-  return fake;
+/** A pool as the renderer reads it: `drawCount` slots drawn out of `capacity`. */
+function pool(drawCount: number, capacity = Math.max(drawCount, 1)): ParticleInstances {
+  return { instances: new Float32Array(capacity * INSTANCE_FLOATS), drawCount };
 }
 
 /** Records every deposit pass; may leave another texture unit active, as a GPU pass could. */
@@ -144,94 +127,60 @@ describe("Renderer", () => {
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
     new Renderer(gl, 1000);
-    expect(callsTo(calls, "bufferData").slice(1)).toEqual([
-      ["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"],
-      ["ARRAY_BUFFER", 1000 * METADATA_FLOATS * 4, "DYNAMIC_DRAW"],
-    ]);
+    expect(callsTo(calls, "bufferData").slice(1)).toEqual([["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"]]);
     expect(callsTo(calls, "vertexAttribDivisor")).toEqual([
       [1, 1],
       [2, 1],
       [3, 1],
     ]);
-    // Six floats per slot rewritten every frame; stream index and size jitter in their own buffer.
+    // One eight-float record per slot: segment, hue and intensity, then stream index and size jitter.
     expect(callsTo(calls, "vertexAttribPointer").slice(1)).toEqual([
-      [1, 4, "FLOAT", false, 24, 0],
-      [2, 2, "FLOAT", false, 24, 16],
-      [3, 2, "FLOAT", false, 8, 0],
+      [1, 4, "FLOAT", false, 32, 0],
+      [2, 2, "FLOAT", false, 32, 16],
+      [3, 2, "FLOAT", false, 32, 24],
     ]);
     // Three programs: particles, fade and present.
     expect(callsTo(calls, "linkProgram")).toHaveLength(3);
   });
 
   describe("stable slots", () => {
-    it("uploads dirty metadata in merged runs after the dynamic prefix, then clears it", () => {
+    it("uploads the drawn prefix of the pool in one call to one buffer", () => {
       const { gl, calls } = createFakeGl({ halfFloat: true });
       const renderer = new Renderer(gl, 500);
       renderer.resize(100, 100);
-      const gap = METADATA_MERGE_GAP;
-      const second = 5 + gap + 1, third = second + gap + gap + 1;
-      const particles = pool(400, 500, [3, 4, 5, second, second + gap, third]);
-      calls.length = 0;
-      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
-      const m = METADATA_FLOATS;
-      expect(callsTo(calls, "bufferSubData")).toEqual([
-        ["ARRAY_BUFFER", 0, particles.instances, 0, 400 * INSTANCE_FLOATS],
-        // One past the gap starts another upload; exactly `gap` apart shares one, resending the slots between.
-        ["ARRAY_BUFFER", 3 * m * 4, particles.metadata, 3 * m, 3 * m],
-        ["ARRAY_BUFFER", second * m * 4, particles.metadata, second * m, (gap + 1) * m],
-        ["ARRAY_BUFFER", third * m * 4, particles.metadata, third * m, m],
-      ]);
-      expect(particles.clears).toBe(1);
-      // The dynamic upload binds its own buffer; metadata runs bind the other one, once.
-      const binds = callsTo(calls, "bindBuffer").filter(([target]) => target === "ARRAY_BUFFER").map(([, buffer]) => buffer);
-      expect(binds).toHaveLength(2);
-      expect(new Set(binds).size).toBe(2);
-
+      const particles = pool(400, 500);
       calls.length = 0;
       renderer.render(particles, CHROMA, 1, 1 / 60, 1);
       expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 400 * INSTANCE_FLOATS]]);
+      expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 400]]);
+      const binds = callsTo(calls, "bindBuffer").filter(([target]) => target === "ARRAY_BUFFER");
+      expect(binds).toHaveLength(1);
     });
 
-    it("merges births close together into one span", () => {
-      const { gl, calls } = createFakeGl({ halfFloat: true });
-      const renderer = new Renderer(gl, 2000);
-      renderer.resize(100, 100);
-      const dirty = Array.from({ length: 50 }, (_, k) => 10 + k * METADATA_MERGE_GAP);
-      const inPool = dirty.filter((i) => i < 2000), last = inPool.at(-1)!;
-      const particles = pool(2000, 2000, inPool);
-      calls.length = 0;
-      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
-      const m = METADATA_FLOATS;
-      expect(callsTo(calls, "bufferSubData").slice(1)).toEqual([["ARRAY_BUFFER", 10 * m * 4, particles.metadata, 10 * m, (last - 10 + 1) * m]]);
-    });
-
-    it("keeps metadata dirty through callbacks without a deposit and uploads once per callback", () => {
+    it("uploads nothing in callbacks without a deposit and once per callback otherwise", () => {
       const { gl, calls } = createFakeGl();
       const renderer = new Renderer(gl, 10);
       renderer.resize(100, 100);
-      const particles = pool(4, 10, [2]);
+      const particles = pool(4, 10);
       calls.length = 0;
-      // 8-bit trails at 240 Hz: no deposit in this callback, so nothing is uploaded or cleared.
+      // 8-bit trails at 240 Hz: no deposit in this callback, so nothing is uploaded.
       renderer.render(particles, CHROMA, 1, 1 / 240, 1);
       expect(callsTo(calls, "bufferSubData")).toEqual([]);
-      expect(particles.clears).toBe(0);
       // At 30 Hz the callback deposits twice, drawing one upload of the state.
       calls.length = 0;
       renderer.render(particles, CHROMA, 1, 1 / 30, 1);
       expect(callsTo(calls, "drawArraysInstanced")).toHaveLength(2);
-      expect(callsTo(calls, "bufferSubData")).toHaveLength(2);
-      expect(particles.clears).toBe(1);
+      expect(callsTo(calls, "bufferSubData")).toHaveLength(1);
     });
 
-    it("leaves dirty metadata for later when nothing is drawn", () => {
+    it("uploads and draws nothing when no slot is live", () => {
       const { gl, calls } = createFakeGl({ halfFloat: true });
       const renderer = new Renderer(gl, 10);
       renderer.resize(100, 100);
-      const particles = pool(0, 10, [1]);
       calls.length = 0;
-      renderer.render(particles, CHROMA, 1, 1 / 60, 1);
+      renderer.render(pool(0, 10), CHROMA, 1, 1 / 60, 1);
       expect(callsTo(calls, "bufferSubData")).toEqual([]);
-      expect(particles.clears).toBe(0);
+      expect(callsTo(calls, "drawArraysInstanced")).toEqual([]);
     });
 
     it("sends per-stream chroma, lightness and the size scale as uniforms every deposit", () => {
@@ -248,7 +197,7 @@ describe("Renderer", () => {
         expect(uniforms.get("u_sizeScale")).toBe(LOOK.sizePx * pixelRatio);
         expect(uniforms.get("u_lightness")).toBe(LOOK.lightness);
         expect(callsTo(calls, "uniform1fv")).toEqual([[{ uniform: "u_chroma" }, chroma]]);
-        // A colour change is a uniform, not a metadata upload.
+        // A colour change is a uniform: the upload stays the same.
         expect(callsTo(calls, "bufferSubData")).toEqual([["ARRAY_BUFFER", 0, particles.instances, 0, 5 * INSTANCE_FLOATS]]);
       }
     });
