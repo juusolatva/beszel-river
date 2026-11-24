@@ -1,7 +1,7 @@
 import { LOOK } from "../config";
 import { clamp, fract, gaussian, lerp, type Random } from "../util/math";
 import type { FlowField } from "./noise";
-import { CENTER_MAX_Y, CENTER_MIN_Y, CENTER_SAMPLES, CENTER_SCALE, MIN_SHARE, laneCenter, type StreamSet } from "./streams";
+import { CENTER_MAX_Y, CENTER_MIN_Y, CENTER_SAMPLES, CENTER_SCALE, MIN_SHARE, laneCenter, type StreamSet, type StreamSlot } from "./streams";
 
 /**
  * Floats per slot of `instances`, in attribute order. `step` rewrites the first six: tail x, tail y,
@@ -87,7 +87,6 @@ export class ParticleSystem {
     for (const s of streams.slots) if (s.used) share += s.shareWeight;
     if (share <= 0) return;
 
-    const { random } = this;
     // Never below one full stream's share: otherwise the last streams fading out would keep the
     // whole pool between them, and the river would never drain.
     const baseRate = this.limit / LOOK.turnoverSeconds / Math.max(share, MIN_SHARE);
@@ -97,37 +96,40 @@ export class ParticleSystem {
       s.spawnCarry += baseRate * s.spawnWeight * dt;
       const n = Math.floor(s.spawnCarry);
       s.spawnCarry -= n;
-      for (let k = 0; k < n && this.capacity - this.freeTop < this.limit; k++) {
-        const i = this.free[--this.freeTop];
-        this.active[i] = 1;
-        this.slot[i] = slotIndex;
-        this.speedJitter[i] = lerp(LOOK.speedJitter[0], LOOK.speedJitter[1], random());
-        // With filaments, particles start in a lane picked by its activity and keep their place in it,
-        // so a busy lane, scattering little, shows as a strand.
-        if (s.filamentMix > 0.001 && random() < s.filamentMix) {
-          const lane = s.pickLane(random());
-          const activity = s.filaments[lane];
-          this.offset[i] = laneCenter(lane) + gaussian(random) * lerp(LOOK.filamentSpread[0], LOOK.filamentSpread[1], activity);
-          this.x[i] = s.centerAt(0) + this.offset[i] * s.half;
-          this.speedJitter[i] *= lerp(LOOK.filamentSpeed[0], LOOK.filamentSpeed[1], activity);
-        } else {
-          this.offset[i] = 0;
-          this.x[i] = s.centerAt(0) + gaussian(random) * s.half * LOOK.spawnSpread;
-        }
-        this.y[i] = -0.02 * random();
-        this.vx[i] = 0;
-        this.vy[i] = s.speed;
-        this.age[i] = 0;
-        this.life[i] = lerp(LOOK.lifeRange[0], LOOK.lifeRange[1], random());
-        this.hueJitter[i] = (random() - 0.5) * 2 * LOOK.hueJitter;
-        this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
-        s.particles++;
-        const o = i * INSTANCE_FLOATS;
-        this.instances[o + 6] = slotIndex;
-        this.instances[o + 7] = this.size[i];
-        if (i >= this.drawCount) this.drawCount = i + 1;
-      }
+      for (let k = 0; k < n && this.capacity - this.freeTop < this.limit; k++) this.birth(this.free[--this.freeTop], slotIndex, s);
     }
+  }
+
+  /** Starts a particle in free pool slot `i` for stream slot `slotIndex` and writes its spawn-time floats. */
+  private birth(i: number, slotIndex: number, s: StreamSlot): void {
+    const { random } = this;
+    this.active[i] = 1;
+    this.slot[i] = slotIndex;
+    this.speedJitter[i] = lerp(LOOK.speedJitter[0], LOOK.speedJitter[1], random());
+    // With filaments, particles start in a lane picked by its activity and keep their place in it,
+    // so a busy lane, scattering little, shows as a strand.
+    if (s.filamentMix > 0.001 && random() < s.filamentMix) {
+      const lane = s.pickLane(random());
+      const activity = s.filaments[lane];
+      this.offset[i] = laneCenter(lane) + gaussian(random) * lerp(LOOK.filamentSpread[0], LOOK.filamentSpread[1], activity);
+      this.x[i] = s.centerAt(0) + this.offset[i] * s.half;
+      this.speedJitter[i] *= lerp(LOOK.filamentSpeed[0], LOOK.filamentSpeed[1], activity);
+    } else {
+      this.offset[i] = 0;
+      this.x[i] = s.centerAt(0) + gaussian(random) * s.half * LOOK.spawnSpread;
+    }
+    this.y[i] = -0.02 * random();
+    this.vx[i] = 0;
+    this.vy[i] = s.speed;
+    this.age[i] = 0;
+    this.life[i] = lerp(LOOK.lifeRange[0], LOOK.lifeRange[1], random());
+    this.hueJitter[i] = (random() - 0.5) * 2 * LOOK.hueJitter;
+    this.size[i] = lerp(LOOK.sizeJitter[0], LOOK.sizeJitter[1], random());
+    s.particles++;
+    const o = i * INSTANCE_FLOATS;
+    this.instances[o + 6] = slotIndex;
+    this.instances[o + 7] = this.size[i];
+    if (i >= this.drawCount) this.drawCount = i + 1;
   }
 
   /** Advances every particle and rewrites the dynamic floats of its slot of `instances`; returns the live count. */

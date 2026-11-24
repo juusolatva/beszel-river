@@ -240,7 +240,7 @@ describe("ParticleSystem", () => {
       const live = liveFlags(particles);
       const spawned: number[] = [];
       for (let i = 0; i < particles.drawCount; i++) if (live[i]) spawned.push(i);
-      expect(spawned.length).toBe(particles.count);
+      expect(spawned).toHaveLength(particles.count);
       expect(spawned.length).toBeGreaterThan(0);
       for (const i of spawned) {
         const [slotIndex, size] = spawnFloats(particles, i);
