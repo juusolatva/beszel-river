@@ -20,7 +20,7 @@ Transform feedback fits the existing WebGL2 renderer and can remove particle-sta
 
 ## Global constraints
 
-- Production Node floor remains 24.22.1. Keep exact dependency versions and existing coverage thresholds.
+- Production Node floor remains 24.22.3 (24.22.1 when this plan was written). Keep exact dependency versions and existing coverage thresholds.
 - No per-frame or per-particle allocations in simulation/rendering. Allocate buffers, typed-array views, uniforms and texture storage outside the hot path; resize deliberately.
 - No synchronous GPU readback, `finish`, or blocking fence waits in the animation loop. Readbacks are allowed in correctness tests only; asynchronous timing queries must never block.
 - Only existing abstract stream channels reach the frontend. Preserve all six filament values and current stream ordering/privacy rules.

@@ -23,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 24.22.1: production pin in .nvmrc and minimum in package.json "engines". 24: latest LTS patch.
+        # 24.22.3: production pin in .nvmrc and minimum in package.json "engines". 24: latest LTS patch.
         # 26: the current release line, the next production version.
-        node: ["24.22.1", "24", "26"]
+        node: ["24.22.3", "24", "26"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
