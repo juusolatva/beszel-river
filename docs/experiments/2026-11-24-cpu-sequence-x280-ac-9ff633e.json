@@ -1,0 +1,7330 @@
+{
+ "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+ "refreshHz": 60,
+ "commit": "9ff633e",
+ "config": {
+  "viewports": [
+   "960x640",
+   "full"
+  ],
+  "workloads": [
+   "dense-10000",
+   "dense-8000",
+   "dense-1000",
+   "draining",
+   "drained",
+   "rotation"
+  ],
+  "repetitions": 3,
+  "scheduleReplays": true,
+  "cpuOnly": true,
+  "warmupSeconds": 30,
+  "measureSeconds": 60
+ },
+ "schedules": {
+  "960x640": {
+   "runId": "b0fffe14-4f88-4d18-9b6c-1ac29960d9b8",
+   "scenario": "dense",
+   "motion": 1,
+   "decisions": [
+    {
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  "full": {
+   "runId": "7f628a94-c565-406d-b5ea-bd5d4bbcb599",
+   "scenario": "dense",
+   "motion": 1,
+   "decisions": [
+    {
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  }
+ },
+ "results": [
+  {
+   "spec": {
+    "index": 0,
+    "viewport": "960x640",
+    "kind": "discovery",
+    "workload": "discovery",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "b0fffe14-4f88-4d18-9b6c-1ac29960d9b8",
+   "startedAt": "2026-11-24T06:04:38.003Z",
+   "battery": {
+    "charging": true,
+    "level": 0.99
+   },
+   "memory": {
+    "usedJSHeapSize": 5094878,
+    "totalJSHeapSize": 6921750,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU adaptive discovery (not a paired performance result)",
+    "limit": "scheduled",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.299999952316284,
+     "p95": 7.300000011920929,
+     "p99": 8.600000023841858
+    },
+    "simulationMs": {
+     "median": 4.800000011920929,
+     "p95": 6.800000011920929,
+     "p99": 8.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.40000003576278687,
+     "p99": 0.5999999642372131
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.4835,
+      "p95": 13.332999,
+      "p99": 14.9495
+     },
+     "totalMs": {
+      "median": 2.485916,
+      "p95": 13.333165,
+      "p99": 14.949583
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9938,
+     "max": 9995,
+     "simulationMean": 9980.946120988307,
+     "wallMean": 9980.94612098775
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 1,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "1027dcf1-a7bf-4c8c-811f-856596db5648",
+   "startedAt": "2026-11-24T06:06:16.755Z",
+   "battery": {
+    "charging": true,
+    "level": 0.99
+   },
+   "memory": {
+    "usedJSHeapSize": 21138954,
+    "totalJSHeapSize": 24099626,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.5,
+     "p95": 7.100000023841858,
+     "p99": 8.599999964237213
+    },
+    "simulationMs": {
+     "median": 5.100000023841858,
+     "p95": 6.699999988079071,
+     "p99": 8.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.366583,
+      "p95": 3.33425,
+      "p99": 11.996666
+     },
+     "totalMs": {
+      "median": 2.366666,
+      "p95": 3.334333,
+      "p99": 11.996749
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9939,
+     "max": 9994,
+     "simulationMean": 9980.970065599551,
+     "wallMean": 9980.970065598684
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 2,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "2bdb833f-92c1-4d41-af42-49eb2a787560",
+   "startedAt": "2026-11-24T06:07:55.530Z",
+   "battery": {
+    "charging": true,
+    "level": 0.99
+   },
+   "memory": {
+    "usedJSHeapSize": 19151714,
+    "totalJSHeapSize": 24814470,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.899999976158142,
+     "p95": 6.5,
+     "p99": 7.200000047683716
+    },
+    "simulationMs": {
+     "median": 4.5,
+     "p95": 6,
+     "p99": 6.799999952316284
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922367680,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 28823990,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.603416,
+      "p95": 13.794333,
+      "p99": 15.211083
+     },
+     "totalMs": {
+      "median": 2.6034990000000002,
+      "p95": 13.794416,
+      "p99": 15.211166
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7956,
+     "max": 7996,
+     "simulationMean": 7983.837348252585,
+     "wallMean": 7983.837348253013
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 3,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "90cfb813-a60c-49eb-a891-300f1f67bdda",
+   "startedAt": "2026-11-24T06:09:33.413Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19155986,
+    "totalJSHeapSize": 25338758,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.7000000476837158,
+     "p95": 2.400000035762787,
+     "p99": 2.600000023841858
+    },
+    "simulationMs": {
+     "median": 1.399999976158142,
+     "p95": 2,
+     "p99": 2.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115295584,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602987,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.137166,
+      "p95": 13.802499,
+      "p99": 15.245166
+     },
+     "totalMs": {
+      "median": 2.137249,
+      "p95": 13.802582,
+      "p99": 15.245166
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 972,
+     "max": 1000,
+     "simulationMean": 992.9274965710147,
+     "wallMean": 992.9274965708778
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 4,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "c27555fc-45f8-4c1a-bb7a-c2c8a2064986",
+   "startedAt": "2026-11-24T06:11:07.977Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19161678,
+    "totalJSHeapSize": 24814470,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 6,
+     "p99": 7
+    },
+    "simulationMs": {
+     "median": 0.5999999642372131,
+     "p95": 5.5,
+     "p99": 6.5
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 425187776,
+    "textureUploadBytes": 0,
+    "drawCalls": 8541,
+    "summedParticleDrawCapacity": 13287118,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.98475,
+      "p95": 13.438666,
+      "p99": 14.950333
+     },
+     "totalMs": {
+      "median": 1.9849990000000002,
+      "p95": 13.438832,
+      "p99": 14.950416
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9993,
+     "simulationMean": 2068.8413434271465,
+     "wallMean": 2068.841343437542,
+     "curve": [
+      1376,
+      2840,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9989,
+      9988,
+      9984,
+      9978,
+      9984,
+      9982,
+      9977,
+      9984,
+      9987,
+      9962,
+      9986,
+      9978,
+      9981,
+      9982,
+      9981,
+      9983,
+      9985,
+      9982,
+      9979,
+      9980,
+      9989,
+      9981,
+      9978,
+      9974,
+      9978,
+      9983,
+      9981,
+      9986,
+      9873,
+      9268,
+      8318,
+      7221,
+      6155,
+      5093,
+      4070,
+      3103,
+      2324,
+      1654,
+      1099,
+      674,
+      341,
+      146,
+      29,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.241898903623223
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 5,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "c5ec23db-71ed-48b5-946f-e75e1ebfee64",
+   "startedAt": "2026-11-24T06:12:44.046Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19260782,
+    "totalJSHeapSize": 25687382,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.699999988079071,
+     "p95": 0.9000000357627869,
+     "p99": 1
+    },
+    "simulationMs": {
+     "median": 0.40000003576278687,
+     "p95": 0.699999988079071,
+     "p99": 0.7000000476837158
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.30000001192092896
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.965333,
+      "p95": 13.122749,
+      "p99": 15.061916
+     },
+     "totalMs": {
+      "median": 1.965416,
+      "p95": 13.122915,
+      "p99": 15.061916
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1376,
+      2816,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9989,
+      9988,
+      9985,
+      9980,
+      9984,
+      9983,
+      9983,
+      9982,
+      9987,
+      9964,
+      9988,
+      9981,
+      9985,
+      9982,
+      9981,
+      9985,
+      9985,
+      9981,
+      9974,
+      9981,
+      9987,
+      9980,
+      9980,
+      9975,
+      9974,
+      9980,
+      9983,
+      9987,
+      9877,
+      9272,
+      8324,
+      7225,
+      6158,
+      5095,
+      4088,
+      3105,
+      2328,
+      1652,
+      1099,
+      680,
+      340,
+      147,
+      25,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.14279890805483
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 6,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "2a27cee0-ec36-444c-9037-f71398a486cd",
+   "startedAt": "2026-11-24T06:14:50.228Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18808574,
+    "totalJSHeapSize": 25429270,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.199999988079071,
+     "p95": 6.699999988079071,
+     "p99": 8
+    },
+    "simulationMs": {
+     "median": 3.899999976158142,
+     "p95": 6.199999988079071,
+     "p99": 7.400000035762787
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152538304,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36016822,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.469583,
+      "p95": 13.579416,
+      "p99": 14.8625
+     },
+     "totalMs": {
+      "median": 2.469666,
+      "p95": 13.579582,
+      "p99": 14.862583
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 96,
+     "max": 9999,
+     "simulationMean": 6806.500234157708,
+     "wallMean": 6806.500234161542,
+     "curve": [
+      1190,
+      2410,
+      3628,
+      4840,
+      6071,
+      9417,
+      9986,
+      9977,
+      9981,
+      9975,
+      9961,
+      9959,
+      9965,
+      9986,
+      9990,
+      9990,
+      9973,
+      9991,
+      9980,
+      9977,
+      9985,
+      9985,
+      9991,
+      9983,
+      9984,
+      9976,
+      9975,
+      9983,
+      9977,
+      9985,
+      9979,
+      9981,
+      9965,
+      9982,
+      9982,
+      9978,
+      9981,
+      9979,
+      9981,
+      9976,
+      9985,
+      9976,
+      9982,
+      9979,
+      9974,
+      9982,
+      9901,
+      9197,
+      8215,
+      7178,
+      6097,
+      5084,
+      4091,
+      3164,
+      2341,
+      1686,
+      1134,
+      672,
+      361,
+      130,
+      746,
+      2154,
+      3579,
+      5005,
+      6434,
+      7836,
+      9099,
+      9988,
+      9990,
+      9983,
+      9991,
+      9974,
+      9976,
+      9969,
+      9968,
+      9983,
+      9885,
+      9230,
+      8209,
+      7178,
+      6168,
+      5214,
+      4232,
+      3319,
+      2498,
+      1786,
+      1159,
+      657,
+      314
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 7,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "e11b6169-cd09-42f8-a9c9-c0e7890e56d4",
+   "startedAt": "2026-11-24T06:16:28.157Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 4331871,
+    "totalJSHeapSize": 13493331,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.5,
+     "p95": 7,
+     "p99": 8.199999988079071
+    },
+    "simulationMs": {
+     "median": 5.100000023841858,
+     "p95": 6.599999964237213,
+     "p99": 7.799999952316284
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.342,
+      "p95": 3.2015,
+      "p99": 3.462416
+     },
+     "totalMs": {
+      "median": 2.342166,
+      "p95": 3.201583,
+      "p99": 3.462499
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9950,
+     "max": 9997,
+     "simulationMean": 9980.993043461365,
+     "wallMean": 9980.993043460807
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 8,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "3229c233-c999-4ebf-9551-c9cee8226f78",
+   "startedAt": "2026-11-24T06:18:06.991Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18523543,
+    "totalJSHeapSize": 28249799,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 3.800000011920929,
+     "p95": 4.900000035762787,
+     "p99": 6.199999988079071
+    },
+    "simulationMs": {
+     "median": 3.5,
+     "p95": 4.5,
+     "p99": 5.699999988079071
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.30000001192092896,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922367808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 28823994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.480583,
+      "p95": 3.4,
+      "p99": 4.064416
+     },
+     "totalMs": {
+      "median": 1.480583,
+      "p95": 3.400083,
+      "p99": 4.064499
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7948,
+     "max": 7996,
+     "simulationMean": 7983.933054672801,
+     "wallMean": 7983.933054672221
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 9,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "48cce9bf-f53a-4e3d-939e-0e2059235c43",
+   "startedAt": "2026-11-24T06:19:44.806Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18484142,
+    "totalJSHeapSize": 28484070,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.699999988079071,
+     "p95": 2.399999976158142,
+     "p99": 2.600000023841858
+    },
+    "simulationMs": {
+     "median": 1.399999976158142,
+     "p95": 1.9000000357627869,
+     "p99": 2.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.30000001192092896,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115295712,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602991,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.132833,
+      "p95": 13.718333,
+      "p99": 14.960166
+     },
+     "totalMs": {
+      "median": 2.1329160000000003,
+      "p95": 13.718416,
+      "p99": 14.960166
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 971,
+     "max": 1000,
+     "simulationMean": 992.7831943361836,
+     "wallMean": 992.7831943360865
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 10,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "27186e84-6499-4fd9-bf7d-c970b8305463",
+   "startedAt": "2026-11-24T06:21:19.373Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18489902,
+    "totalJSHeapSize": 28746214,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 6.399999976158142,
+     "p99": 7.5
+    },
+    "simulationMs": {
+     "median": 0.5999999642372131,
+     "p95": 5.900000035762787,
+     "p99": 7
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 424673408,
+    "textureUploadBytes": 0,
+    "drawCalls": 8538,
+    "summedParticleDrawCapacity": 13271044,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.985416,
+      "p95": 13.60275,
+      "p99": 15.393333
+     },
+     "totalMs": {
+      "median": 1.9854990000000001,
+      "p95": 13.602833,
+      "p99": 15.393416
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9995,
+     "simulationMean": 2069.102561107205,
+     "wallMean": 2069.1025611111527,
+     "curve": [
+      1376,
+      2816,
+      4248,
+      5696,
+      7128,
+      8480,
+      9658,
+      9991,
+      9989,
+      9988,
+      9987,
+      9980,
+      9984,
+      9979,
+      9985,
+      9982,
+      9984,
+      9985,
+      9988,
+      9980,
+      9987,
+      9980,
+      9977,
+      9986,
+      9985,
+      9978,
+      9974,
+      9981,
+      9985,
+      9977,
+      9981,
+      9974,
+      9975,
+      9983,
+      9982,
+      9984,
+      9881,
+      9268,
+      8322,
+      7222,
+      6156,
+      5094,
+      4087,
+      3115,
+      2326,
+      1649,
+      1097,
+      672,
+      340,
+      146,
+      26,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.193698905408382
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 11,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "c206325f-ff65-465a-a3aa-c1112b2667cf",
+   "startedAt": "2026-11-24T06:22:55.398Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18496598,
+    "totalJSHeapSize": 28746214,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.699999988079071,
+     "p95": 0.9000000357627869,
+     "p99": 1
+    },
+    "simulationMs": {
+     "median": 0.40000003576278687,
+     "p95": 0.699999988079071,
+     "p99": 0.7000000476837158
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.20000004768371582
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.965333,
+      "p95": 13.335999,
+      "p99": 15.370166
+     },
+     "totalMs": {
+      "median": 1.965416,
+      "p95": 13.336082,
+      "p99": 15.370166
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1408,
+      2840,
+      4264,
+      5696,
+      7120,
+      8472,
+      9659,
+      9993,
+      9978,
+      9987,
+      9983,
+      9979,
+      9983,
+      9982,
+      9975,
+      9985,
+      9986,
+      9968,
+      9984,
+      9979,
+      9992,
+      9981,
+      9981,
+      9982,
+      9983,
+      9977,
+      9979,
+      9978,
+      9990,
+      9985,
+      9979,
+      9975,
+      9979,
+      9980,
+      9960,
+      9988,
+      9880,
+      9278,
+      8330,
+      7232,
+      6163,
+      5088,
+      4077,
+      3107,
+      2329,
+      1654,
+      1098,
+      678,
+      346,
+      147,
+      25,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.19099890626967
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 12,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "76936984-84d5-4f0c-9366-17e26bd8f63b",
+   "startedAt": "2026-11-24T06:25:01.820Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18972174,
+    "totalJSHeapSize": 24725078,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.599999964237213,
+     "p95": 6.800000011920929,
+     "p99": 7.5
+    },
+    "simulationMs": {
+     "median": 4.199999988079071,
+     "p95": 6.300000011920929,
+     "p99": 7.100000023841858
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152810496,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36025328,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.506,
+      "p95": 13.688999,
+      "p99": 15.074166
+     },
+     "totalMs": {
+      "median": 2.506083,
+      "p95": 13.689082,
+      "p99": 15.074249
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 92,
+     "max": 9999,
+     "simulationMean": 6819.649084260691,
+     "wallMean": 6819.64908426981,
+     "curve": [
+      1192,
+      2411,
+      3631,
+      4841,
+      6074,
+      9418,
+      9985,
+      9979,
+      9984,
+      9976,
+      9972,
+      9966,
+      9962,
+      9985,
+      9992,
+      9984,
+      9976,
+      9985,
+      9988,
+      9986,
+      9984,
+      9977,
+      9988,
+      9982,
+      9982,
+      9982,
+      9984,
+      9976,
+      9977,
+      9978,
+      9984,
+      9985,
+      9954,
+      9979,
+      9988,
+      9982,
+      9982,
+      9976,
+      9988,
+      9980,
+      9977,
+      9987,
+      9980,
+      9984,
+      9986,
+      9978,
+      9875,
+      9171,
+      8177,
+      7174,
+      6068,
+      5059,
+      4070,
+      3152,
+      2320,
+      1658,
+      1125,
+      671,
+      357,
+      144,
+      877,
+      2302,
+      3723,
+      5153,
+      6579,
+      7962,
+      9203,
+      9991,
+      9991,
+      9986,
+      9986,
+      9977,
+      9968,
+      9982,
+      9988,
+      9980,
+      9859,
+      9212,
+      8262,
+      7269,
+      6263,
+      5270,
+      4278,
+      3299,
+      2431,
+      1723,
+      1106,
+      670,
+      297
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 13,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "91d9519a-4159-4585-ab60-dd6cb07241ac",
+   "startedAt": "2026-11-24T06:26:39.716Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18587245,
+    "totalJSHeapSize": 24593493,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.599999964237213,
+     "p95": 7.199999988079071,
+     "p99": 8.300000011920929
+    },
+    "simulationMs": {
+     "median": 5.199999988079071,
+     "p95": 6.799999952316284,
+     "p99": 7.800000011920929
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.509416,
+      "p95": 13.516833,
+      "p99": 15.141416
+     },
+     "totalMs": {
+      "median": 2.509999,
+      "p95": 13.516916,
+      "p99": 15.141416
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9951,
+     "max": 9993,
+     "simulationMean": 9981.00259328224,
+     "wallMean": 9981.002593281404
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 14,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "617dcf44-fbba-473d-a765-e714819183ba",
+   "startedAt": "2026-11-24T06:28:18.638Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18516214,
+    "totalJSHeapSize": 24289766,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.900000035762787,
+     "p95": 6.5,
+     "p99": 7.300000011920929
+    },
+    "simulationMs": {
+     "median": 4.5,
+     "p95": 6.099999964237213,
+     "p99": 6.800000011920929
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922367808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 28823994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.70275,
+      "p95": 13.861916,
+      "p99": 15.171332
+     },
+     "totalMs": {
+      "median": 2.702833,
+      "p95": 13.862082000000001,
+      "p99": 15.171332
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7954,
+     "max": 7996,
+     "simulationMean": 7983.9536792606295,
+     "wallMean": 7983.9536792597055
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 15,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "457201c8-745f-4523-ad9d-e803b30e9361",
+   "startedAt": "2026-11-24T06:29:56.666Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18522106,
+    "totalJSHeapSize": 24027622,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.7999999523162842,
+     "p95": 2.400000035762787,
+     "p99": 2.600000023841858
+    },
+    "simulationMs": {
+     "median": 1.399999976158142,
+     "p95": 1.9000000357627869,
+     "p99": 2.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.30000001192092896,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115294752,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602961,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.135,
+      "p95": 13.757249,
+      "p99": 15.149166
+     },
+     "totalMs": {
+      "median": 2.135083,
+      "p95": 13.757415,
+      "p99": 15.149249
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 971,
+     "max": 1000,
+     "simulationMean": 992.8136867492098,
+     "wallMean": 992.8136867490482
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 16,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "6eb2e0a1-067b-4127-b1be-71b569d2b0cf",
+   "startedAt": "2026-11-24T06:31:31.261Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18527454,
+    "totalJSHeapSize": 24289766,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 5.700000047683716,
+     "p99": 6.800000011920929
+    },
+    "simulationMs": {
+     "median": 0.5,
+     "p95": 5.300000011920929,
+     "p99": 6.300000011920929
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 425828768,
+    "textureUploadBytes": 0,
+    "drawCalls": 8540,
+    "summedParticleDrawCapacity": 13307149,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.989083,
+      "p95": 13.595916,
+      "p99": 15.131749
+     },
+     "totalMs": {
+      "median": 1.989166,
+      "p95": 13.595999,
+      "p99": 15.131749
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9994,
+     "simulationMean": 2068.9987867067784,
+     "wallMean": 2068.9987866888896,
+     "curve": [
+      1376,
+      2840,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9990,
+      9988,
+      9986,
+      9980,
+      9984,
+      9982,
+      9984,
+      9983,
+      9987,
+      9962,
+      9987,
+      9980,
+      9984,
+      9983,
+      9981,
+      9984,
+      9985,
+      9980,
+      9978,
+      9980,
+      9989,
+      9980,
+      9980,
+      9974,
+      9975,
+      9981,
+      9978,
+      9986,
+      9876,
+      9268,
+      8320,
+      7222,
+      6154,
+      5092,
+      4070,
+      3100,
+      2326,
+      1653,
+      1097,
+      680,
+      343,
+      146,
+      27,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.225798904895782
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 17,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "89c23ec7-57f9-4cb0-aa58-a8b61883aa65",
+   "startedAt": "2026-11-24T06:33:07.461Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 4516203,
+    "totalJSHeapSize": 14044191,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.699999988079071,
+     "p95": 0.9000000357627869,
+     "p99": 1
+    },
+    "simulationMs": {
+     "median": 0.40000003576278687,
+     "p95": 0.6000000238418579,
+     "p99": 0.7000000476837158
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.2999999523162842
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 1.965916,
+      "p95": 13.188333,
+      "p99": 15.149999
+     },
+     "totalMs": {
+      "median": 1.965999,
+      "p95": 13.188416,
+      "p99": 15.150082
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1376,
+      2816,
+      4248,
+      5696,
+      7128,
+      8480,
+      9658,
+      9991,
+      9989,
+      9988,
+      9987,
+      9980,
+      9984,
+      9979,
+      9985,
+      9982,
+      9984,
+      9985,
+      9988,
+      9981,
+      9986,
+      9980,
+      9978,
+      9984,
+      9984,
+      9978,
+      9974,
+      9980,
+      9985,
+      9976,
+      9983,
+      9975,
+      9976,
+      9982,
+      9978,
+      9983,
+      9884,
+      9270,
+      8323,
+      7224,
+      6158,
+      5093,
+      4087,
+      3116,
+      2327,
+      1651,
+      1096,
+      675,
+      340,
+      147,
+      25,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.12709890678525
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 18,
+    "viewport": "960x640",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "5f54e4a2-6bed-4e14-817e-3b5653812560",
+   "startedAt": "2026-11-24T06:35:13.746Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19009238,
+    "totalJSHeapSize": 22660906,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.5,
+     "p95": 6.899999976158142,
+     "p99": 7.800000011920929
+    },
+    "simulationMs": {
+     "median": 4.100000023841858,
+     "p95": 6.400000035762787,
+     "p99": 7.399999976158142
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152620416,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36019388,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.491916,
+      "p95": 13.631499,
+      "p99": 15.229999
+     },
+     "totalMs": {
+      "median": 2.492166,
+      "p95": 13.631582,
+      "p99": 15.230082
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 112,
+     "max": 9999,
+     "simulationMean": 6848.018817986102,
+     "wallMean": 6848.01881798829,
+     "curve": [
+      1190,
+      2410,
+      3627,
+      4839,
+      6070,
+      9409,
+      9986,
+      9978,
+      9981,
+      9977,
+      9964,
+      9964,
+      9965,
+      9987,
+      9990,
+      9982,
+      9976,
+      9990,
+      9984,
+      9989,
+      9982,
+      9978,
+      9988,
+      9974,
+      9984,
+      9984,
+      9985,
+      9978,
+      9980,
+      9989,
+      9984,
+      9974,
+      9964,
+      9981,
+      9979,
+      9979,
+      9983,
+      9977,
+      9987,
+      9972,
+      9983,
+      9978,
+      9978,
+      9987,
+      9986,
+      9982,
+      9908,
+      9255,
+      8245,
+      7179,
+      6136,
+      5129,
+      4081,
+      3147,
+      2351,
+      1654,
+      1124,
+      675,
+      345,
+      120,
+      1035,
+      2434,
+      3860,
+      5291,
+      6717,
+      8099,
+      9342,
+      9991,
+      9988,
+      9978,
+      9986,
+      9979,
+      9982,
+      9983,
+      9981,
+      9974,
+      9880,
+      9205,
+      8192,
+      7221,
+      6246,
+      5307,
+      4342,
+      3398,
+      2558,
+      1817,
+      1134,
+      675,
+      322
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 19,
+    "viewport": "960x640",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "25fb0f8d-e330-4352-ab63-dd2483dbc437",
+   "startedAt": "2026-11-24T06:36:51.687Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 3489750,
+    "totalJSHeapSize": 9756294,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "b0fffe14-4f88-4d18-9b6c-1ac29960d9b8",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.699999988079071,
+     "p95": 7.400000035762787,
+     "p99": 8.199999988079071
+    },
+    "simulationMs": {
+     "median": 5.300000011920929,
+     "p95": 7,
+     "p99": 7.699999988079071
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.516583,
+      "p95": 13.550666,
+      "p99": 14.959332
+     },
+     "totalMs": {
+      "median": 2.516749,
+      "p95": 13.550666,
+      "p99": 14.959415
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9952,
+     "max": 9995,
+     "simulationMean": 9981.002886609214,
+     "wallMean": 9981.002886608912
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  },
+  {
+   "spec": {
+    "index": 20,
+    "viewport": "960x640",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "4b3f8444-cf0b-41dc-9436-522e5ef2f345",
+   "startedAt": "2026-11-24T06:38:31.108Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18667706,
+    "totalJSHeapSize": 24874334,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "b0fffe14-4f88-4d18-9b6c-1ac29960d9b8",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.5,
+     "p95": 7.299999952316284,
+     "p99": 8.599999964237213
+    },
+    "simulationMs": {
+     "median": 5.100000023841858,
+     "p95": 6.800000011920929,
+     "p99": 8
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959840,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029995,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.510083,
+      "p95": 13.595,
+      "p99": 14.913083
+     },
+     "totalMs": {
+      "median": 2.5104990000000003,
+      "p95": 13.595083,
+      "p99": 14.913083
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9947,
+     "max": 9995,
+     "simulationMean": 9980.949431011939,
+     "wallMean": 9980.949431011359
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  },
+  {
+   "spec": {
+    "index": 21,
+    "viewport": "960x640",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "d799dd30-f347-4d78-b86b-9658faeaeac0",
+   "startedAt": "2026-11-24T06:40:09.836Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18678247,
+    "totalJSHeapSize": 24877143,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "b0fffe14-4f88-4d18-9b6c-1ac29960d9b8",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1155,
+    "height": 770,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.700000047683716,
+     "p95": 7.400000035762787,
+     "p99": 8.600000023841858
+    },
+    "simulationMs": {
+     "median": 5.300000011920929,
+     "p95": 7,
+     "p99": 8.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.508666,
+      "p95": 13.447416,
+      "p99": 15.011249
+     },
+     "totalMs": {
+      "median": 2.508832,
+      "p95": 13.447499,
+      "p99": 15.011415
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9947,
+     "max": 9996,
+     "simulationMean": 9981.001431637495,
+     "wallMean": 9981.00143163796
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  },
+  {
+   "spec": {
+    "index": 22,
+    "viewport": "full",
+    "kind": "discovery",
+    "workload": "discovery",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "7f628a94-c565-406d-b5ea-bd5d4bbcb599",
+   "startedAt": "2026-11-24T06:41:55.350Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 4789041,
+    "totalJSHeapSize": 9929165,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU adaptive discovery (not a paired performance result)",
+    "limit": "scheduled",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 6,
+     "p95": 8,
+     "p99": 9.399999976158142
+    },
+    "simulationMs": {
+     "median": 5.600000023841858,
+     "p95": 7.5,
+     "p99": 8.900000035762787
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959744,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029992,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.103416,
+      "p95": 13.416999,
+      "p99": 15.259666
+     },
+     "totalMs": {
+      "median": 5.104833,
+      "p95": 13.417082,
+      "p99": 15.259749
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9948,
+     "max": 9994,
+     "simulationMean": 9980.929924618273,
+     "wallMean": 9980.929924617974
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 23,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "ad7d60ed-7b1e-49b0-a34d-f4437030273d",
+   "startedAt": "2026-11-24T06:43:35.309Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18752306,
+    "totalJSHeapSize": 24908046,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.900000035762787,
+     "p95": 7.399999976158142,
+     "p99": 9
+    },
+    "simulationMs": {
+     "median": 5.599999964237213,
+     "p95": 6.900000035762787,
+     "p99": 8.400000035762787
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 3.02775,
+      "p95": 4.97425,
+      "p99": 5.717583
+     },
+     "totalMs": {
+      "median": 3.027833,
+      "p95": 4.974333,
+      "p99": 5.717666
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9949,
+     "max": 9995,
+     "simulationMean": 9980.976327139795,
+     "wallMean": 9980.976327140123
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 24,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "a661b22f-7405-4025-a037-0d36ceff9e06",
+   "startedAt": "2026-11-24T06:45:14.145Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 3674800,
+    "totalJSHeapSize": 9040672,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3602,
+    "callbackMs": {
+     "median": 5.200000047683716,
+     "p95": 6.800000011920929,
+     "p99": 7.699999988079071
+    },
+    "simulationMs": {
+     "median": 4.899999976158142,
+     "p95": 6.399999976158142,
+     "p99": 7.200000047683716
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922111840,
+    "textureUploadBytes": 0,
+    "drawCalls": 10806,
+    "summedParticleDrawCapacity": 28815995,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3602,
+     "samples": 3602,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.148916,
+      "p95": 14.293916,
+      "p99": 15.939666
+     },
+     "totalMs": {
+      "median": 5.149082,
+      "p95": 14.293916,
+      "p99": 15.939666
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7956,
+     "max": 7996,
+     "simulationMean": 7983.828717704191,
+     "wallMean": 7983.828717704194
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 25,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "c9c36d83-6fa5-4197-b564-f1d8d06e36e4",
+   "startedAt": "2026-11-24T06:46:52.654Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18615414,
+    "totalJSHeapSize": 24294974,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.800000011920929,
+     "p95": 2.699999988079071,
+     "p99": 3
+    },
+    "simulationMs": {
+     "median": 1.5,
+     "p95": 2.100000023841858,
+     "p99": 2.400000035762787
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115295008,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602969,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 4.584666,
+      "p95": 14.713583,
+      "p99": 16.061666
+     },
+     "totalMs": {
+      "median": 4.5848320000000005,
+      "p95": 14.713583,
+      "p99": 16.061749
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 971,
+     "max": 1000,
+     "simulationMean": 992.8393548794779,
+     "wallMean": 992.8393548795436
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 26,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "47c964d5-dfeb-4007-ae9d-46d530ab8f65",
+   "startedAt": "2026-11-24T06:48:27.298Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18621410,
+    "totalJSHeapSize": 24557122,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.9000000357627869,
+     "p95": 6.100000023841858,
+     "p99": 7.099999964237213
+    },
+    "simulationMs": {
+     "median": 0.699999988079071,
+     "p95": 5.699999988079071,
+     "p99": 6.699999988079071
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 422454400,
+    "textureUploadBytes": 0,
+    "drawCalls": 8541,
+    "summedParticleDrawCapacity": 13201700,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.574416,
+      "p95": 4.594083,
+      "p99": 5.243166
+     },
+     "totalMs": {
+      "median": 2.574416,
+      "p95": 4.594166,
+      "p99": 5.2433320000000005
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9994,
+     "simulationMean": 2068.5692352829133,
+     "wallMean": 2068.5692352819456,
+     "curve": [
+      1376,
+      2840,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9989,
+      9988,
+      9983,
+      9979,
+      9984,
+      9982,
+      9978,
+      9984,
+      9988,
+      9964,
+      9986,
+      9979,
+      9984,
+      9982,
+      9981,
+      9986,
+      9983,
+      9977,
+      9981,
+      9980,
+      9989,
+      9983,
+      9977,
+      9976,
+      9976,
+      9980,
+      9975,
+      9986,
+      9874,
+      9266,
+      8317,
+      7218,
+      6150,
+      5090,
+      4068,
+      3102,
+      2325,
+      1649,
+      1101,
+      675,
+      343,
+      148,
+      28,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.241798903793097
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 27,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "30c66cc9-38f8-4181-892d-9fb3feb71dee",
+   "startedAt": "2026-11-24T06:50:03.981Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 3565942,
+    "totalJSHeapSize": 13426310,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 1.100000023841858,
+     "p99": 1.199999988079071
+    },
+    "simulationMs": {
+     "median": 0.5999999642372131,
+     "p95": 0.800000011920929,
+     "p99": 0.8999999761581421
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.30000001192092896
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.285916,
+      "p95": 4.476083,
+      "p99": 4.965166
+     },
+     "totalMs": {
+      "median": 2.285916,
+      "p95": 4.476249,
+      "p99": 4.965249
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1376,
+      2840,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9978,
+      9988,
+      9983,
+      9978,
+      9984,
+      9982,
+      9978,
+      9984,
+      9988,
+      9969,
+      9985,
+      9979,
+      9984,
+      9983,
+      9981,
+      9985,
+      9983,
+      9978,
+      9978,
+      9979,
+      9990,
+      9984,
+      9978,
+      9977,
+      9976,
+      9980,
+      9977,
+      9986,
+      9870,
+      9267,
+      8318,
+      7218,
+      6147,
+      5089,
+      4067,
+      3101,
+      2326,
+      1650,
+      1100,
+      675,
+      344,
+      149,
+      28,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.24179890565574
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 28,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "8d5df1ac-cf70-42d5-9ef0-87b91acfc6be",
+   "startedAt": "2026-11-24T06:52:10.358Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18989670,
+    "totalJSHeapSize": 28842246,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.800000011920929,
+     "p95": 7.199999988079071,
+     "p99": 8.899999976158142
+    },
+    "simulationMs": {
+     "median": 4.399999976158142,
+     "p95": 6.799999952316284,
+     "p99": 8.300000011920929
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.5,
+     "p99": 0.699999988079071
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152655552,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36020486,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 4.907166,
+      "p95": 14.159916,
+      "p99": 15.825499
+     },
+     "totalMs": {
+      "median": 4.907249,
+      "p95": 14.159916,
+      "p99": 15.825582
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 85,
+     "max": 9997,
+     "simulationMean": 6820.306192211254,
+     "wallMean": 6820.306192209456,
+     "curve": [
+      1180,
+      2387,
+      3593,
+      4797,
+      6021,
+      9366,
+      9978,
+      9976,
+      9991,
+      9971,
+      9954,
+      9918,
+      9973,
+      9990,
+      9981,
+      9984,
+      9984,
+      9983,
+      9978,
+      9984,
+      9980,
+      9984,
+      9980,
+      9980,
+      9979,
+      9988,
+      9979,
+      9980,
+      9971,
+      9985,
+      9983,
+      9983,
+      9960,
+      9985,
+      9981,
+      9983,
+      9985,
+      9984,
+      9989,
+      9980,
+      9979,
+      9979,
+      9978,
+      9984,
+      9985,
+      9977,
+      9906,
+      9250,
+      8236,
+      7181,
+      6070,
+      4980,
+      3992,
+      3084,
+      2309,
+      1624,
+      1066,
+      647,
+      325,
+      108,
+      850,
+      2236,
+      3659,
+      5087,
+      6512,
+      7920,
+      9177,
+      9986,
+      9986,
+      9987,
+      9982,
+      9983,
+      9979,
+      9984,
+      9977,
+      9973,
+      9909,
+      9234,
+      8209,
+      7222,
+      6237,
+      5310,
+      4332,
+      3423,
+      2563,
+      1825,
+      1177,
+      711,
+      325
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 29,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "0959ab5e-119a-4330-9c00-20e7f22cc5c4",
+   "startedAt": "2026-11-24T06:53:48.806Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18883393,
+    "totalJSHeapSize": 28922425,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 6,
+     "p95": 7.399999976158142,
+     "p99": 8.400000035762787
+    },
+    "simulationMs": {
+     "median": 5.600000023841858,
+     "p95": 7,
+     "p99": 8
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.99225,
+      "p95": 4.935833,
+      "p99": 5.655
+     },
+     "totalMs": {
+      "median": 2.99225,
+      "p95": 4.935916,
+      "p99": 5.655083
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9948,
+     "max": 9994,
+     "simulationMean": 9980.927694659636,
+     "wallMean": 9980.927694658922
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 30,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "a8d5ec0c-e3f7-4266-910b-2f2bae663c4a",
+   "startedAt": "2026-11-24T06:55:28.567Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18807023,
+    "totalJSHeapSize": 28576471,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.300000011920929,
+     "p95": 7,
+     "p99": 8
+    },
+    "simulationMs": {
+     "median": 5,
+     "p95": 6.599999964237213,
+     "p99": 7.5
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922367808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 28823994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.088583,
+      "p95": 14.148416,
+      "p99": 15.905333
+     },
+     "totalMs": {
+      "median": 5.088666,
+      "p95": 14.148416,
+      "p99": 15.905416
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7955,
+     "max": 7998,
+     "simulationMean": 7983.828635094164,
+     "wallMean": 7983.828635093932
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 31,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "a73aca47-500f-412a-8ded-a613e4613e36",
+   "startedAt": "2026-11-24T06:57:07.183Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18655966,
+    "totalJSHeapSize": 28489282,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.899999976158142,
+     "p95": 2.899999976158142,
+     "p99": 3
+    },
+    "simulationMs": {
+     "median": 1.5,
+     "p95": 2.399999976158142,
+     "p99": 2.599999964237213
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115295072,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602971,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.5855,
+      "p95": 4.626416,
+      "p99": 5.2605
+     },
+     "totalMs": {
+      "median": 2.5855,
+      "p95": 4.626582,
+      "p99": 5.2605830000000005
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 970,
+     "max": 1000,
+     "simulationMean": 992.7131624036402,
+     "wallMean": 992.7131624033892
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 32,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "7204b9b4-72f1-43d5-a869-efd699bae430",
+   "startedAt": "2026-11-24T06:58:41.972Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18660806,
+    "totalJSHeapSize": 28751622,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.8999999761581421,
+     "p95": 6.199999988079071,
+     "p99": 7.900000035762787
+    },
+    "simulationMs": {
+     "median": 0.6000000238418579,
+     "p95": 5.800000011920929,
+     "p99": 7.400000035762787
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.3999999761581421,
+     "p99": 0.5999999642372131
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 421907840,
+    "textureUploadBytes": 0,
+    "drawCalls": 8530,
+    "summedParticleDrawCapacity": 13184620,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 3.677916,
+      "p95": 14.84325,
+      "p99": 16.810666
+     },
+     "totalMs": {
+      "median": 3.677916,
+      "p95": 14.843333,
+      "p99": 16.810666
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9996,
+     "simulationMean": 2071.1037862534445,
+     "wallMean": 2071.103786257584,
+     "curve": [
+      1408,
+      2832,
+      4256,
+      5680,
+      7120,
+      8473,
+      9653,
+      9992,
+      9989,
+      9987,
+      9974,
+      9977,
+      9982,
+      9983,
+      9979,
+      9979,
+      9980,
+      9990,
+      9990,
+      9983,
+      9986,
+      9980,
+      9981,
+      9981,
+      9983,
+      9977,
+      9977,
+      9972,
+      9987,
+      9981,
+      9981,
+      9984,
+      9985,
+      9966,
+      9983,
+      9986,
+      9880,
+      9275,
+      8316,
+      7214,
+      6154,
+      5091,
+      4080,
+      3108,
+      2332,
+      1657,
+      1106,
+      683,
+      343,
+      148,
+      26,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.051898907870054
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 33,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "811b9dda-7c9f-4ba0-a67b-fb0d0b13deb8",
+   "startedAt": "2026-11-24T07:00:18.118Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18753982,
+    "totalJSHeapSize": 28575746,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 1.0999999642372131,
+     "p99": 1.199999988079071
+    },
+    "simulationMs": {
+     "median": 0.5999999642372131,
+     "p95": 0.800000011920929,
+     "p99": 0.8999999761581421
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.20000004768371582
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 3.106166,
+      "p95": 15.122916,
+      "p99": 17.035499
+     },
+     "totalMs": {
+      "median": 3.106249,
+      "p95": 15.122916,
+      "p99": 17.035499
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1408,
+      2840,
+      4264,
+      5696,
+      7120,
+      8472,
+      9659,
+      9993,
+      9978,
+      9990,
+      9983,
+      9979,
+      9983,
+      9981,
+      9975,
+      9986,
+      9987,
+      9969,
+      9984,
+      9979,
+      9992,
+      9981,
+      9981,
+      9981,
+      9983,
+      9977,
+      9981,
+      9980,
+      9990,
+      9981,
+      9980,
+      9975,
+      9978,
+      9979,
+      9955,
+      9988,
+      9881,
+      9276,
+      8330,
+      7231,
+      6145,
+      5088,
+      4077,
+      3111,
+      2330,
+      1652,
+      1098,
+      679,
+      343,
+      148,
+      25,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.190898906439543
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 34,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "de88fda3-6d96-41b6-9f49-cac767a806b3",
+   "startedAt": "2026-11-24T07:02:24.623Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19027690,
+    "totalJSHeapSize": 24381702,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.5,
+     "p95": 7.199999988079071,
+     "p99": 8.699999988079071
+    },
+    "simulationMs": {
+     "median": 4.199999988079071,
+     "p95": 6.699999988079071,
+     "p99": 8.199999988079071
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.5,
+     "p99": 0.6000000238418579
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152816800,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36025525,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 4.952166,
+      "p95": 14.219083,
+      "p99": 15.845166
+     },
+     "totalMs": {
+      "median": 4.952332,
+      "p95": 14.219083,
+      "p99": 15.845249
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 81,
+     "max": 9998,
+     "simulationMean": 6814.568389352538,
+     "wallMean": 6814.5683893515115,
+     "curve": [
+      1169,
+      2375,
+      3580,
+      4786,
+      6009,
+      9424,
+      9980,
+      9981,
+      9991,
+      9971,
+      9965,
+      9963,
+      9974,
+      9988,
+      9987,
+      9990,
+      9988,
+      9987,
+      9978,
+      9986,
+      9989,
+      9975,
+      9981,
+      9972,
+      9975,
+      9990,
+      9989,
+      9973,
+      9983,
+      9986,
+      9988,
+      9982,
+      9962,
+      9982,
+      9982,
+      9987,
+      9985,
+      9980,
+      9987,
+      9990,
+      9982,
+      9961,
+      9977,
+      9980,
+      9985,
+      9977,
+      9889,
+      9240,
+      8222,
+      7181,
+      6048,
+      4965,
+      3979,
+      3070,
+      2296,
+      1616,
+      1063,
+      656,
+      325,
+      111,
+      802,
+      2192,
+      3613,
+      5040,
+      6470,
+      7872,
+      9171,
+      9996,
+      9991,
+      9984,
+      9985,
+      9984,
+      9983,
+      9984,
+      9976,
+      9975,
+      9904,
+      9208,
+      8241,
+      7214,
+      6269,
+      5336,
+      4402,
+      3432,
+      2583,
+      1802,
+      1189,
+      679,
+      307
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 35,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-10000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "2729b813-ed2e-4061-829d-2be29ee16941",
+   "startedAt": "2026-11-24T07:04:03.345Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18863414,
+    "totalJSHeapSize": 24793154,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 6.099999964237213,
+     "p95": 8,
+     "p99": 9.599999964237213
+    },
+    "simulationMs": {
+     "median": 5.699999988079071,
+     "p95": 7.599999964237213,
+     "p99": 9.099999964237213
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.01675,
+      "p95": 13.71475,
+      "p99": 15.292583
+     },
+     "totalMs": {
+      "median": 5.016916,
+      "p95": 13.714833,
+      "p99": 15.292666
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9948,
+     "max": 9994,
+     "simulationMean": 9980.936996261007,
+     "wallMean": 9980.936996260021
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 36,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-8000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 8000
+   },
+   "ok": true,
+   "runId": "14438495-df7c-4b7b-adf6-9832e6ba74f5",
+   "startedAt": "2026-11-24T07:05:43.029Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18872832,
+    "totalJSHeapSize": 24795636,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 8000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.300000011920929,
+     "p95": 7.099999964237213,
+     "p99": 8.099999964237213
+    },
+    "simulationMs": {
+     "median": 5,
+     "p95": 6.600000023841858,
+     "p99": 7.600000023841858
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 922367744,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 28823992,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.093666,
+      "p95": 14.327082,
+      "p99": 15.980416
+     },
+     "totalMs": {
+      "median": 5.093749,
+      "p95": 14.327082,
+      "p99": 15.980416
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 7958,
+     "max": 7996,
+     "simulationMean": 7983.914698372859,
+     "wallMean": 7983.914698372675
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 8000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 37,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "dense-1000",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 1000
+   },
+   "ok": true,
+   "runId": "6625ef55-d288-4a8c-a460-ddea0f198722",
+   "startedAt": "2026-11-24T07:07:20.961Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18691938,
+    "totalJSHeapSize": 24696386,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 1000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 1.899999976158142,
+     "p95": 2.899999976158142,
+     "p99": 3.099999964237213
+    },
+    "simulationMs": {
+     "median": 1.5,
+     "p95": 2.399999976158142,
+     "p99": 2.599999964237213
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 115295072,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 3602971,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.6615,
+      "p95": 4.62725,
+      "p99": 5.314333
+     },
+     "totalMs": {
+      "median": 2.6615,
+      "p95": 4.627333,
+      "p99": 5.3144990000000005
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 970,
+     "max": 1000,
+     "simulationMean": 992.7242121822663,
+     "wallMean": 992.7242121823947
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 1000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 38,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "draining",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "draining",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "5f3ed946-3b04-493c-972a-a2e9fafa9956",
+   "startedAt": "2026-11-24T07:08:55.673Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18697298,
+    "totalJSHeapSize": 28632838,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "draining",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.9000000357627869,
+     "p95": 6.5,
+     "p99": 7.800000011920929
+    },
+    "simulationMs": {
+     "median": 0.699999988079071,
+     "p95": 6,
+     "p99": 7.400000035762787
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.40000003576278687,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 423997184,
+    "textureUploadBytes": 0,
+    "drawCalls": 8539,
+    "summedParticleDrawCapacity": 13249912,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 3.793083,
+      "p95": 15.124416,
+      "p99": 16.968916
+     },
+     "totalMs": {
+      "median": 3.7931660000000003,
+      "p95": 15.124416,
+      "p99": 16.968999
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 9993,
+     "simulationMean": 2068.760783507462,
+     "wallMean": 2068.760783516337,
+     "curve": [
+      1376,
+      2816,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9989,
+      9988,
+      9986,
+      9980,
+      9984,
+      9983,
+      9984,
+      9982,
+      9987,
+      9962,
+      9987,
+      9981,
+      9984,
+      9982,
+      9980,
+      9984,
+      9984,
+      9979,
+      9974,
+      9982,
+      9990,
+      9980,
+      9979,
+      9976,
+      9974,
+      9980,
+      9979,
+      9985,
+      9870,
+      9266,
+      8318,
+      7219,
+      6154,
+      5090,
+      4083,
+      3101,
+      2324,
+      1650,
+      1098,
+      674,
+      341,
+      147,
+      27,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.209398904815316
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 39,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "drained",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "drained",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "876735cb-b7ff-49e1-8558-de972caf663f",
+   "startedAt": "2026-11-24T07:10:32.407Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18703558,
+    "totalJSHeapSize": 28636934,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "drained",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 60,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 0.800000011920929,
+     "p95": 1.100000023841858,
+     "p99": 1.199999988079071
+    },
+    "simulationMs": {
+     "median": 0.5999999642372131,
+     "p95": 0.800000011920929,
+     "p99": 0.8999999761581421
+    },
+    "submissionMs": {
+     "median": 0.10000002384185791,
+     "p95": 0.20000004768371582,
+     "p99": 0.30000001192092896
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 0,
+    "textureUploadBytes": 0,
+    "drawCalls": 7206,
+    "summedParticleDrawCapacity": 0,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.276083,
+      "p95": 4.480083,
+      "p99": 5.064916
+     },
+     "totalMs": {
+      "median": 2.276166,
+      "p95": 4.480249,
+      "p99": 5.065082
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 0,
+     "max": 0,
+     "simulationMean": 0,
+     "wallMean": 0,
+     "curve": [
+      1376,
+      2840,
+      4272,
+      5696,
+      7120,
+      8480,
+      9659,
+      9992,
+      9990,
+      9988,
+      9984,
+      9979,
+      9984,
+      9982,
+      9978,
+      9984,
+      9988,
+      9963,
+      9985,
+      9979,
+      9983,
+      9982,
+      9981,
+      9984,
+      9982,
+      9977,
+      9980,
+      9980,
+      9989,
+      9983,
+      9976,
+      9977,
+      9977,
+      9977,
+      9975,
+      9987,
+      9872,
+      9267,
+      8319,
+      7220,
+      6152,
+      5091,
+      4067,
+      3101,
+      2323,
+      1651,
+      1100,
+      673,
+      341,
+      147,
+      27,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "timeToZeroAfterRemoval": 22.241898903623223
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 40,
+    "viewport": "full",
+    "kind": "fixed",
+    "workload": "rotation",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "rotation",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "10c297b5-5787-4e7d-b624-9d1d03962715",
+   "startedAt": "2026-11-24T07:12:39.174Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19181518,
+    "totalJSHeapSize": 25697322,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "rotation",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "fixed limit",
+    "limit": 10000,
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 4.699999988079071,
+     "p95": 7.300000011920929,
+     "p99": 8.5
+    },
+    "simulationMs": {
+     "median": 4.300000011920929,
+     "p95": 6.800000011920929,
+     "p99": 8
+    },
+    "submissionMs": {
+     "median": 0.2999999523162842,
+     "p95": 0.5,
+     "p99": 0.6000000238418579
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152379808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36011869,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 4.831416,
+      "p95": 14.067833,
+      "p99": 16.04825
+     },
+     "totalMs": {
+      "median": 4.831499,
+      "p95": 14.067916,
+      "p99": 16.048333
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 74,
+     "max": 9999,
+     "simulationMean": 6823.963629046338,
+     "wallMean": 6823.963629060719,
+     "curve": [
+      1175,
+      2381,
+      3587,
+      4792,
+      6015,
+      9367,
+      9979,
+      9981,
+      9986,
+      9975,
+      9954,
+      9968,
+      9979,
+      9981,
+      9975,
+      9987,
+      9986,
+      9976,
+      9981,
+      9979,
+      9982,
+      9982,
+      9985,
+      9983,
+      9980,
+      9987,
+      9983,
+      9980,
+      9979,
+      9979,
+      9977,
+      9972,
+      9978,
+      9983,
+      9982,
+      9973,
+      9984,
+      9984,
+      9978,
+      9987,
+      9990,
+      9983,
+      9984,
+      9982,
+      9978,
+      9983,
+      9885,
+      9196,
+      8226,
+      7177,
+      6102,
+      5079,
+      4082,
+      3145,
+      2318,
+      1672,
+      1125,
+      670,
+      348,
+      130,
+      837,
+      2243,
+      3659,
+      5089,
+      6518,
+      7915,
+      9177,
+      9988,
+      9991,
+      9988,
+      9990,
+      9987,
+      9978,
+      9979,
+      9987,
+      9980,
+      9883,
+      9187,
+      8197,
+      7219,
+      6229,
+      5296,
+      4327,
+      3410,
+      2582,
+      1822,
+      1141,
+      673,
+      312
+     ],
+     "timeToZeroAfterRemoval": null
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ]
+  },
+  {
+   "spec": {
+    "index": 41,
+    "viewport": "full",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 1,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "860298c6-4807-49a5-9890-4d348d2fc05e",
+   "startedAt": "2026-11-24T07:14:17.061Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 19014051,
+    "totalJSHeapSize": 24391775,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "7f628a94-c565-406d-b5ea-bd5d4bbcb599",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.800000011920929,
+     "p95": 7.5,
+     "p99": 9
+    },
+    "simulationMs": {
+     "median": 5.400000035762787,
+     "p95": 7,
+     "p99": 8.5
+    },
+    "submissionMs": {
+     "median": 0.19999998807907104,
+     "p95": 0.3999999761581421,
+     "p99": 0.40000003576278687
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959808,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029994,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000083,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 2.951416,
+      "p95": 4.9295,
+      "p99": 5.521
+     },
+     "totalMs": {
+      "median": 2.951499,
+      "p95": 4.929666,
+      "p99": 5.521083
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9950,
+     "max": 9999,
+     "simulationMean": 9981.000334993669,
+     "wallMean": 9981.000334993247
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  },
+  {
+   "spec": {
+    "index": 42,
+    "viewport": "full",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 2,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "b8e39d7e-928c-4e91-a423-465d46a09bd1",
+   "startedAt": "2026-11-24T07:15:56.088Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18724818,
+    "totalJSHeapSize": 24454918,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "7f628a94-c565-406d-b5ea-bd5d4bbcb599",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 6,
+     "p95": 8.099999964237213,
+     "p99": 9.5
+    },
+    "simulationMs": {
+     "median": 5.600000023841858,
+     "p95": 7.600000023841858,
+     "p99": 9
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959776,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029993,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.036833,
+      "p95": 13.52125,
+      "p99": 15.423833
+     },
+     "totalMs": {
+      "median": 5.036916,
+      "p95": 13.521333,
+      "p99": 15.423916
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9941,
+     "max": 9995,
+     "simulationMean": 9980.926211600081,
+     "wallMean": 9980.926211598717
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  },
+  {
+   "spec": {
+    "index": 43,
+    "viewport": "full",
+    "kind": "schedule",
+    "workload": "schedule-replay",
+    "backend": "cpu",
+    "repetition": 3,
+    "scenario": "dense",
+    "limit": 10000
+   },
+   "ok": true,
+   "runId": "de4276b5-a157-4d62-8787-8e1a30c37cc5",
+   "startedAt": "2026-11-24T07:17:34.918Z",
+   "battery": {
+    "charging": true,
+    "level": 1
+   },
+   "memory": {
+    "usedJSHeapSize": 18728570,
+    "totalJSHeapSize": 24459014,
+    "jsHeapSizeLimit": 4395630592
+   },
+   "metadata": {
+    "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+    "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+    "backend": "cpu",
+    "scenario": "dense",
+    "seed": 42,
+    "capacity": 10000,
+    "budget": "CPU-schedule replay",
+    "limit": "scheduled",
+    "scheduleSource": "7f628a94-c565-406d-b5ea-bd5d4bbcb599",
+    "gpuTiming": "enabled",
+    "motion": 1,
+    "refreshHz": 60,
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Google Chrome 158, idle PC, visible window driven over CDP",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+    "renderer": "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+    "targetFormat": "RGBA16F",
+    "width": 1921,
+    "height": 1080,
+    "pixelRatio": 1.203125,
+    "warmupSeconds": 30,
+    "measureSeconds": 60
+   },
+   "timing": {
+    "callbacks": 3603,
+    "callbackMs": {
+     "median": 5.800000011920929,
+     "p95": 7.700000047683716,
+     "p99": 9.099999964237213
+    },
+    "simulationMs": {
+     "median": 5.399999976158142,
+     "p95": 7.199999988079071,
+     "p99": 8.599999964237213
+    },
+    "submissionMs": {
+     "median": 0.20000004768371582,
+     "p95": 0.3999999761581421,
+     "p99": 0.5
+    },
+    "intervalMs": {
+     "median": 16.69999999999709,
+     "p95": 16.70000000001164,
+     "p99": 16.80000000000291
+    },
+    "missedPeriods": 0,
+    "uploadedBytes": 1152959744,
+    "textureUploadBytes": 0,
+    "drawCalls": 10809,
+    "summedParticleDrawCapacity": 36029992,
+    "simulatedSlotsPerPositiveStep": 10000,
+    "drawCapacity": "live count",
+    "gpuTime": {
+     "source": "EXT_disjoint_timer_query_webgl2 TIME_ELAPSED_EXT",
+     "covers": "simulation: uploads, flag and prefix-scan passes, transform feedback over both state buffers' full capacity; render: instance upload or full-capacity draw, trail passes, present",
+     "measuredSteps": 3603,
+     "samples": 3603,
+     "skippedRingFull": 0,
+     "discardedDisjoint": 0,
+     "lostAtEnd": 0,
+     "simulationMs": {
+      "median": 0.000083,
+      "p95": 0.000166,
+      "p99": 0.000166
+     },
+     "renderMs": {
+      "median": 5.1295,
+      "p95": 14.035833,
+      "p99": 15.496916
+     },
+     "totalMs": {
+      "median": 5.129583,
+      "p95": 14.035833,
+      "p99": 15.496999
+     }
+    }
+   },
+   "occupancy": {
+    "cpu": {
+     "min": 9955,
+     "max": 9996,
+     "simulationMean": 9981.067373652644,
+     "wallMean": 9981.067373652471
+    },
+    "gpu": {
+     "unavailable": "crossValidate: false"
+    }
+   },
+   "parity": {
+    "unavailable": "crossValidate: false"
+   },
+   "finalStateMatches": true,
+   "decisions": [
+    {
+     "callback": 0,
+     "time": 0,
+     "limit": 10000,
+     "intensity": 1
+    }
+   ],
+   "scheduleApplied": {
+    "applied": 1,
+    "total": 1
+   }
+  }
+ ]
+}

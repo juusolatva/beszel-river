@@ -104,11 +104,11 @@ function frame(now: number): void {
     streams.update(dt, aspect);
     field.update(t, aspect);
     particles.spawn(dt, streams);
-    const count = particles.step(dt, streams, field, aspect, pixelRatio);
+    const count = particles.step(dt, streams, field, aspect);
     stats.simMs = ease(stats.simMs, performance.now() - simStart, 0.5, dt);
     stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
     stats.particles = count;
-    renderer.render(particles.instances, count, dt, aspect);
+    renderer.render(particles, streams.chroma, pixelRatio, dt, aspect);
     // Include rendering submission and any driver stalls; this does not measure GPU execution.
     const workSeconds = (performance.now() - simStart) / 1000;
     if (budget.update(interval, particles.count, workSeconds)) {

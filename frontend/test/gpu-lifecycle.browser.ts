@@ -77,8 +77,8 @@ export async function runGpuLifecycleBrowserChecks() {
             else if (cs.slots[storage.slot[i]].id.startsWith("new")) lastBirth.cpuNew = time;
           }
         }
-        cpu.step(dt, cs, field, 1.5, 1);
-        control.spawn(dt, controlStreams); control.step(dt, controlStreams, field, 1.5, 1);
+        cpu.step(dt, cs, field, 1.5);
+        control.spawn(dt, controlStreams); control.step(dt, controlStreams, field, 1.5);
         gpu.step(dt, gs, field, 1.5);
         for (let s = 0; s < 32; s++) if (gs.slots[s].used && (gs.slots[s].inFrame || gs.slots[s].presence >= 0.01)) lastEligible[s] = time;
         gl.bindBuffer(gl.ARRAY_BUFFER, gpu.stateBuffer);

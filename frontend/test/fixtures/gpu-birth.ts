@@ -61,7 +61,7 @@ export function replayRecordedBirth(): BirthInputs {
       return { u: 1 - draws[1], v: draws[2], centers, half: slot.half,
         x: storage.x[i], y: storage.y[i], life: storage.life[i], speedJitter: storage.speedJitter[i] };
     }
-    control.particles.step(dt, control.streams, field, aspect, 1);
+    control.particles.step(dt, control.streams, field, aspect);
   }
   throw new Error("The replay ended before the recorded birth");
 }

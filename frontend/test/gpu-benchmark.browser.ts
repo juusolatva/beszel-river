@@ -32,6 +32,12 @@ interface BenchmarkOptions {
   gpuTiming?: boolean;
 }
 
+/**
+ * The slots the CPU path steps and draws per callback: every slot through `ParticleSystem.drawCount`, dead
+ * ones included, so an emptying pool still visits the holes below its highest live particle and an empty
+ * one visits none. `summedParticleDrawCapacity` holds the measured total.
+ */
+const CPU_SLOTS = "drawCount (highest live slot + 1)";
 const BUDGET_LABELS = { fixed: "fixed limit", adaptive: "CPU adaptive discovery (not a paired performance result)", schedule: "CPU-schedule replay" };
 
 const usedCanvases = new WeakSet<HTMLCanvasElement>();
@@ -225,7 +231,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
         // Submission starts after the query switch, so neither span (nor the budget's input) includes query calls.
         const renderBegin = performance.now();
         if (dt > 0) {
-          if (cpu) renderer.render(cpu.particles.instances, count, dt, width / height);
+          if (cpu) renderer.render(cpu.particles, cpu.streams.chroma, pixelRatio, dt, width / height);
           else renderer.renderGpu(gpu!.drawer, dt, width / height, pixelRatio, gpu!.particles.globalHue, gpu!.intensity);
         }
         const end = performance.now();
@@ -311,7 +317,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
       submissionMs: distribution(submission, measured), intervalMs: distribution(intervals, measured), missedPeriods,
       uploadedBytes: totalUploads, textureUploadBytes: totalTextureUploads, drawCalls: totalDraws, summedParticleDrawCapacity: totalDrawCapacity,
-      simulatedSlotsPerPositiveStep: REPLAY_CAPACITY, drawCapacity: backend === "gpu" ? REPLAY_CAPACITY : "live count",
+      simulatedSlotsPerPositiveStep: backend === "gpu" ? REPLAY_CAPACITY : CPU_SLOTS, drawCapacity: backend === "gpu" ? REPLAY_CAPACITY : CPU_SLOTS,
       gpuTime: gpuTimer ? gpuTimeSummary(gpuTimer, measuredSteps) : timer as string },
     validation: { source: `untimed ${backend.toUpperCase()} replay of this trace`, finalStateMatches: finalState.matches,
       finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: replayIds,

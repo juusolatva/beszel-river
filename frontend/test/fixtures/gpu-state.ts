@@ -29,6 +29,7 @@ export function preloadCpuState(state: ArrayBuffer, streams: StreamSet): Particl
     if (storage.active[i]) { active++; streams.slots[storage.slot[i]].particles++; }
   }
   storage.freeTop = capacity - active;
+  cpu.resync();
   return cpu;
 }
 

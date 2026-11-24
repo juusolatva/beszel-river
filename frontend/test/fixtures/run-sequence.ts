@@ -14,6 +14,11 @@ export interface SequenceConfig {
   repetitions: number;
   /** A CPU adaptive discovery per viewport, then CPU-schedule replays on both backends. */
   scheduleReplays: boolean;
+  /**
+   * CPU runs only, without their untimed GPU replay: for comparing CPU changes between commits.
+   * Absent in sequences stored before it existed, which ran both backends.
+   */
+  cpuOnly?: boolean;
   warmupSeconds: number;
   measureSeconds: number;
 }
@@ -40,6 +45,10 @@ export function backendOrder(repetition: number): Backend[] {
   return repetition % 2 === 1 ? ["cpu", "gpu"] : ["gpu", "cpu"];
 }
 
+function backends(config: SequenceConfig, repetition: number): Backend[] {
+  return config.cpuOnly ? ["cpu"] : backendOrder(repetition);
+}
+
 /**
  * The run order: viewports one after another (switching to full screen needs the person), each
  * starting with the CPU adaptive discovery its replays need, then every workload per repetition as a
@@ -55,12 +64,12 @@ export function buildRunPlan(config: SequenceConfig): RunSpec[] {
     for (let repetition = 1; repetition <= config.repetitions; repetition++) {
       for (const workload of config.workloads) {
         const [scenario, limit] = SCENARIO[workload];
-        for (const backend of backendOrder(repetition)) add({ viewport, kind: "fixed", workload, backend, repetition, scenario, limit });
+        for (const backend of backends(config, repetition)) add({ viewport, kind: "fixed", workload, backend, repetition, scenario, limit });
       }
     }
     if (config.scheduleReplays) {
       for (let repetition = 1; repetition <= config.repetitions; repetition++) {
-        for (const backend of backendOrder(repetition)) add({ viewport, kind: "schedule", workload: "schedule-replay", backend, repetition, scenario: "dense", limit: 10000 });
+        for (const backend of backends(config, repetition)) add({ viewport, kind: "schedule", workload: "schedule-replay", backend, repetition, scenario: "dense", limit: 10000 });
       }
     }
   }
@@ -191,7 +200,7 @@ export function ledgerMarkdown(results: (RunSummary | FailedRun)[], commit: stri
     const gpu = runs.flatMap((run) => (typeof run.timing.gpuTime === "string" || !run.timing.gpuTime.totalMs ? [] : [run.timing.gpuTime.totalMs.median]));
     const charging = [...new Set(runs.map((run) => (run.battery ? (run.battery.charging ? "AC" : "battery") : "unknown")))].join("/");
     const parity = runs.map((run) => ("unavailable" in run.parity ? "n/a" : run.parity.passed === null ? "not gated" : run.parity.passed ? "pass" : "FAIL"));
-    lines.push(`| ${spec.backend.toUpperCase()} / ${commit || "?"} | ${metadata.conditions}; ${metadata.renderer}; ${metadata.targetFormat} | ${spec.workload} / ${metadata.width}×${metadata.height} / ${fmt(metadata.pixelRatio)} / ${REPLAY_CAPACITY} / ${metadata.limit}; ${metadata.budget}; ${runs.length} run(s) | ${spread(runs.map((run) => run.timing.callbackMs.median))} / ${spread(runs.map((run) => run.timing.callbackMs.p95))} / ${spread(runs.map((run) => run.timing.callbackMs.p99))} ms | median ${spread(runs.map((run) => run.timing.intervalMs.median))} ms, p95 ${spread(runs.map((run) => run.timing.intervalMs.p95))} ms / ${spread(runs.map((run) => run.timing.missedPeriods))} | ${live((o) => o.min)} / ${live((o) => o.simulationMean)} / ${live((o) => o.max)} / ${REPLAY_CAPACITY} / ${runs[0].timing.drawCapacity} / ${runs.map((run) => run.runId.slice(0, 8)).join(", ")} | ${gpu.length ? `GPU ${spread(gpu)} ms` : String(typeof runs[0].timing.gpuTime === "string" ? runs[0].timing.gpuTime : "no GPU samples")} / heap ${spread(runs.flatMap((run) => (run.memory ? [run.memory.usedJSHeapSize / 2 ** 20] : [])))} MiB / ${charging} | Pending / ${parity.join(", ")} |`);
+    lines.push(`| ${spec.backend.toUpperCase()} / ${commit || "?"} | ${metadata.conditions}; ${metadata.renderer}; ${metadata.targetFormat} | ${spec.workload} / ${metadata.width}×${metadata.height} / ${fmt(metadata.pixelRatio)} / ${REPLAY_CAPACITY} / ${metadata.limit}; ${metadata.budget}; ${runs.length} run(s) | ${spread(runs.map((run) => run.timing.callbackMs.median))} / ${spread(runs.map((run) => run.timing.callbackMs.p95))} / ${spread(runs.map((run) => run.timing.callbackMs.p99))} ms | median ${spread(runs.map((run) => run.timing.intervalMs.median))} ms, p95 ${spread(runs.map((run) => run.timing.intervalMs.p95))} ms / ${spread(runs.map((run) => run.timing.missedPeriods))} | ${live((o) => o.min)} / ${live((o) => o.simulationMean)} / ${live((o) => o.max)} / ${runs[0].timing.simulatedSlotsPerPositiveStep} / ${runs[0].timing.drawCapacity} / ${runs.map((run) => run.runId.slice(0, 8)).join(", ")} | ${gpu.length ? `GPU ${spread(gpu)} ms` : String(typeof runs[0].timing.gpuTime === "string" ? runs[0].timing.gpuTime : "no GPU samples")} / heap ${spread(runs.flatMap((run) => (run.memory ? [run.memory.usedJSHeapSize / 2 ** 20] : [])))} MiB / ${charging} | Pending / ${parity.join(", ")} |`);
   }
   const failed = results.filter((result): result is FailedRun => !result.ok);
   if (failed.length) {

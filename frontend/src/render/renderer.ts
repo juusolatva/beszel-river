@@ -16,7 +16,11 @@ export interface GpuDrawSource {
   draw(aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number, depositScale: number, pixel: number): void;
 }
 
-const NO_INSTANCES = new Float32Array(0);
+/** A particle pool as the renderer reads it (`ParticleSystem`): per-slot `instances`, drawn up to `drawCount`. */
+export interface ParticleInstances {
+  readonly instances: Float32Array;
+  readonly drawCount: number;
+}
 const TRAIL_STEP = 1 / 60;
 const REFERENCE_DEPOSIT = -Math.expm1(-TRAIL_STEP / LOOK.trailTau);
 
@@ -31,6 +35,11 @@ export class Renderer {
   private readonly particleVao: WebGLVertexArrayObject;
   private readonly emptyVao: WebGLVertexArrayObject;
   private readonly instanceBuffer: WebGLBuffer;
+  // The CPU pool of the current `render` call, uploaded at its first deposit; null in GPU frames.
+  private pool: ParticleInstances | null = null;
+  private chroma: Float32Array | null = null;
+  private sizeScale = 0;
+  private uploaded = false;
   private half: boolean;
   private targets: [Target, Target] | null = null;
   private width = 0;
@@ -60,20 +69,20 @@ export class Renderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    this.instanceBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
-    const stride = INSTANCE_FLOATS * 4;
-    const attributes: [location: number, size: number, offset: number][] = [
-      [1, 4, 0],
-      [2, 4, 16],
-      [3, 1, 32],
-    ];
-    for (const [location, size, offset] of attributes) {
+    const attribute = (location: number, size: number, stride: number, offset: number): void => {
       gl.enableVertexAttribArray(location);
       gl.vertexAttribPointer(location, size, gl.FLOAT, false, stride, offset);
       gl.vertexAttribDivisor(location, 1);
-    }
+    };
+    // One record per slot, uploaded whole every frame: segment, hue and intensity, then stream index
+    // and size jitter. Updating spawn-time values separately, in small writes to a second buffer the
+    // GPU may still be reading, more than quadrupled GPU time in some runs on the X280 (Task 5).
+    this.instanceBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
+    attribute(1, 4, INSTANCE_FLOATS * 4, 0);
+    attribute(2, 2, INSTANCE_FLOATS * 4, 16);
+    attribute(3, 2, INSTANCE_FLOATS * 4, 24);
     gl.bindVertexArray(null);
   }
 
@@ -104,8 +113,22 @@ export class Renderer {
     this.trailTime = 0;
   }
 
-  render(instances: Float32Array, count: number, dt: number, aspect: number): void {
-    this.frame(dt, aspect, instances, count, null);
+  /**
+   * Draws the CPU pool. `chroma` is each stream slot's current chroma (`StreamSet.chroma`); half-widths
+   * scale with `devicePixelRatio`. The pool is uploaded once, at the first deposit: a callback without
+   * one (8-bit trails above 60 Hz) uploads nothing.
+   */
+  render(particles: ParticleInstances, chroma: Float32Array, devicePixelRatio: number, dt: number, aspect: number): void {
+    this.pool = particles;
+    this.chroma = chroma;
+    this.sizeScale = LOOK.sizePx * devicePixelRatio;
+    this.uploaded = false;
+    try {
+      this.frame(dt, aspect, null);
+    } finally {
+      this.pool = null;
+      this.chroma = null;
+    }
   }
 
   /**
@@ -116,23 +139,23 @@ export class Renderer {
     this.gpuPixelRatio = devicePixelRatio;
     this.gpuHue = globalHue;
     this.gpuIntensity = intensityScale;
-    this.frame(dt, aspect, NO_INSTANCES, 0, source);
+    this.frame(dt, aspect, source);
   }
 
-  private frame(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
+  private frame(dt: number, aspect: number, source: GpuDrawSource | null): void {
     const { gl, targets } = this;
     if (!targets) return;
     gl.viewport(0, 0, this.width, this.height);
 
     try {
-      if (this.half) this.accumulate(dt, aspect, instances, count, source);
+      if (this.half) this.accumulate(dt, aspect, source);
       else {
         this.trailTime += dt;
         // Retain fractional time, allowing a tiny tolerance at exact display-period boundaries.
         // Each step is consumed before it is drawn, so a failed deposit is not repeated next frame.
         while (this.trailTime + 1e-9 >= TRAIL_STEP) {
           this.trailTime = Math.max(0, this.trailTime - TRAIL_STEP);
-          this.accumulate(TRAIL_STEP, aspect, instances, count, source);
+          this.accumulate(TRAIL_STEP, aspect, source);
         }
       }
     } finally {
@@ -151,7 +174,7 @@ export class Renderer {
     gl.bindVertexArray(null);
   }
 
-  private accumulate(dt: number, aspect: number, instances: Float32Array, count: number, source: GpuDrawSource | null): void {
+  private accumulate(dt: number, aspect: number, source: GpuDrawSource | null): void {
     const { gl } = this;
     const targets = this.targets!;
     const [previous, next] = targets;
@@ -178,18 +201,25 @@ export class Renderer {
       } finally {
         gl.disable(gl.BLEND);
       }
-    } else if (count > 0) {
+    } else if (this.pool && this.pool.drawCount > 0) {
+      const pool = this.pool;
+      if (!this.uploaded) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, pool.instances, 0, pool.drawCount * INSTANCE_FLOATS);
+        this.uploaded = true;
+      }
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.useProgram(this.particles.program);
       gl.uniform1f(this.particles.uniform("u_aspect"), aspect);
       gl.uniform1f(this.particles.uniform("u_pixel"), 1 / this.height);
+      gl.uniform1f(this.particles.uniform("u_sizeScale"), this.sizeScale);
+      gl.uniform1f(this.particles.uniform("u_lightness"), LOOK.lightness);
+      gl.uniform1fv(this.particles.uniform("u_chroma"), this.chroma!);
       // Match the trail decay at any frame rate, retaining the original deposit at 60 Hz.
       gl.uniform1f(this.particles.uniform("u_depositScale"), depositScale);
       gl.bindVertexArray(this.particleVao);
-      gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-      gl.bufferSubData(gl.ARRAY_BUFFER, 0, instances, 0, count * INSTANCE_FLOATS);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, pool.drawCount);
       gl.disable(gl.BLEND);
     }
 
