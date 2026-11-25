@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
+import { GPU_DRAIN_SECONDS } from "../src/sim/gpu-lifecycle";
 import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
 import { MAX_STREAMS, StreamSet } from "../src/sim/streams";
@@ -103,6 +104,119 @@ describe("GPU motion orchestration", () => {
     expect(flow.slice(4, 6)).toEqual([field.gridCols, field.gridRows]);
     expect(flow[8]).toBe(field.vectors);
     gpu.dispose();
+  });
+
+  describe("active horizon", () => {
+    const dt = Math.fround(0.1);
+    /** Steps until the drain deadline has passed since the first step, then two more: the shrink step. */
+    function shrinkStep(): number {
+      let clock = 0, n = 0;
+      while (clock <= GPU_DRAIN_SECONDS) { clock += dt; n++; }
+      return n + 2;
+    }
+    function feedbackCounts(calls: Call[], start: number): number[] {
+      // The feedback pass is the only POINTS draw issued with transform feedback begun.
+      const counts: number[] = [];
+      let begun = false;
+      for (const [name, ...args] of calls.slice(start)) {
+        if (name === "beginTransformFeedback") begun = true;
+        if (name === "endTransformFeedback") begun = false;
+        if (name === "drawArrays" && begun) counts.push(args[2] as number);
+      }
+      return counts;
+    }
+
+    it("drops to zero after the drain deadline without requests, then rises at once with them", () => {
+      const { gl, calls } = createFakeGl();
+      const gpu = new GpuParticles(gl, 1000, 42);
+      const { streams, field } = inputs();
+      gpu.spawningEnabled = true;
+      gpu.limit = 0;
+      const last = shrinkStep();
+      for (let n = 1; n < last; n++) {
+        gpu.step(dt, streams, field, 1);
+        expect(gpu.activeSlots, `step ${n}`).toBe(1000);
+      }
+      const before = calls.length, hue = gpu.globalHue, buffer = gpu.stateBuffer;
+      gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(0);
+      // No pass, upload or binding at all; only the hue moves on.
+      expect(calls.slice(before)).toEqual([]);
+      expect(gpu.globalHue).toBeCloseTo(hue + LOOK.hueRotate * dt);
+      expect(gpu.stateBuffer).toBe(buffer);
+
+      gpu.limit = 600;
+      const start = calls.length;
+      gpu.step(dt, streams, field, 1);
+      expect(gpu.lifecycle.commands[MAX_STREAMS * 4 - 1]).toBeGreaterThan(0);
+      expect(gpu.activeSlots).toBe(600);
+      expect(feedbackCounts(calls, start)).toEqual([600]);
+      // The flag pass covers 600 slots and the prefix passes the five rows that hold them.
+      const step = calls.slice(start);
+      expect(callsTo(step, "drawArrays")[0]).toEqual(["POINTS", 0, 600]);
+      expect(callsTo(step, "drawArrays").filter(([mode]) => mode === "TRIANGLES")).toHaveLength(10);
+      expect(callsTo(step, "viewport")).toContainEqual([0, 0, 128, 5]);
+      expect(uniformCalls(calls, "u_capacity", start)).toEqual([[600]]);
+      gpu.dispose();
+    });
+
+    it("shrinks to a lowered limit only after the deadline and two full steps", () => {
+      const { gl, calls } = createFakeGl();
+      const gpu = new GpuParticles(gl, 1000, 42);
+      const { streams, field } = inputs();
+      gpu.spawningEnabled = true;
+      gpu.step(dt, streams, field, 1);
+      gpu.limit = 400;
+      const start = calls.length;
+      // The claim starts on the step that first sees the lower limit, one step later than a claim
+      // that holds from construction.
+      const last = shrinkStep() + 1;
+      for (let n = 1; n < last; n++) gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(1000);
+      expect(feedbackCounts(calls, start).every((count) => count === 1000)).toBe(true);
+      const mark = calls.length;
+      gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(400);
+      expect(feedbackCounts(calls, mark)).toEqual([400]);
+      expect(uniformCalls(calls, "u_capacity", mark)).toEqual([[400]]);
+      const mark2 = calls.length;
+      gpu.step(dt, streams, field, 1);
+      // Set once per change.
+      expect(uniformCalls(calls, "u_capacity", mark2)).toEqual([]);
+      gpu.dispose();
+    });
+
+    it("restarts the wait when the reach climbs back to the horizon", () => {
+      const { gl } = createFakeGl();
+      const gpu = new GpuParticles(gl, 1000, 42);
+      const { streams, field } = inputs();
+      gpu.spawningEnabled = true;
+      gpu.limit = 0;
+      const last = shrinkStep();
+      for (let n = 1; n < last - 5; n++) gpu.step(dt, streams, field, 1);
+      gpu.limit = 1000;
+      gpu.step(dt, streams, field, 1);
+      gpu.limit = 0;
+      for (let n = 0; n < 10; n++) gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(1000);
+      gpu.dispose();
+    });
+
+    it("never shrinks while spawning is off, since preloaded particles may live anywhere", () => {
+      const { gl } = createFakeGl();
+      const gpu = new GpuParticles(gl, 1000, 42);
+      const { streams, field } = inputs();
+      for (let n = 0; n < 2 * shrinkStep(); n++) gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(1000);
+      // Turning spawning on starts the wait from that step.
+      gpu.spawningEnabled = true;
+      gpu.limit = 0;
+      for (let n = 1; n < shrinkStep() + 1; n++) gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(1000);
+      gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots).toBe(0);
+      gpu.dispose();
+    });
   });
 
   it("bounds the simulation shader's stream loop by MAX_STREAMS", () => {

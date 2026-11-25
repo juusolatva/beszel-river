@@ -10,8 +10,9 @@ type Uniform = "aspect" | "pixel" | "depositScale" | "hue" | "intensity" | "size
 
 /**
  * Draws the experimental GPU simulation's latest state buffer directly, without uploading instances.
- * Every slot is drawn; inactive ones collapse outside the clip volume. Its program, quad and vertex
- * arrays are created on the first draw, so harnesses do that during warmup.
+ * Every slot below the simulation's active horizon is drawn; inactive ones collapse outside the clip
+ * volume. Its program, quad and vertex arrays are created on the first draw, so harnesses do that
+ * during warmup.
  */
 export class GpuParticleDrawer implements GpuDrawSource {
   private program: Program | null = null;
@@ -26,9 +27,9 @@ export class GpuParticleDrawer implements GpuDrawSource {
     private readonly particles: GpuParticles,
   ) {}
 
-  /** Instances submitted per deposit pass: the full capacity, not the live count. */
+  /** Instances submitted per deposit pass: the active horizon, not the live count. */
   get drawCapacity(): number {
-    return this.particles.capacity;
+    return this.particles.activeSlots;
   }
 
   /**
@@ -47,6 +48,8 @@ export class GpuParticleDrawer implements GpuDrawSource {
 
   draw(aspect: number, devicePixelRatio: number, globalHue: number, intensityScale: number, depositScale: number, pixel: number): void {
     const { gl, particles } = this;
+    const count = particles.activeSlots;
+    if (count === 0) return;
     try {
       const vao = this.vertexArrayFor(particles.stateBuffer);
       const u = this.uniforms!;
@@ -62,7 +65,7 @@ export class GpuParticleDrawer implements GpuDrawSource {
       gl.activeTexture(gl.TEXTURE2);
       gl.bindTexture(gl.TEXTURE_2D, particles.commandTexture);
       gl.bindVertexArray(vao);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, particles.capacity);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
     } finally {
       gl.bindVertexArray(null);
       gl.bindBuffer(gl.ARRAY_BUFFER, null);

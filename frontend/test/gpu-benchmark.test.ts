@@ -75,8 +75,8 @@ describe("GPU backend", () => {
     for (let now = 0; now <= 1100; now += 20) state.callback?.(now);
     const result = await run;
     expect(result.metadata.backend).toBe("gpu");
-    expect(result.timing.drawCapacity).toBe(10000);
-    expect(result.timing.simulatedSlotsPerPositiveStep).toBe(10000);
+    expect(result.timing.drawCapacity).toBe("activeSlots (horizon: at most capacity)");
+    expect(result.timing.simulatedSlotsPerPositiveStep).toBe("activeSlots (horizon: at most capacity)");
     // Every positive step drew the full pool and uploaded no particle instances.
     const draws = callsTo(calls, "drawArraysInstanced");
     expect(draws.length).toBeGreaterThan(0);

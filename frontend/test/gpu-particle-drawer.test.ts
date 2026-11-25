@@ -85,6 +85,19 @@ describe("GpuParticleDrawer", () => {
     expect(binds.at(-1)).toEqual(["ARRAY_BUFFER", particles.stateBuffer]);
   });
 
+  it("draws only the simulation's active slots, and nothing at all when there are none", () => {
+    const { calls, particles, drawer } = setup();
+    let active = 7;
+    Object.defineProperty(particles, "activeSlots", { get: () => active });
+    expect(drawer.drawCapacity).toBe(7);
+    drawer.draw(1, 1, 0, 1, 1, 0.01);
+    expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 7]]);
+    active = 0;
+    calls.length = 0;
+    drawer.draw(1, 1, 0, 1, 1, 0.01);
+    expect(calls).toEqual([]);
+  });
+
   it("applies the intensity scale, deposit scale, DPR and hue once as uniforms", () => {
     const { calls, drawer } = setup();
     drawer.draw(1.5, 1.25, 0.3, 0.5, 0.75, 1 / 600);

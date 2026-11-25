@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { GpuLifecycle } from "../src/sim/gpu-lifecycle";
+import { GPU_DRAIN_SECONDS, GpuLifecycle } from "../src/sim/gpu-lifecycle";
 import { StreamSet } from "../src/sim/streams";
 import { replayFrames } from "./fixtures/gpu-replay";
 
@@ -95,7 +95,8 @@ describe("GPU request and retention policy", () => {
     s.presence = 0.009;
     life.prepare(0.1, streams, 100);
     expect(life.commands[3]).toBe(0);
-    advance(life, LOOK.lifeRange[1] + Math.fround(LOOK.maxDt));
+    expect(GPU_DRAIN_SECONDS).toBe(LOOK.lifeRange[1] + Math.fround(LOOK.maxDt));
+    advance(life, GPU_DRAIN_SECONDS);
     expect(life.canRelease(s, 0)).toBe(false);
     life.advanceTime(0.01);
     expect(life.canRelease(s, 0)).toBe(true);
