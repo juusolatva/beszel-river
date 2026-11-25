@@ -192,7 +192,7 @@ export class Renderer {
     gl.bindVertexArray(this.emptyVao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // Particles, added on top. A GPU source draws its whole pool: only the GPU knows the live count.
+    // Particles, added on top. A GPU source draws every slot below its horizon: only the GPU knows the live count.
     if (source) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);

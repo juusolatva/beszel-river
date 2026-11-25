@@ -211,6 +211,45 @@ export function runGpuAllocationBrowserChecks(): { cases: number } {
       cases++;
     } finally { gpu.dispose(); }
   }
+  // The active horizon may only exclude slots that are dead in both state buffers, after every step.
+  {
+    const capacity = 1000;
+    const gpu = new GpuParticles(gl, capacity, 42);
+    const streams = new StreamSet(1, gpu.lifecycle.canRelease);
+    streams.apply(replayFrames[1]); streams.update(0, 1.5);
+    for (const s of streams.slots) { s.half = 0.01; s.center = 0.75; s.rebuildCenters(); }
+    const field = new FlowField(() => 0.5); field.update(0, 1.5);
+    gpu.spawningEnabled = true;
+    const words = new Uint32Array(capacity * 16);
+    const seen = new Set<number>();
+    let peakLive = 0;
+    try {
+      // Full pool, a lowered limit, no births at all, then the full pool again.
+      for (const [limit, seconds] of [[1000, 3], [300, 20], [0, 17], [1000, 2]]) {
+        gpu.limit = limit;
+        for (let t = 0; t < seconds; t += 0.1) {
+          gpu.step(0.1, streams, field, 1.5);
+          const horizon = gpu.activeSlots;
+          seen.add(horizon);
+          let live = 0;
+          for (const buffer of gpu.stateBuffers) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.getBufferSubData(gl.ARRAY_BUFFER, 0, words);
+            for (let i = 0; i < capacity; i++) {
+              if (words[i * 16 + 14] === 0) continue;
+              assert(i < horizon, `Slot ${i} alive above horizon ${horizon} at limit ${limit}`);
+              if (buffer === gpu.stateBuffer) live++;
+            }
+          }
+          gl.bindBuffer(gl.ARRAY_BUFFER, null);
+          peakLive = Math.max(peakLive, live);
+        }
+      }
+      assert(seen.has(300) && seen.has(0) && seen.has(1000), `Horizon never reached 300, 0 and 1000: ${[...seen].join(", ")}`);
+      assert(peakLive > 300, "Horizon check never filled the pool");
+      assert(gl.getError() === gl.NO_ERROR, "Horizon WebGL error");
+      cases++;
+    } finally { gpu.dispose(); }
+  }
   gl.getExtension("WEBGL_lose_context")?.loseContext();
   return { cases };
 }

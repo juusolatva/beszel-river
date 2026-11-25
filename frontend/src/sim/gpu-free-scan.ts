@@ -19,6 +19,8 @@ export class GpuFreeScan {
   private readonly zero = new Uint32Array(4);
   private current = 0;
   private readonly offset!: WebGLUniformLocation | null;
+  private readonly count!: WebGLUniformLocation | null;
+  private countSet = 0;
 
   /** `stateBuffers`, at most two, get their flag vertex arrays now instead of on their first scan. */
   constructor(private readonly gl: WebGL2RenderingContext, private readonly capacity: number, stateBuffers: readonly WebGLBuffer[] = []) {
@@ -38,7 +40,9 @@ export class GpuFreeScan {
       gl.useProgram(this.programs[1].program);
       gl.uniform1i(this.programs[1].uniform("u_source"), 0);
       gl.uniform1i(this.programs[1].uniform("u_width"), this.width);
-      gl.uniform1i(this.programs[1].uniform("u_capacity"), capacity);
+      this.count = this.programs[1].uniform("u_capacity");
+      gl.uniform1i(this.count, capacity);
+      this.countSet = capacity;
       this.offset = this.programs[1].uniform("u_offset");
       this.emptyVao = this.resource(gl.createVertexArray());
       for (let i = 0; i < 2; i++) {
@@ -62,8 +66,12 @@ export class GpuFreeScan {
 
   get prefixTexture(): WebGLTexture { return this.textures[this.current]; }
 
-  /** One flag pass followed by ceil(log2(capacity)) disjoint integer passes. */
-  scan(stateBuffer: WebGLBuffer): void {
+  /**
+   * Prefix of the first `count` slots (default all): one flag pass followed by ceil(log2(count))
+   * disjoint integer passes over the rows that hold them. Later slots keep stale prefixes; read none.
+   */
+  scan(stateBuffer: WebGLBuffer, count = this.capacity): void {
+    if (!Number.isInteger(count) || count < 1 || count > this.capacity) throw new Error("Invalid GPU scan count");
     const gl = this.gl;
     try {
       const flagVao = this.flagVaoFor(stateBuffer);
@@ -77,11 +85,17 @@ export class GpuFreeScan {
       gl.clearBufferuiv(gl.COLOR, 0, this.zero);
       gl.useProgram(this.programs[0].program);
       gl.bindVertexArray(flagVao);
-      gl.drawArrays(gl.POINTS, 0, this.capacity);
+      gl.drawArrays(gl.POINTS, 0, count);
       gl.bindVertexArray(this.emptyVao);
       gl.useProgram(this.programs[1].program);
+      if (count !== this.countSet) {
+        gl.uniform1i(this.count, count);
+        this.countSet = count;
+      }
+      // Window coordinates index texels, so a shorter viewport just skips the rows past `count`.
+      gl.viewport(0, 0, this.width, Math.ceil(count / this.width));
       this.current = 0;
-      for (let offset = 1; offset < this.capacity; offset *= 2) {
+      for (let offset = 1; offset < count; offset *= 2) {
         // Unbind the old source before it becomes the next destination.
         gl.bindTexture(gl.TEXTURE_2D, null);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[1 - this.current]);

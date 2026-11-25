@@ -1,6 +1,12 @@
 import { LOOK } from "../config";
 import { DRAIN_PRESENCE, MAX_STREAMS, MIN_SHARE, type StreamReleasePolicy, type StreamSet, type StreamSlot } from "./streams";
 
+/**
+ * Seconds after a particle's last possible birth by which it has died: the longest life plus the
+ * largest step, which also covers accumulated Float32 age error (see `GpuLifecycle.advanceTime`).
+ */
+export const GPU_DRAIN_SECONDS = LOOK.lifeRange[1] + Math.fround(LOOK.maxDt);
+
 /** Supported schedule keeps accumulated Float32 age error below one birth step. */
 export function effectiveGpuStep(dt: number): number {
   dt = Math.fround(dt);
@@ -22,7 +28,7 @@ export class GpuLifecycle {
 
   readonly canRelease: StreamReleasePolicy = (slot, index) =>
     this.ids[index] === slot.id && this.ids[index] !== "" && this.claims[index] === slot.claimVersion &&
-    this.time > this.lastPossibleSpawn[index] + LOOK.lifeRange[1] + Math.fround(LOOK.maxDt);
+    this.time > this.lastPossibleSpawn[index] + GPU_DRAIN_SECONDS;
 
   constructor(private readonly capacity: number) {
     if (!Number.isSafeInteger(capacity) || capacity <= 0) throw new Error("Invalid GPU capacity");

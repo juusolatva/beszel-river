@@ -7,10 +7,20 @@ import { GPU_FEEDBACK_VARYINGS, GPU_IDENTITY_OFFSET_BYTES, GPU_LIFETIME_OFFSET_B
   GPU_MOTION_OFFSET_BYTES, GPU_SPAWN_OFFSET_BYTES, GPU_STATE_STRIDE_BYTES } from "./gpu-layout";
 import { FLOW_CELL, type FlowField } from "./noise";
 import { GpuFreeScan } from "./gpu-free-scan";
-import { effectiveGpuStep, GpuLifecycle } from "./gpu-lifecycle";
+import { effectiveGpuStep, GPU_DRAIN_SECONDS, GpuLifecycle } from "./gpu-lifecycle";
 import { MAX_STREAMS, type StreamSet } from "./streams";
 
-/** Isolated transform-feedback experiment; production continues to use ParticleSystem. */
+/**
+ * Isolated transform-feedback experiment; production continues to use ParticleSystem.
+ *
+ * Steps and draws cover only the slots below an active horizon. Free ranks run upwards from slot 0
+ * and births never exceed `limit - live`, so every birth lands below `limit`, and below 0 on a step
+ * without requests. Once that reach has stayed under a lower value for the drain deadline, every
+ * slot from there up has died; two more full steps write that into both state buffers, and the
+ * horizon drops to it. A higher reach raises the horizon at once, since the slots above are dead.
+ * This assumes every live particle was born here: test fixtures that preload state keep spawning
+ * off, or run for less than the deadline.
+ */
 export class GpuParticles {
   readonly lifecycle: GpuLifecycle;
   readonly stateStrideBytes = GPU_STATE_STRIDE_BYTES;
@@ -24,7 +34,14 @@ export class GpuParticles {
   private feedback: WebGLTransformFeedback | null = null;
   private program: Program | null = null;
   private scan: GpuFreeScan | null = null;
-  private readonly uniforms!: Record<"dt" | "bounds" | "physics" | "limit" | "enabled", WebGLUniformLocation | null>;
+  private readonly uniforms!: Record<"dt" | "bounds" | "physics" | "limit" | "enabled" | "capacity", WebGLUniformLocation | null>;
+  private horizon: number;
+  private horizonSet: number;
+  // Simulation seconds, and the claim that since `reachSince` no birth could land at or above `reach`.
+  private clock = 0;
+  private reach = 0;
+  private reachSince = 0;
+  private settledSteps = 0;
   private readonly streamData = new Float32Array(24 * MAX_STREAMS * 4);
   private cols = 0;
   private rows = 0;
@@ -34,6 +51,7 @@ export class GpuParticles {
     if (!Number.isSafeInteger(capacity) || capacity <= 0) throw new Error("Invalid GPU capacity");
     this.lifecycle = new GpuLifecycle(capacity);
     this.limit = capacity;
+    this.horizon = this.horizonSet = capacity;
     this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
     if (gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) < 4 || gl.getParameter(gl.MAX_VERTEX_ATTRIBS) < 5 ||
       gl.getParameter(gl.MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS) < 16 || this.maxTextureSize < 32) {
@@ -44,7 +62,7 @@ export class GpuParticles {
       const program = this.program, uniform = (name: string) => program.uniform(name);
       this.uniforms = {
         dt: uniform("u_dt"), bounds: uniform("u_bounds"), physics: uniform("u_physics"),
-        limit: uniform("u_limit"), enabled: uniform("u_enabled"),
+        limit: uniform("u_limit"), enabled: uniform("u_enabled"), capacity: uniform("u_capacity"),
       };
       this.feedback = gl.createTransformFeedback();
       if (!this.feedback) throw new Error("GPU resource allocation failed");
@@ -64,25 +82,41 @@ export class GpuParticles {
   get streamTexture(): WebGLTexture { return this.textures[1]; }
   get commandTexture(): WebGLTexture { return this.textures[2]; }
   get globalHue(): number { return this.hue; }
+  /** Slots the next step and draw cover, from 0: every slot at or above it is dead in both buffers. */
+  get activeSlots(): number { return this.horizon; }
 
   /** Advance using a Float32-effective step shared by prototype replay, easing and CPU reference. */
   step(dt: number, streams: StreamSet, field: FlowField, aspect: number): void {
     if (dt <= 0) return;
     dt = effectiveGpuStep(dt);
+    this.clock += dt;
+    let births = false;
+    if (this.spawningEnabled) {
+      this.lifecycle.prepare(dt, streams, this.limit);
+      births = this.lifecycle.commands[MAX_STREAMS * 4 - 1] > 0;
+      this.trackHorizon(births ? this.limit : 0);
+    } else {
+      // Preloaded state may live anywhere; never shrink while spawning is off.
+      this.restartReach(this.horizon);
+    }
+    if (this.horizon === 0) {
+      // Nothing is alive and nothing is born: no pass to run, nothing for the drawer to read.
+      this.hue = fract(this.hue + LOOK.hueRotate * dt);
+      return;
+    }
     const gl = this.gl;
     let begun = false;
     try {
-      let births = false;
-      if (this.spawningEnabled) {
-        this.lifecycle.prepare(dt, streams, this.limit);
-        // Without requests no slot reads a free rank, so the scan would be wasted. The commands
-        // are still uploaded: the drawer hides stale generations with them.
-        births = this.lifecycle.commands[MAX_STREAMS * 4 - 1] > 0;
-        if (births) this.scan!.scan(this.stateBuffer);
-      }
+      // Without requests no slot reads a free rank, so the scan would be wasted. The commands are
+      // still uploaded: the drawer hides stale generations with them.
+      if (births) this.scan!.scan(this.stateBuffer, this.horizon);
       this.uploadInputs(streams, field);
       const u = this.uniforms;
       gl.useProgram(this.program!.program);
+      if (this.horizonSet !== this.horizon) {
+        gl.uniform1i(u.capacity, this.horizon);
+        this.horizonSet = this.horizon;
+      }
       gl.uniform1ui(u.limit, this.limit);
       gl.uniform1i(u.enabled, births ? 1 : 0);
       gl.uniform1f(u.dt, dt);
@@ -97,7 +131,7 @@ export class GpuParticles {
       gl.enable(gl.RASTERIZER_DISCARD);
       gl.beginTransformFeedback(gl.POINTS);
       begun = true;
-      gl.drawArrays(gl.POINTS, 0, this.capacity);
+      gl.drawArrays(gl.POINTS, 0, this.horizon);
       begun = false;
       gl.endTransformFeedback();
       this.current = 1 - this.current;
@@ -120,6 +154,28 @@ export class GpuParticles {
     this.vaos.length = this.buffers.length = this.textures.length = 0;
     this.feedback = null;
     this.program = null;
+  }
+
+  /** Moves the horizon for this step, given the slot count below which any birth must land. */
+  private trackHorizon(reach: number): void {
+    if (reach > this.horizon) this.horizon = reach;
+    if (reach > this.reach) this.reach = reach;
+    if (this.reach >= this.horizon) {
+      this.restartReach(reach);
+      return;
+    }
+    if (this.clock - this.reachSince <= GPU_DRAIN_SECONDS) return;
+    // Particles above `reach` were born before `reachSince` and die by this step's output; the
+    // next step copies them dead into the other buffer. Shrink on the step after that.
+    if (++this.settledSteps < 3) return;
+    this.horizon = this.reach;
+    this.restartReach(reach);
+  }
+
+  private restartReach(reach: number): void {
+    this.reach = reach;
+    this.reachSince = this.clock;
+    this.settledSteps = 0;
   }
 
   /** Samplers, sizes and `LOOK` values, which never change after linking. */

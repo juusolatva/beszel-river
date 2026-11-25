@@ -97,6 +97,25 @@ describe("GPU integer free scan", () => {
     expect(callsTo(calls, "deleteVertexArray")).toHaveLength(3);
   });
 
+  it("scans only the rows holding the first `count` slots and sets the count only when it changes", () => {
+    const { gl, calls } = createFakeGl();
+    const scan = new GpuFreeScan(gl, 10000);
+    const buffer = gl.createBuffer()!;
+    for (const [count, rows, passes, setsCount] of [[300, 3, 9, true], [300, 3, 9, false], [1, 1, 0, true], [10000, 79, 14, true]] as const) {
+      const start = calls.length;
+      scan.scan(buffer, count);
+      const step = calls.slice(start);
+      expect(callsTo(step, "drawArrays")[0]).toEqual(["POINTS", 0, count]);
+      expect(callsTo(step, "drawArrays").filter(([mode]) => mode === "TRIANGLES")).toHaveLength(passes);
+      // The flag pass keeps the full viewport, which its point positions assume.
+      expect(callsTo(step, "viewport")).toEqual([[0, 0, 128, 79], [0, 0, 128, rows]]);
+      const counts = callsTo(step, "uniform1i").filter(([location]) => (location as { uniform: string }).uniform === "u_capacity");
+      expect(counts).toEqual(setsCount ? [[{ uniform: "u_capacity" }, count]] : []);
+    }
+    for (const count of [0, -1, 1.5, 10001, NaN]) expect(() => scan.scan(buffer, count)).toThrow("Invalid GPU scan count");
+    scan.dispose();
+  });
+
   it("releases the first program when linking the second program fails", () => {
     let linked = 0;
     const { gl, calls } = createFakeGl({ overrides: { getProgramParameter: () => ++linked === 1 } });

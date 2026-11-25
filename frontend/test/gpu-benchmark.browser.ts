@@ -38,6 +38,12 @@ interface BenchmarkOptions {
  * one visits none. `summedParticleDrawCapacity` holds the measured total.
  */
 const CPU_SLOTS = "drawCount (highest live slot + 1)";
+/**
+ * The slots the GPU path steps and draws per callback: every slot below `GpuParticles.activeSlots`, which
+ * falls to the limit (or to zero without births) a drain deadline after it drops. Before 2026-11-25 this
+ * was always the full capacity.
+ */
+const GPU_SLOTS = "activeSlots (horizon: at most capacity)";
 const BUDGET_LABELS = { fixed: "fixed limit", adaptive: "CPU adaptive discovery (not a paired performance result)", schedule: "CPU-schedule replay" };
 
 const usedCanvases = new WeakSet<HTMLCanvasElement>();
@@ -317,7 +323,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
       submissionMs: distribution(submission, measured), intervalMs: distribution(intervals, measured), missedPeriods,
       uploadedBytes: totalUploads, textureUploadBytes: totalTextureUploads, drawCalls: totalDraws, summedParticleDrawCapacity: totalDrawCapacity,
-      simulatedSlotsPerPositiveStep: backend === "gpu" ? REPLAY_CAPACITY : CPU_SLOTS, drawCapacity: backend === "gpu" ? REPLAY_CAPACITY : CPU_SLOTS,
+      simulatedSlotsPerPositiveStep: backend === "gpu" ? GPU_SLOTS : CPU_SLOTS, drawCapacity: backend === "gpu" ? GPU_SLOTS : CPU_SLOTS,
       gpuTime: gpuTimer ? gpuTimeSummary(gpuTimer, measuredSteps) : timer as string },
     validation: { source: `untimed ${backend.toUpperCase()} replay of this trace`, finalStateMatches: finalState.matches,
       finalStateMaxFloatDifference: finalState.maxFloatDifference, ids: replayIds,
