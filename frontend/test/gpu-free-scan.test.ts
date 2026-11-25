@@ -58,6 +58,45 @@ describe("GPU integer free scan", () => {
     scan.dispose();
   });
 
+  it("sets up one flag vertex array per state buffer and only the pass offset per scan", () => {
+    const { gl, calls } = createFakeGl();
+    const scan = new GpuFreeScan(gl, 100);
+    const constants = callsTo(calls, "uniform1i").map(([location, value]) => [(location as { uniform: string }).uniform, value]);
+    expect(constants).toEqual([["u_width", 100], ["u_height", 1], ["u_source", 0], ["u_width", 100], ["u_capacity", 100]]);
+    const [a, b] = [gl.createBuffer()!, gl.createBuffer()!];
+    scan.scan(a); scan.scan(b);
+    expect(callsTo(calls, "createVertexArray")).toHaveLength(3);
+    expect(callsTo(calls, "vertexAttribIPointer")).toHaveLength(2);
+    const start = calls.length;
+    scan.scan(a); scan.scan(b); scan.scan(a);
+    const later = calls.slice(start);
+    expect(callsTo(later, "createVertexArray")).toEqual([]);
+    expect(callsTo(later, "vertexAttribIPointer")).toEqual([]);
+    expect(callsTo(later, "enableVertexAttribArray")).toEqual([]);
+    expect(new Set(callsTo(later, "uniform1i").map(([location]) => (location as { uniform: string }).uniform))).toEqual(new Set(["u_offset"]));
+    const bound = callsTo(later, "bindVertexArray").filter(([vao]) => vao !== null).map(([vao]) => vao);
+    // Per scan: its buffer's flag array, then the shared empty array.
+    expect(bound).toHaveLength(6);
+    expect(bound[0]).toBe(bound[4]);
+    expect(bound[0]).not.toBe(bound[2]);
+    expect(new Set([bound[1], bound[3], bound[5]]).size).toBe(1);
+    expect(() => scan.scan(gl.createBuffer()!)).toThrow("state buffer changed");
+    // Buffers named at construction are set up there, before any scan.
+    const early = createFakeGl();
+    const buffers = [early.gl.createBuffer()!, early.gl.createBuffer()!];
+    const prepared = new GpuFreeScan(early.gl, 100, buffers);
+    expect(callsTo(early.calls, "vertexAttribIPointer")).toHaveLength(2);
+    expect(callsTo(early.calls, "bindVertexArray").at(-1)).toEqual([null]);
+    const mark = early.calls.length;
+    prepared.scan(buffers[1]);
+    expect(callsTo(early.calls.slice(mark), "createVertexArray")).toEqual([]);
+    prepared.dispose();
+    expect(callsTo(calls, "bindFramebuffer").at(-1)).toEqual(["FRAMEBUFFER", null]);
+    calls.length = 0;
+    scan.dispose();
+    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(3);
+  });
+
   it("releases the first program when linking the second program fails", () => {
     let linked = 0;
     const { gl, calls } = createFakeGl({ overrides: { getProgramParameter: () => ++linked === 1 } });

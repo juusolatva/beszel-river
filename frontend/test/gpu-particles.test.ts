@@ -1,9 +1,22 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
-import { StreamSet } from "../src/sim/streams";
-import { callsTo, createFakeGl } from "./fake-gl";
+import { MAX_STREAMS, StreamSet } from "../src/sim/streams";
+import { callsTo, createFakeGl, type Call } from "./fake-gl";
+
+/** Values set for uniform `name` of the simulation program (the one with feedback varyings) from call `start`. */
+function uniformCalls(calls: Call[], name: string, start = 0): unknown[][] {
+  const simulation = calls.find(([method]) => method === "transformFeedbackVaryings")?.[1];
+  let program: unknown;
+  const values: unknown[][] = [];
+  for (const [i, [method, location, ...rest]] of calls.entries()) {
+    if (method === "useProgram") program = location;
+    else if (i >= start && program === simulation && method.startsWith("uniform") && (location as { uniform?: string })?.uniform === name) values.push(rest);
+  }
+  return values;
+}
 
 function inputs() {
   const streams = new StreamSet(1);
@@ -18,21 +31,86 @@ function inputs() {
 describe("GPU motion orchestration", () => {
   it("prepares commands and scans before feedback only when spawning is enabled", () => {
     const { gl, calls } = createFakeGl();
-    const gpu = new GpuParticles(gl, 33, 42);
+    const gpu = new GpuParticles(gl, 1000, 42);
     const { streams, field } = inputs();
     gpu.spawningEnabled = true;
     gpu.lifecycle.advanceTime(Math.fround(0.1));
     gpu.step(0.1, streams, field, 1);
+    expect(gpu.lifecycle.commands[MAX_STREAMS * 4 - 1]).toBeGreaterThan(0);
     const draws = callsTo(calls, "drawArrays");
-    expect(draws).toHaveLength(8); // flag + 6 scan + feedback
-    expect(draws.at(-1)).toEqual(["POINTS", 0, 33]);
+    expect(draws).toHaveLength(12); // flag + 10 scan + feedback
+    expect(draws.at(-1)).toEqual(["POINTS", 0, 1000]);
     const uploads = callsTo(calls, "texSubImage2D");
     expect(uploads.at(-1)!.slice(4, 8)).toEqual([1, 32, "RGBA_INTEGER", "UNSIGNED_INT"]);
     expect(uploads.at(-1)![8]).toBe(gpu.lifecycle.commands);
     expect(callsTo(calls, "getBufferSubData")).toHaveLength(0);
     expect(callsTo(calls, "finish")).toHaveLength(0);
+    expect(uniformCalls(calls, "u_enabled").at(-1)).toEqual([1]);
     gpu.dispose();
   });
+
+  it("skips the free scan without birth requests but still uploads the commands", () => {
+    const { gl, calls } = createFakeGl();
+    const gpu = new GpuParticles(gl, 1000, 42);
+    const { streams, field } = inputs();
+    gpu.spawningEnabled = true;
+    gpu.limit = 0; // no room, so every stream requests nothing
+    let start = calls.length;
+    gpu.step(0.1, streams, field, 1);
+    let step = calls.slice(start);
+    expect(gpu.lifecycle.commands[MAX_STREAMS * 4 - 1]).toBe(0);
+    expect(callsTo(step, "drawArrays")).toEqual([["POINTS", 0, 1000]]);
+    expect(callsTo(step, "clearBufferuiv")).toHaveLength(0);
+    expect(uniformCalls(calls, "u_enabled", start)).toEqual([[0]]);
+    expect(callsTo(step, "texSubImage2D").at(-1)![8]).toBe(gpu.lifecycle.commands);
+    // Requests return with room; the scan runs again.
+    gpu.limit = 1000;
+    start = calls.length;
+    gpu.step(0.1, streams, field, 1);
+    step = calls.slice(start);
+    expect(callsTo(step, "drawArrays")).toHaveLength(12);
+    expect(uniformCalls(calls, "u_enabled", start)).toEqual([[1]]);
+    gpu.dispose();
+  });
+
+  it("sets samplers, sizes and LOOK uniforms once at setup and only per-step values in a step", () => {
+    const { gl, calls } = createFakeGl();
+    const gpu = new GpuParticles(gl, 33, 42);
+    const constants = ["u_flow", "u_stream", "u_command", "u_prefix", "u_width", "u_capacity", "u_seed",
+      "u_birth", "u_lifeSize", "u_filament", "u_span", "u_cell", "u_braid"];
+    for (const name of constants) expect(uniformCalls(calls, name), name).toHaveLength(1);
+    expect(uniformCalls(calls, "u_width")).toEqual([[33]]);
+    expect(uniformCalls(calls, "u_capacity")).toEqual([[33]]);
+    expect(uniformCalls(calls, "u_seed")).toEqual([[42]]);
+    expect(uniformCalls(calls, "u_prefix")).toEqual([[3]]);
+    const { streams, field } = inputs();
+    expect(uniformCalls(calls, "u_cell")).toEqual([[field.gridCell]]);
+    expect(uniformCalls(calls, "u_braid")).toEqual([[LOOK.braid, LOOK.braidWaves]]);
+    const start = calls.length;
+    gpu.step(1 / 60, streams, field, 1);
+    gpu.step(1 / 60, streams, field, 1);
+    for (const name of constants) expect(uniformCalls(calls, name, start), name).toHaveLength(0);
+    for (const name of ["u_limit", "u_enabled", "u_dt", "u_bounds", "u_physics"]) expect(uniformCalls(calls, name, start), name).toHaveLength(2);
+    gpu.dispose();
+  });
+
+  it("uploads the flow field's own grid without copying it", () => {
+    const { gl, calls } = createFakeGl();
+    const gpu = new GpuParticles(gl, 8, 42);
+    const { streams, field } = inputs();
+    gpu.step(1 / 60, streams, field, 1);
+    const flow = callsTo(calls, "texSubImage2D").find((args) => args[6] === "RG")!;
+    expect(flow.slice(4, 6)).toEqual([field.gridCols, field.gridRows]);
+    expect(flow[8]).toBe(field.vectors);
+    gpu.dispose();
+  });
+
+  it("bounds the simulation shader's stream loop by MAX_STREAMS", () => {
+    const source = readFileSync(new URL("../src/render/shaders/simulate.vert", import.meta.url), "utf8");
+    expect(source).toContain(`#define MAX_STREAMS ${MAX_STREAMS}\n`);
+    expect(source.replace(/#define MAX_STREAMS \d+/, "")).not.toMatch(/\b3[12]u?\b/);
+  });
+
   it("allocates two fixed buffers and binds the integer identity without conversion", () => {
     const { gl, calls } = createFakeGl();
     const gpu = new GpuParticles(gl, 8, 42);
@@ -42,14 +120,16 @@ describe("GPU motion orchestration", () => {
     expect(gpu.stateStrideBytes).toBe(64);
     expect(gpu.streamTexture).not.toBe(gpu.commandTexture);
     expect(callsTo(calls, "bufferData")).toEqual([["ARRAY_BUFFER", 512, "DYNAMIC_COPY"], ["ARRAY_BUFFER", 512, "DYNAMIC_COPY"]]);
-    expect(callsTo(calls, "vertexAttribIPointer")).toEqual([[3, 4, "UNSIGNED_INT", 64, 48], [3, 4, "UNSIGNED_INT", 64, 48]]);
+    // Simulation and free-scan vertex arrays, one of each per state buffer.
+    expect(callsTo(calls, "vertexAttribIPointer")).toEqual(Array(4).fill([3, 4, "UNSIGNED_INT", 64, 48]));
     expect(callsTo(calls, "vertexAttribPointer").slice(0, 3)).toEqual([
       [0, 4, "FLOAT", false, 64, 0], [1, 4, "FLOAT", false, 64, 16], [2, 4, "FLOAT", false, 64, 32],
     ]);
     gpu.dispose();
     expect(callsTo(calls, "deleteBuffer")).toHaveLength(2);
     expect(callsTo(calls, "deleteTexture")).toHaveLength(5);
-    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(4);
+    // Two state arrays, and the scan's empty array and one flag array per state buffer.
+    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(5);
     expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
     expect(callsTo(calls, "deleteProgram")).toHaveLength(3);
   });

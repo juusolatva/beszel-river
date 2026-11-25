@@ -3,6 +3,8 @@ precision highp float;
 precision highp int;
 precision highp sampler2D;
 precision highp usampler2D;
+// Stream slots, the rows of the stream and command textures: MAX_STREAMS in streams.ts (unit-tested).
+#define MAX_STREAMS 32
 layout(location=0) in vec4 a_motion;
 layout(location=1) in vec4 a_lifetime;
 layout(location=2) in vec4 a_spawn;
@@ -73,11 +75,11 @@ void birth() {
   uint freeTotal = prefixAt(u_capacity - 1);
   uint live = uint(u_capacity) - freeTotal;
   uint room = u_limit > live ? u_limit - live : 0u;
-  uint requests = texelFetch(u_command, ivec2(0, 31), 0).w;
+  uint requests = texelFetch(u_command, ivec2(0, MAX_STREAMS - 1), 0).w;
   uint births = min(requests, min(room, freeTotal));
   uint rank = prefixAt(gl_VertexID) - 1u;
   if (rank >= births) return;
-  for (int slot = 0; slot < 32; slot++) {
+  for (int slot = 0; slot < MAX_STREAMS; slot++) {
     uvec4 cmd = texelFetch(u_command, ivec2(0, slot), 0);
     if (cmd.y == 0u || rank < cmd.z || rank >= cmd.w) continue;
     // Sticky invalid marker: untimed validation rejects this run rather than aliasing a birth.

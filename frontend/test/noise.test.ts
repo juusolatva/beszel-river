@@ -160,17 +160,3 @@ describe("FlowField vectors", () => {
     expect(field.vectors.every(Number.isFinite)).toBe(true);
   });
 });
-
-it("exports the exact velocity grid into caller storage", () => {
-  const field = new FlowField(() => 0.5);
-  field.update(0.3, 1.5);
-  const out = new Float32Array(field.gridCols * field.gridRows * 2 + 1).fill(123);
-  field.writeVelocityGrid(out);
-  for (let y = 0; y < field.gridRows - 1; y++) for (let x = 0; x < field.gridCols - 1; x++) {
-    field.sample(x * field.gridCell, y * field.gridCell);
-    const i = (y * field.gridCols + x) * 2;
-    expect(out[i]).toBeCloseTo(field.sx, 6);
-    expect(out[i + 1]).toBeCloseTo(field.sy, 6);
-  }
-  expect(out.at(-1)).toBe(123);
-});

@@ -12,7 +12,6 @@ precision highp usampler2D;
 layout(location = 0) in vec2 a_corner; // x: 0 tail .. 1 head, y: -1 .. 1 across
 layout(location = 1) in vec4 a_motion; // x, y, vx, vy
 layout(location = 2) in vec4 a_lifetime; // age, life, hueJitter, size
-layout(location = 3) in vec4 a_spawn; // speedJitter, laneOffset: bound for the shared layout, unused
 layout(location = 4) in uvec4 a_identity; // streamSlot, generation, active, spawnCounter
 
 uniform sampler2D u_stream;

@@ -75,10 +75,11 @@ describe("GpuParticleDrawer", () => {
       [0, 2, "FLOAT", false, 0, 0],
       [1, 4, "FLOAT", false, 64, 0],
       [2, 4, "FLOAT", false, 64, 16],
-      [3, 4, "FLOAT", false, 64, 32],
     ]);
+    // The spawn record steers motion only; the drawer leaves it unbound.
+    expect(callsTo(calls, "enableVertexAttribArray")).not.toContainEqual([3]);
     expect(callsTo(calls, "vertexAttribIPointer")).toEqual([[4, 4, "UNSIGNED_INT", 64, 48]]);
-    expect(callsTo(calls, "vertexAttribDivisor")).toEqual([[1, 1], [2, 1], [3, 1], [4, 1]]);
+    expect(callsTo(calls, "vertexAttribDivisor")).toEqual([[1, 1], [2, 1], [4, 1]]);
     // The particle attributes read the simulation's current buffer, not the corner quad.
     const binds = callsTo(calls, "bindBuffer").filter(([target, buffer]) => target === "ARRAY_BUFFER" && buffer !== null);
     expect(binds.at(-1)).toEqual(["ARRAY_BUFFER", particles.stateBuffer]);
@@ -226,6 +227,7 @@ describe("GpuParticleDrawer", () => {
     // The slot bound must follow the stream and command texture rows.
     expect(read("particle-gpu.vert")).toContain(`#define MAX_STREAMS ${MAX_STREAMS}u\n`);
     expect(read("particle-gpu.vert").replace(/#define MAX_STREAMS \d+u/, "")).not.toMatch(/\b3[12]u?\b/);
+    expect(read("particle-gpu.vert")).not.toContain("a_spawn");
     const drawer = readFileSync(new URL("../src/render/gpu-particle-drawer.ts", import.meta.url), "utf8");
     expect(drawer).toContain('from "./shaders/particle.frag?raw"');
   });
