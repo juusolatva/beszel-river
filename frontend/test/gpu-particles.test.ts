@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { GpuParticles } from "../src/sim/gpu-particles";
@@ -102,6 +103,12 @@ describe("GPU motion orchestration", () => {
     expect(flow.slice(4, 6)).toEqual([field.gridCols, field.gridRows]);
     expect(flow[8]).toBe(field.vectors);
     gpu.dispose();
+  });
+
+  it("bounds the simulation shader's stream loop by MAX_STREAMS", () => {
+    const source = readFileSync(new URL("../src/render/shaders/simulate.vert", import.meta.url), "utf8");
+    expect(source).toContain(`#define MAX_STREAMS ${MAX_STREAMS}\n`);
+    expect(source.replace(/#define MAX_STREAMS \d+/, "")).not.toMatch(/\b3[12]u?\b/);
   });
 
   it("allocates two fixed buffers and binds the integer identity without conversion", () => {
