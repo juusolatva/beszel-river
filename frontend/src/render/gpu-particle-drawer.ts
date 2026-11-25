@@ -1,7 +1,6 @@
 import { LOOK } from "../config";
 import type { GpuParticles } from "../sim/gpu-particles";
-import { GPU_IDENTITY_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES, GPU_MOTION_OFFSET_BYTES, GPU_SPAWN_OFFSET_BYTES,
-  GPU_STATE_STRIDE_BYTES } from "../sim/gpu-layout";
+import { GPU_IDENTITY_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES, GPU_MOTION_OFFSET_BYTES, GPU_STATE_STRIDE_BYTES } from "../sim/gpu-layout";
 import { createProgram, type Program } from "./gl";
 import type { GpuDrawSource } from "./renderer";
 import particleFrag from "./shaders/particle.frag?raw";
@@ -135,7 +134,8 @@ export class GpuParticleDrawer implements GpuDrawSource {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    const offsets = [GPU_MOTION_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES, GPU_SPAWN_OFFSET_BYTES];
+    // The spawn record (speed jitter, lane offset) only steers motion, so drawing skips it.
+    const offsets = [GPU_MOTION_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES];
     for (let i = 0; i < offsets.length; i++) {
       gl.enableVertexAttribArray(i + 1);
       gl.vertexAttribPointer(i + 1, 4, gl.FLOAT, false, GPU_STATE_STRIDE_BYTES, offsets[i]);
