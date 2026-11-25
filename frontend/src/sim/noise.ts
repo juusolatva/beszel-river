@@ -79,6 +79,9 @@ export function createSimplex3(random: Random): (x: number, y: number, z: number
   };
 }
 
+/** Spacing of the flow grid's points in world units; the same for every grid size. */
+export const FLOW_CELL = 1 / (LOOK.field.rows - 1);
+
 /**
  * Divergence-free velocity field: the curl of a scrolling noise potential, evaluated on a coarse grid
  * once per frame and sampled bilinearly per particle. Values are roughly -1..1.
@@ -89,7 +92,7 @@ export class FlowField {
   sy = 0;
   private cols = 0;
   private readonly rows = LOOK.field.rows;
-  private readonly cell = 1 / (LOOK.field.rows - 1);
+  private readonly cell = FLOW_CELL;
   private psi = new Float32Array(0);
   private v = new Float32Array(0);
   private readonly noise: (x: number, y: number, z: number) => number;
@@ -139,11 +142,6 @@ export class FlowField {
    * callers; replaced when `update` changes the grid size, so read it after each update.
    */
   get vectors(): Float32Array { return this.v; }
-
-  /** Copies exact cell velocities into caller-owned interleaved storage. */
-  writeVelocityGrid(out: Float32Array): void {
-    out.set(this.v);
-  }
 
   /**
    * Bilinear sample at world position (x, y); writes `sx`, `sy`. A reference for tests: the particle

@@ -5,7 +5,7 @@ import fragmentSource from "../render/shaders/simulate.frag?raw";
 import { fract } from "../util/math";
 import { GPU_FEEDBACK_VARYINGS, GPU_IDENTITY_OFFSET_BYTES, GPU_LIFETIME_OFFSET_BYTES,
   GPU_MOTION_OFFSET_BYTES, GPU_SPAWN_OFFSET_BYTES, GPU_STATE_STRIDE_BYTES } from "./gpu-layout";
-import type { FlowField } from "./noise";
+import { FLOW_CELL, type FlowField } from "./noise";
 import { GpuFreeScan } from "./gpu-free-scan";
 import { effectiveGpuStep, GpuLifecycle } from "./gpu-lifecycle";
 import { MAX_STREAMS, type StreamSet } from "./streams";
@@ -24,10 +24,8 @@ export class GpuParticles {
   private feedback: WebGLTransformFeedback | null = null;
   private program: Program | null = null;
   private scan: GpuFreeScan | null = null;
-  private readonly uniforms!: Record<"flow" | "stream" | "dt" | "bounds" | "cell" | "physics" | "braid" |
-    "command" | "prefix" | "width" | "capacity" | "limit" | "enabled" | "seed" | "birth" | "lifeSize" | "filament" | "span", WebGLUniformLocation | null>;
+  private readonly uniforms!: Record<"dt" | "bounds" | "physics" | "limit" | "enabled", WebGLUniformLocation | null>;
   private readonly streamData = new Float32Array(24 * MAX_STREAMS * 4);
-  private flowData = new Float32Array(0);
   private cols = 0;
   private rows = 0;
   private readonly maxTextureSize: number;
@@ -43,21 +41,17 @@ export class GpuParticles {
     }
     try {
       this.program = createProgram(gl, vertexSource, fragmentSource, GPU_FEEDBACK_VARYINGS);
+      const program = this.program, uniform = (name: string) => program.uniform(name);
       this.uniforms = {
-        flow: this.program.uniform("u_flow"), stream: this.program.uniform("u_stream"),
-        dt: this.program.uniform("u_dt"), bounds: this.program.uniform("u_bounds"),
-        cell: this.program.uniform("u_cell"), physics: this.program.uniform("u_physics"), braid: this.program.uniform("u_braid"),
-        command: this.program.uniform("u_command"), prefix: this.program.uniform("u_prefix"),
-        width: this.program.uniform("u_width"), capacity: this.program.uniform("u_capacity"), limit: this.program.uniform("u_limit"),
-        enabled: this.program.uniform("u_enabled"), seed: this.program.uniform("u_seed"),
-        birth: this.program.uniform("u_birth"), lifeSize: this.program.uniform("u_lifeSize"),
-        filament: this.program.uniform("u_filament"), span: this.program.uniform("u_span"),
+        dt: uniform("u_dt"), bounds: uniform("u_bounds"), physics: uniform("u_physics"),
+        limit: uniform("u_limit"), enabled: uniform("u_enabled"),
       };
       this.feedback = gl.createTransformFeedback();
       if (!this.feedback) throw new Error("GPU resource allocation failed");
       this.createStateBuffers();
       this.createDataTextures();
-      this.scan = new GpuFreeScan(gl, capacity);
+      this.scan = new GpuFreeScan(gl, capacity, this.buffers);
+      this.setConstantUniforms(this.scan.width);
     } catch (error) {
       this.dispose();
       throw error;
@@ -78,31 +72,25 @@ export class GpuParticles {
     const gl = this.gl;
     let begun = false;
     try {
+      let births = false;
       if (this.spawningEnabled) {
         this.lifecycle.prepare(dt, streams, this.limit);
-        this.scan!.scan(this.stateBuffer);
+        // Without requests no slot reads a free rank, so the scan would be wasted. The commands
+        // are still uploaded: the drawer hides stale generations with them.
+        births = this.lifecycle.commands[MAX_STREAMS * 4 - 1] > 0;
+        if (births) this.scan!.scan(this.stateBuffer);
       }
       this.uploadInputs(streams, field);
       const u = this.uniforms;
       gl.useProgram(this.program!.program);
-      gl.uniform1i(u.flow, 0);
-      gl.uniform1i(u.stream, 1);
-      gl.uniform1i(u.command, 2); gl.uniform1i(u.prefix, 3);
-      gl.uniform1i(u.width, this.scan!.width); gl.uniform1i(u.capacity, this.capacity);
-      gl.uniform1ui(u.limit, this.limit); gl.uniform1ui(u.seed, this.seed >>> 0);
-      gl.uniform1i(u.enabled, this.spawningEnabled ? 1 : 0);
-      gl.uniform4f(u.birth, LOOK.speedJitter[0], LOOK.speedJitter[1], LOOK.spawnSpread, LOOK.hueJitter);
-      gl.uniform4f(u.lifeSize, LOOK.lifeRange[0], LOOK.lifeRange[1], LOOK.sizeJitter[0], LOOK.sizeJitter[1]);
-      gl.uniform4f(u.filament, LOOK.filamentSpread[0], LOOK.filamentSpread[1], LOOK.filamentSpeed[0], LOOK.filamentSpeed[1]);
-      gl.uniform1f(u.span, LOOK.filamentSpan);
+      gl.uniform1ui(u.limit, this.limit);
+      gl.uniform1i(u.enabled, births ? 1 : 0);
       gl.uniform1f(u.dt, dt);
       // Float32(-0.1) is below the CPU double bound; Float32(1.08) is above it.
       // Equality at those rounded values is therefore a death on the CPU too.
       const upper = Math.fround(aspect + 0.1);
       gl.uniform4f(u.bounds, Math.fround(-0.1), Math.fround(1.08), upper, upper > aspect + 0.1 ? 1 : 0);
-      gl.uniform1f(u.cell, field.gridCell);
       gl.uniform3f(u.physics, LOOK.steer, LOOK.maxSlope, 1 - Math.exp(-dt / LOOK.inertia));
-      gl.uniform2f(u.braid, LOOK.braid, LOOK.braidWaves);
       gl.bindVertexArray(this.vaos[this.current]);
       gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.feedback);
       gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.buffers[1 - this.current]);
@@ -132,6 +120,25 @@ export class GpuParticles {
     this.vaos.length = this.buffers.length = this.textures.length = 0;
     this.feedback = null;
     this.program = null;
+  }
+
+  /** Samplers, sizes and `LOOK` values, which never change after linking. */
+  private setConstantUniforms(scanWidth: number): void {
+    const gl = this.gl, program = this.program!, uniform = (name: string) => program.uniform(name);
+    gl.useProgram(program.program);
+    gl.uniform1i(uniform("u_flow"), 0);
+    gl.uniform1i(uniform("u_stream"), 1);
+    gl.uniform1i(uniform("u_command"), 2);
+    gl.uniform1i(uniform("u_prefix"), 3);
+    gl.uniform1i(uniform("u_width"), scanWidth);
+    gl.uniform1i(uniform("u_capacity"), this.capacity);
+    gl.uniform1ui(uniform("u_seed"), this.seed >>> 0);
+    gl.uniform4f(uniform("u_birth"), LOOK.speedJitter[0], LOOK.speedJitter[1], LOOK.spawnSpread, LOOK.hueJitter);
+    gl.uniform4f(uniform("u_lifeSize"), LOOK.lifeRange[0], LOOK.lifeRange[1], LOOK.sizeJitter[0], LOOK.sizeJitter[1]);
+    gl.uniform4f(uniform("u_filament"), LOOK.filamentSpread[0], LOOK.filamentSpread[1], LOOK.filamentSpeed[0], LOOK.filamentSpeed[1]);
+    gl.uniform1f(uniform("u_span"), LOOK.filamentSpan);
+    gl.uniform1f(uniform("u_cell"), FLOW_CELL);
+    gl.uniform2f(uniform("u_braid"), LOOK.braid, LOOK.braidWaves);
   }
 
   private createStateBuffers(): void {
@@ -180,13 +187,12 @@ export class GpuParticles {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.textures[0]);
     if (cols !== this.cols || rows !== this.rows) {
-      this.flowData = new Float32Array(cols * rows * 2);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, cols, rows, 0, gl.RG, gl.FLOAT, null);
       this.cols = cols;
       this.rows = rows;
     }
-    field.writeVelocityGrid(this.flowData);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RG, gl.FLOAT, this.flowData);
+    // texSubImage2D copies before returning, so the field's own grid can be uploaded directly.
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, cols, rows, gl.RG, gl.FLOAT, field.vectors);
     const data = this.streamData;
     for (let i = 0; i < MAX_STREAMS; i++) {
       const s = streams.slots[i], o = i * 96;
