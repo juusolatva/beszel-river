@@ -221,31 +221,44 @@ export function runGpuAllocationBrowserChecks(): { cases: number } {
     const field = new FlowField(() => 0.5); field.update(0, 1.5);
     gpu.spawningEnabled = true;
     const words = new Uint32Array(capacity * 16);
-    const seen = new Set<number>();
-    let peakLive = 0;
-    try {
-      // Full pool, a lowered limit, no births at all, then the full pool again.
-      for (const [limit, seconds] of [[1000, 3], [300, 20], [0, 17], [1000, 2]]) {
-        gpu.limit = limit;
-        for (let t = 0; t < seconds; t += 0.1) {
-          gpu.step(0.1, streams, field, 1.5);
-          const horizon = gpu.activeSlots;
-          seen.add(horizon);
-          let live = 0;
-          for (const buffer of gpu.stateBuffers) {
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.getBufferSubData(gl.ARRAY_BUFFER, 0, words);
-            for (let i = 0; i < capacity; i++) {
-              if (words[i * 16 + 14] === 0) continue;
-              assert(i < horizon, `Slot ${i} alive above horizon ${horizon} at limit ${limit}`);
-              if (buffer === gpu.stateBuffer) live++;
-            }
-          }
-          gl.bindBuffer(gl.ARRAY_BUFFER, null);
-          peakLive = Math.max(peakLive, live);
+    let live = 0, births = 0;
+    // Live slots in the current buffer and births so far: every birth raises its slot's spawn counter.
+    const check = (horizon: number, limit: number) => {
+      for (const buffer of gpu.stateBuffers) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.getBufferSubData(gl.ARRAY_BUFFER, 0, words);
+        const current = buffer === gpu.stateBuffer;
+        if (current) live = births = 0;
+        for (let i = 0; i < capacity; i++) {
+          if (current) births += words[i * 16 + 15];
+          if (words[i * 16 + 14] === 0) continue;
+          assert(i < horizon, `Slot ${i} alive above horizon ${horizon} at limit ${limit}`);
+          if (current) live++;
         }
       }
-      assert(seen.has(300) && seen.has(0) && seen.has(1000), `Horizon never reached 300, 0 and 1000: ${[...seen].join(", ")}`);
-      assert(peakLive > 300, "Horizon check never filled the pool");
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    };
+    try {
+      // Full pool, a lowered limit, no births at all, then the full pool again. Per phase: the
+      // horizon reached the limit, and births continued there (or stopped, at limit 0).
+      for (const [limit, seconds] of [[1000, 3], [300, 20], [0, 17], [1000, 2]]) {
+        gpu.limit = limit;
+        let peak = 0, birthsAtLimit = -1;
+        for (let t = 0; t < seconds; t += 0.1) {
+          gpu.step(0.1, streams, field, 1.5);
+          check(gpu.activeSlots, limit);
+          peak = Math.max(peak, live);
+          if (birthsAtLimit < 0 && gpu.activeSlots === limit) birthsAtLimit = births;
+        }
+        assert(birthsAtLimit >= 0, `Horizon never reached limit ${limit}: ${gpu.activeSlots}`);
+        if (limit === 0) {
+          assert(births === birthsAtLimit && live === 0, `Births or live particles after emptying: ${births - birthsAtLimit}, ${live}`);
+        } else {
+          assert(births > birthsAtLimit, `No births at horizon ${limit}`);
+          // After the 20 s phase every particle from the full pool has died.
+          assert(live > 0 && (limit === 1000 || live <= limit), `Live ${live} at limit ${limit}`);
+          if (limit === 1000 && seconds === 3) assert(peak > 300, `Full pool reached only ${peak}`);
+        }
+      }
       assert(gl.getError() === gl.NO_ERROR, "Horizon WebGL error");
       cases++;
     } finally { gpu.dispose(); }
