@@ -78,8 +78,10 @@ simulation and rendering:
 | full | dense-1000 | 0.29, 0.22, 0.29 | 0.07, 0.33, 0.07 | 4.64, 4.64, 4.64 / 4.41, 3.61, 4.35 |
 | full | drained | 0.21, 0.28, 0.28 | 0.00, 0.00, 0.00 | 2.33, 3.37, 3.30 / 3.67, 2.41, 2.69 |
 
-- **Simulation:** the GPU path's simulation time fell from 0.2–0.5 ms to below 0.35 ms in every run, and to
-  zero with an empty pool.
+- **Simulation:** the GPU path's per-run median simulation time fell from 0.2–0.5 ms to 0.07–0.33 ms, and to
+  zero with an empty pool. Slower steps remain: per-run p95 is 0.2–1.1 ms and p99 0.2–3.0 ms with particles
+  alive. The export does not say which steps those are, so they cannot be attributed to the scan, which runs
+  only on steps with birth requests.
 - **Rendering at full screen:** the per-run times change between about 2.4 and 5.2 ms on both backends in the
   same cell, without a pattern by backend or order. The full-screen GPU `dense-1000` rendering
   is 3.6–4.4 ms now against 2.4 ms on 2026-11-24, while the CPU path's rendering in the same cell was 4.6 ms
@@ -91,6 +93,7 @@ simulation and rendering:
 - The active horizon's acceptance runs in Chrome and Firefox on the X280 are done: it targets both measured GPU
   regressions, and the X280 one (empty pool) is gone. The phone CPU-schedule replay, asked for "if available",
   remains.
-- **Radix-16 scan:** the GPU path's entire simulation now takes at most 0.33 ms of GPU time per step, and the
-  scan runs only on steps with birth requests. Cutting its 14 passes to 4 can save part of that at most, which
-  these runs could not separate from noise, so it is not worth pursuing on this evidence.
+- **Radix-16 scan:** not pursued for now. Per-run simulation medians stay below 0.35 ms of GPU time, the GPU
+  path's callback work is well below the CPU path's, and these runs missed 2 display periods in all. They do not
+  show whether the slower steps (p95 up to 1.1 ms, p99 up to 3.0 ms) are scan steps; revisit if phone GPU time
+  or missed periods point there.
