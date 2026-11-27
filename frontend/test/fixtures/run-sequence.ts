@@ -7,7 +7,8 @@ export type Backend = "cpu" | "gpu";
 export const WORKLOADS = ["dense-10000", "dense-8000", "dense-2500", "dense-1000", "draining", "drained", "rotation"] as const;
 export type Workload = (typeof WORKLOADS)[number];
 /** Spawn limits a fixed-limit run accepts. */
-export type ReplayLimit = 10000 | 8000 | 2500 | 1000;
+export const REPLAY_LIMITS = [10000, 8000, 2500, 1000] as const;
+export type ReplayLimit = (typeof REPLAY_LIMITS)[number];
 /**
  * The workloads the setup form starts with: Task 6's matrix. `dense-2500`, where the phone's adaptive
  * budget settles, came later for the active-horizon runs and is opt-in, so the default plan stays 86 runs.

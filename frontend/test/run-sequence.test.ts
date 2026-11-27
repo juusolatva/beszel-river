@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { REPLAY_CAPACITY, ReplayTrace } from "./fixtures/gpu-replay";
-import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
+import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, REPLAY_LIMITS, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
   type FailedRun, type RunSpec, type SequenceConfig } from "./fixtures/run-sequence";
 
 const CONFIG: SequenceConfig = { viewports: ["960x640", "full"], workloads: [...DEFAULT_WORKLOADS], repetitions: 3, scheduleReplays: true, warmupSeconds: 30, measureSeconds: 60 };
@@ -45,6 +45,8 @@ describe("run plan", () => {
     const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], workloads: ["dense-2500", "drained"], repetitions: 3, scheduleReplays: false });
     expect(plan.filter((spec) => spec.workload === "dense-2500")).toHaveLength(6);
     expect(plan.find((spec) => spec.workload === "dense-2500")).toEqual(expect.objectContaining({ kind: "fixed", scenario: "dense", limit: 2500 }));
+    // Every workload's limit is one the benchmark accepts.
+    expect(buildRunPlan({ ...CONFIG, workloads: [...WORKLOADS] }).every((spec) => REPLAY_LIMITS.includes(spec.limit))).toBe(true);
   });
 
   it("runs only the CPU, once per repetition, when asked", () => {
