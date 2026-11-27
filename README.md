@@ -271,6 +271,7 @@ The page reads frames from `stream` next to itself (`/stream` at the site root).
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
 | `?particles=N` | Fixed particle pool size, clamped to 100–10000. Without it the pool is 10000 (8000 with a coarse pointer), halved with reduced motion, and thins out on devices that cannot keep up. |
 | `?seed=N` | Fixed random seed, for repeatable looks. |
+| `?gpu` | Experimental: simulates and draws the particles on the GPU (WebGL2 transform feedback), loading that code only then. Falls back to the CPU, with a console warning, when the GPU path cannot be set up. The particle limit stays at the pool size, without the CPU's thinning on slow devices, and `?debug` shows the live count as `?`. |
 
 Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/config.ts` (`LOOK`).
 

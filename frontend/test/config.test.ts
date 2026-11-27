@@ -14,6 +14,7 @@ describe("readConfig", () => {
       demoStreams: 4,
       demoIntervalMs: 1000,
       debug: false,
+      gpu: false,
     });
     expect(config.seed).toBeGreaterThanOrEqual(0);
     expect(config.seed).toBeLessThanOrEqual(2 ** 31);
@@ -30,7 +31,7 @@ describe("readConfig", () => {
   });
 
   it("parses flags, clamps integer parameters, and ignores non-numbers", () => {
-    expect(readConfig("?demo&debug&particles=50000&streams=10&interval=5000&seed=123", noMedia)).toEqual({
+    expect(readConfig("?demo&debug&gpu&particles=50000&streams=10&interval=5000&seed=123", noMedia)).toEqual({
       particles: 10000,
       particlesFixed: true,
       motion: 1,
@@ -39,6 +40,7 @@ describe("readConfig", () => {
       demoIntervalMs: 5000,
       seed: 123,
       debug: true,
+      gpu: true,
     });
     expect(readConfig("?particles=10&streams=-5&interval=50&seed=-100", noMedia)).toMatchObject({
       particles: 100,
