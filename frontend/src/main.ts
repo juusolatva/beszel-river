@@ -1,6 +1,7 @@
 import type { Frame } from "@beszel-river/shared";
 import { LOOK, readConfig } from "./config";
 import { mountDebugPanel, type DebugTarget, type Stats } from "./debug/panel";
+import type { GpuBackend, GpuStepClock } from "./gpu-backend";
 import { Renderer } from "./render/renderer";
 import { ParticleBudget } from "./sim/budget";
 import { FlowField } from "./sim/noise";
@@ -25,13 +26,28 @@ if (!canvas || !gl) {
   throw new Error("WebGL2 is not available");
 }
 
-const streams = new StreamSet(config.motion);
+// `?gpu`: the experimental GPU simulation, or the CPU one when it cannot be set up on this device.
+// Loaded only then, so the default page does not download the GPU simulation.
+let gpu: GpuBackend | null = null;
+let gpuClock: GpuStepClock | null = null;
+if (config.gpu) {
+  try {
+    const { createGpuBackend, GpuStepClock } = await import("./gpu-backend");
+    gpu = createGpuBackend(gl, config.particles, config.seed + 1);
+    gpuClock = new GpuStepClock();
+  } catch (error) {
+    console.warn("GPU simulation unavailable, using the CPU:", error);
+  }
+}
+// The GPU's release policy keeps a draining slot until its particles must have died; the CPU's default
+// would release it while GPU particles still live and clip them.
+const streams = new StreamSet(config.motion, gpu?.particles.lifecycle.canRelease);
 const field = new FlowField(mulberry32(config.seed));
-const particles = new ParticleSystem(config.particles, mulberry32(config.seed + 1));
+const particles = gpu ? null : new ParticleSystem(config.particles, mulberry32(config.seed + 1));
 const budget = new ParticleBudget(config.particles, config.particlesFixed);
 const renderer = new Renderer(gl, config.particles);
 // Before the first frame, so a particle shader that does not compile fails here rather than in a callback.
-renderer.prepareParticles();
+if (particles) renderer.prepareParticles();
 const debug: DebugTarget = { demo: null, frame: null };
 const onFrame = (frame: Frame): void => {
   debug.frame = frame;
@@ -88,7 +104,7 @@ const resize = (): void => {
 addEventListener("resize", resize);
 resize();
 
-const stats: Stats = { fps: 0, particles: 0, limit: config.particles, simMs: 0 };
+const stats: Stats = { fps: 0, particles: gpu ? null : 0, limit: config.particles, simMs: 0, backend: gpu ? "GPU" : "CPU" };
 if (config.debug) mountDebugPanel(debug, stats);
 
 let last: number | undefined;
@@ -100,28 +116,51 @@ function frame(now: number): void {
   if (renderer.contextLost) return;
   // The first callback may arrive partway through a display period; do not calibrate from it.
   const interval = last === undefined ? 0 : (now - last) / 1000;
-  const dt = Math.min(interval, LOOK.maxDt);
   last = now;
-  if (dt > 0) {
-    t += dt;
-    const simStart = performance.now();
-    streams.update(dt, aspect);
-    field.update(t, aspect);
-    particles.spawn(dt, streams);
-    const count = particles.step(dt, streams, field, aspect);
-    stats.simMs = ease(stats.simMs, performance.now() - simStart, 0.5, dt);
-    stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
-    stats.particles = count;
-    renderer.render(particles, streams.chroma, pixelRatio, dt, aspect);
-    // Include rendering submission and any driver stalls; this does not measure GPU execution.
-    const workSeconds = (performance.now() - simStart) / 1000;
-    if (budget.update(interval, particles.count, workSeconds)) {
-      particles.limit = budget.limit;
-      particles.intensityScale = budget.intensityScale;
-      stats.limit = budget.limit;
-    }
-  }
+  if (gpu) gpuFrame(gpu, gpuClock!.take(interval));
+  else cpuFrame(particles!, interval);
   raf = requestAnimationFrame(frame);
+}
+
+function cpuFrame(particles: ParticleSystem, interval: number): void {
+  const dt = Math.min(interval, LOOK.maxDt);
+  if (dt <= 0) return;
+  t += dt;
+  const simStart = performance.now();
+  streams.update(dt, aspect);
+  field.update(t, aspect);
+  particles.spawn(dt, streams);
+  const count = particles.step(dt, streams, field, aspect);
+  stats.simMs = ease(stats.simMs, performance.now() - simStart, 0.5, dt);
+  stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
+  stats.particles = count;
+  renderer.render(particles, streams.chroma, pixelRatio, dt, aspect);
+  // Include rendering submission and any driver stalls; this does not measure GPU execution.
+  const workSeconds = (performance.now() - simStart) / 1000;
+  if (budget.update(interval, particles.count, workSeconds)) {
+    particles.limit = budget.limit;
+    particles.intensityScale = budget.intensityScale;
+    stats.limit = budget.limit;
+  }
+}
+
+/**
+ * One GPU step of `dt` seconds (`GpuStepClock`: 0 skips the callback). The limit stays at the pool
+ * size: `ParticleBudget` needs exact live counts, which the GPU does not report yet.
+ */
+function gpuFrame({ particles, drawer }: GpuBackend, dt: number): void {
+  if (dt <= 0) return;
+  t += dt;
+  const simStart = performance.now();
+  // The release clock advances before the streams, so a draining slot is judged in simulation time.
+  particles.lifecycle.advanceTime(dt);
+  streams.update(dt, aspect);
+  field.update(t, aspect);
+  particles.step(dt, streams, field, aspect);
+  // CPU time to submit the step, as the CPU path's figure is its simulation; neither includes rendering.
+  stats.simMs = ease(stats.simMs, performance.now() - simStart, 0.5, dt);
+  stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
+  renderer.renderGpu(drawer, dt, aspect, pixelRatio, particles.globalHue, 1);
 }
 
 // Rebuilding GL state after a context loss is not worth the code; a reload restores everything.

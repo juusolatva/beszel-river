@@ -104,6 +104,11 @@ export interface Config {
   demoIntervalMs: number;
   /** PRNG seed. `?seed=N` overrides. */
   seed: number;
+  /**
+   * Simulates and draws particles on the GPU (transform feedback), falling back to the CPU when setup
+   * fails. `?gpu` enables; experimental, with a fixed particle limit until the GPU reports live counts.
+   */
+  gpu: boolean;
   /** Shows the debug panel. `?debug` enables. */
   debug: boolean;
 }
@@ -127,5 +132,6 @@ export function readConfig(search: string, matches: (mediaQuery: string) => bool
     demoIntervalMs: int("interval", 1000, 100, 600000),
     seed: int("seed", crypto.getRandomValues(new Uint32Array(1))[0] >>> 1, 0, 2 ** 31),
     debug: params.has("debug"),
+    gpu: params.has("gpu"),
   };
 }

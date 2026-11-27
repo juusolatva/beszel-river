@@ -3,10 +3,14 @@ import { CHANNELS, type DemoSource, type DemoStream } from "../source/demo";
 
 export interface Stats {
   fps: number;
-  particles: number;
+  /** Live particles; null when the simulation does not report them (the GPU path). */
+  particles: number | null;
   /** Live particle limit from `ParticleBudget`. */
   limit: number;
+  /** Simulation time per callback, ms: on the GPU path, the CPU time to submit the step. */
   simMs: number;
+  /** Where particles are simulated: "CPU" or "GPU". */
+  backend: string;
 }
 
 const STYLE = `
@@ -133,7 +137,7 @@ export function mountDebugPanel(target: DebugTarget, stats: Stats): void {
   build();
   let shownFrame: Frame | null = null;
   setInterval(() => {
-    header.textContent = `${stats.fps.toFixed(0)} fps · ${stats.particles}/${stats.limit} particles · sim ${stats.simMs.toFixed(1)} ms`;
+    header.textContent = `${stats.fps.toFixed(0)} fps · ${stats.particles ?? "?"}/${stats.limit} particles · ${stats.backend} sim ${stats.simMs.toFixed(1)} ms`;
     if (target.demo !== built) build();
     if (!target.demo && target.frame !== shownFrame) {
       shownFrame = target.frame;
