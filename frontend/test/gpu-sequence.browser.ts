@@ -1,6 +1,6 @@
 import { runGpuBenchmark } from "./gpu-benchmark.browser";
 import type { RecordedSchedule } from "./fixtures/gpu-replay";
-import { buildRunPlan, estimateMinutes, ledgerMarkdown, summarizeRun, WORKLOADS, type FailedRun, type RunEnvironment, type RunSpec,
+import { buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, ledgerMarkdown, summarizeRun, WORKLOADS, type FailedRun, type RunEnvironment, type RunSpec,
   type RunSummary, type SequenceConfig, type Viewport } from "./fixtures/run-sequence";
 
 /**
@@ -291,7 +291,7 @@ function setup(): void {
   $("#workloads").replaceChildren(...WORKLOADS.map((workload) => {
     const label = document.createElement("label");
     const input = document.createElement("input");
-    Object.assign(input, { type: "checkbox", name: "workload", value: workload, checked: true });
+    Object.assign(input, { type: "checkbox", name: "workload", value: workload, checked: DEFAULT_WORKLOADS.includes(workload) });
     label.append(input, ` ${workload}`);
     return label;
   }));
