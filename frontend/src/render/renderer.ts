@@ -91,9 +91,19 @@ export class Renderer {
     return this.half;
   }
 
+  /** Whether the GL context is lost; its `webglcontextlost` event can arrive after the loss. */
+  get contextLost(): boolean {
+    return this.gl.isContextLost();
+  }
+
+  /**
+   * Recreates both trail targets at the new size. Does nothing while the context is lost: every target
+   * would come back incomplete, which would drop half-float trails for good and then throw.
+   */
   resize(width: number, height: number): void {
     if (width === this.width && height === this.height) return;
     const { gl } = this;
+    if (gl.isContextLost()) return;
     if (this.targets) for (const target of this.targets) deleteTarget(gl, target);
 
     let a = createTarget(gl, width, height, this.half);
