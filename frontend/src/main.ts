@@ -94,6 +94,8 @@ let t = 0;
 let raf = requestAnimationFrame(frame);
 
 function frame(now: number): void {
+  // The context can be lost before its event arrives; the event handler stops the loop for good.
+  if (renderer.contextLost) return;
   // The first callback may arrive partway through a display period; do not calibrate from it.
   const interval = last === undefined ? 0 : (now - last) / 1000;
   const dt = Math.min(interval, LOOK.maxDt);

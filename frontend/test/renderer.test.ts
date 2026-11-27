@@ -247,7 +247,22 @@ describe("Renderer", () => {
     expect(callsTo(calls, "uniform1f")).toContainEqual([{ uniform: "u_floor" }, 1.5 / 255]);
   });
 
-  it("fails when no render target can be made", () => {
+  it("skips resizing while the context is lost, keeping half-float trails for after the restore", () => {
+    let lost = true;
+    const { gl, calls } = createFakeGl({ halfFloat: true, complete: { RGBA16F: false, RGBA8: false }, overrides: { isContextLost: () => lost } });
+    const renderer = new Renderer(gl, 10);
+    expect(renderer.contextLost).toBe(true);
+    calls.length = 0;
+    expect(() => renderer.resize(800, 600)).not.toThrow();
+    expect(calls.map(([name]) => name)).toEqual(["isContextLost"]);
+    expect(renderer.halfFloat).toBe(true);
+    // Nothing was made at that size, so the same size is retried once the context is back.
+    lost = false;
+    expect(renderer.contextLost).toBe(false);
+    expect(() => renderer.resize(800, 600)).toThrow("Cannot create render targets");
+  });
+
+    it("fails when no render target can be made", () => {
     const { gl } = createFakeGl({ complete: { RGBA8: false } });
     const renderer = new Renderer(gl, 10);
     expect(() => renderer.resize(800, 600)).toThrow("Cannot create render targets");
