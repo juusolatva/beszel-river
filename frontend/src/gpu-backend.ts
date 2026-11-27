@@ -20,7 +20,7 @@ export class GpuStepClock {
    * value. Time beyond the clamp is dropped, as on the CPU path (a hidden tab's pause).
    */
   take(interval: number): number {
-    if (!(interval > 0)) return 0;
+    if (Number.isNaN(interval) || interval <= 0) return 0;
     this.pending += interval;
     if (this.pending < MIN_GPU_STEP) return 0;
     // Float32 rounding keeps a sum of at least 1/256 at or above it, since 1/256 is exact.
@@ -30,10 +30,11 @@ export class GpuStepClock {
   }
 }
 
-/** The GPU simulation and its drawer, set up and ready to step. */
+/** The GPU simulation, its drawer and its step clock, set up and ready to step. */
 export interface GpuBackend {
   readonly particles: GpuParticles;
   readonly drawer: GpuParticleDrawer;
+  readonly clock: GpuStepClock;
 }
 
 /**
@@ -44,14 +45,15 @@ export interface GpuBackend {
 export function createGpuBackend(gl: WebGL2RenderingContext, capacity: number, seed: number): GpuBackend {
   // The constructor releases its own resources when it throws.
   const particles = new GpuParticles(gl, capacity, seed);
-  const drawer = new GpuParticleDrawer(gl, particles);
+  let drawer: GpuParticleDrawer | null = null;
   try {
+    drawer = new GpuParticleDrawer(gl, particles);
     drawer.prepare();
   } catch (error) {
-    drawer.dispose();
+    drawer?.dispose();
     particles.dispose();
     throw error;
   }
   particles.spawningEnabled = true;
-  return { particles, drawer };
+  return { particles, drawer, clock: new GpuStepClock() };
 }

@@ -37,7 +37,7 @@ describe("GpuStepClock", () => {
 
   it("ignores zero, negative and non-finite intervals", () => {
     const clock = new GpuStepClock();
-    for (const interval of [0, -1, Number.NaN]) expect(clock.take(interval)).toBe(0);
+    for (const interval of [0, -1, Number.NaN, -Infinity]) expect(clock.take(interval)).toBe(0);
     expect(clock.take(1 / 60)).toBe(Math.fround(1 / 60));
   });
 
@@ -58,7 +58,8 @@ describe("GpuStepClock", () => {
 describe("createGpuBackend", () => {
   it("prepares the drawer and turns spawning on", () => {
     const { gl, calls } = createFakeGl();
-    const { particles, drawer } = createGpuBackend(gl, 12, 42);
+    const { particles, drawer, clock } = createGpuBackend(gl, 12, 42);
+    expect(clock.take(1 / 60)).toBe(Math.fround(1 / 60));
     expect(particles.spawningEnabled).toBe(true);
     expect(particles.capacity).toBe(12);
     expect(drawer.drawCapacity).toBe(12);

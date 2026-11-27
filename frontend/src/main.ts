@@ -1,7 +1,7 @@
 import type { Frame } from "@beszel-river/shared";
 import { LOOK, readConfig } from "./config";
 import { mountDebugPanel, type DebugTarget, type Stats } from "./debug/panel";
-import type { GpuBackend, GpuStepClock } from "./gpu-backend";
+import type { GpuBackend } from "./gpu-backend";
 import { Renderer } from "./render/renderer";
 import { ParticleBudget } from "./sim/budget";
 import { FlowField } from "./sim/noise";
@@ -29,12 +29,10 @@ if (!canvas || !gl) {
 // `?gpu`: the experimental GPU simulation, or the CPU one when it cannot be set up on this device.
 // Loaded only then, so the default page does not download the GPU simulation.
 let gpu: GpuBackend | null = null;
-let gpuClock: GpuStepClock | null = null;
 if (config.gpu) {
   try {
-    const { createGpuBackend, GpuStepClock } = await import("./gpu-backend");
+    const { createGpuBackend } = await import("./gpu-backend");
     gpu = createGpuBackend(gl, config.particles, config.seed + 1);
-    gpuClock = new GpuStepClock();
   } catch (error) {
     console.warn("GPU simulation unavailable, using the CPU:", error);
   }
@@ -117,7 +115,7 @@ function frame(now: number): void {
   // The first callback may arrive partway through a display period; do not calibrate from it.
   const interval = last === undefined ? 0 : (now - last) / 1000;
   last = now;
-  if (gpu) gpuFrame(gpu, gpuClock!.take(interval));
+  if (gpu) gpuFrame(gpu, gpu.clock.take(interval));
   else cpuFrame(particles!, interval);
   raf = requestAnimationFrame(frame);
 }
