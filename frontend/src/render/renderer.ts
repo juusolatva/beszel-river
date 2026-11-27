@@ -71,10 +71,19 @@ export class Renderer {
     if (this.particles) return;
     const { gl } = this;
     const program = createProgram(gl, particleVert, particleFrag);
+    // These return null rather than throw, as on a lost context; never mark a half-made setup as done.
+    const vao = gl.createVertexArray() as WebGLVertexArrayObject | null;
+    const cornerBuffer = gl.createBuffer() as WebGLBuffer | null;
+    const instanceBuffer = gl.createBuffer() as WebGLBuffer | null;
+    if (!vao || !cornerBuffer || !instanceBuffer) {
+      gl.deleteBuffer(instanceBuffer);
+      gl.deleteBuffer(cornerBuffer);
+      gl.deleteVertexArray(vao);
+      gl.deleteProgram(program.program);
+      throw new Error("Cannot create particle buffers");
+    }
 
-    const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
-    const cornerBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
@@ -88,14 +97,13 @@ export class Renderer {
     // One record per slot, uploaded whole every frame: segment, hue and intensity, then stream index
     // and size jitter. Updating spawn-time values separately, in small writes to a second buffer the
     // GPU may still be reading, more than quadrupled GPU time in some runs on the X280 (Task 5).
-    const instanceBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, this.capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
     attribute(1, 4, INSTANCE_FLOATS * 4, 0);
     attribute(2, 2, INSTANCE_FLOATS * 4, 16);
     attribute(3, 2, INSTANCE_FLOATS * 4, 24);
     gl.bindVertexArray(null);
-    // Assigned last: a failed setup is retried rather than left half made.
+    // Assigned last: a failed setup is retried on the next call.
     this.particleVao = vao;
     this.instanceBuffer = instanceBuffer;
     this.particles = program;

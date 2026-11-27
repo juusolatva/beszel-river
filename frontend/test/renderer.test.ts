@@ -171,7 +171,24 @@ describe("Renderer", () => {
     expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 40], ["TRIANGLE_STRIP", 0, 4, 40]]);
   });
 
-  it("reports a particle shader failure from prepareParticles and retries on the next call", () => {
+  it("releases what it made and retries when a particle buffer cannot be created", () => {
+    let fail = true;
+    let buffers = 0;
+    const { gl, calls } = createFakeGl({ overrides: { createBuffer: () => (fail && ++buffers === 2 ? null : { kind: "Buffer", n: 900 + buffers }) } });
+    const renderer = new Renderer(gl, 10);
+    expect(() => renderer.prepareParticles()).toThrow("Cannot create particle buffers");
+    expect(callsTo(calls, "deleteBuffer")).toHaveLength(2);
+    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(1);
+    expect(callsTo(calls, "deleteProgram")).toHaveLength(1);
+    expect(callsTo(calls, "bufferData")).toEqual([]);
+    fail = false;
+    renderer.prepareParticles();
+    expect(callsTo(calls, "bufferData")).toHaveLength(2);
+    renderer.prepareParticles();
+    expect(callsTo(calls, "bufferData")).toHaveLength(2);
+  });
+
+    it("reports a particle shader failure from prepareParticles and retries on the next call", () => {
     let fail = true;
     let links = 0;
     const { gl, calls } = createFakeGl({ overrides: { linkProgram: () => { links++; }, getProgramParameter: () => !(fail && links === 3), getProgramInfoLog: () => "particle link" } });
