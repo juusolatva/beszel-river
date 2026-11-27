@@ -126,7 +126,7 @@ describe("Renderer", () => {
 
   it("allocates the instance buffer for the whole pool and sets up per-instance attributes", () => {
     const { gl, calls } = createFakeGl({ halfFloat: true });
-    new Renderer(gl, 1000);
+    new Renderer(gl, 1000).prepareParticles();
     expect(callsTo(calls, "bufferData").slice(1)).toEqual([["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"]]);
     expect(callsTo(calls, "vertexAttribDivisor")).toEqual([
       [1, 1],
@@ -139,14 +139,73 @@ describe("Renderer", () => {
       [2, 2, "FLOAT", false, 32, 16],
       [3, 2, "FLOAT", false, 32, 24],
     ]);
-    // Three programs: particles, fade and present.
+    // Three programs: fade and present, then particles.
     expect(callsTo(calls, "linkProgram")).toHaveLength(3);
+  });
+
+  it("makes the CPU particle program and instance buffer only when asked, once", () => {
+    const { gl, calls } = createFakeGl({ halfFloat: true });
+    const renderer = new Renderer(gl, 1000);
+    // Fade and present only: a GPU session never links the particle program or allocates instances.
+    expect(callsTo(calls, "linkProgram")).toHaveLength(2);
+    expect(callsTo(calls, "bufferData")).toEqual([]);
+    renderer.resize(100, 100);
+    const source = { draw: (): void => {} };
+    for (let i = 0; i < 3; i++) renderer.renderGpu(source, 1 / 60, 1, 1, 0, 1);
+    expect(callsTo(calls, "linkProgram")).toHaveLength(2);
+    expect(callsTo(calls, "bufferData")).toEqual([]);
+
+    renderer.prepareParticles();
+    renderer.prepareParticles();
+    expect(callsTo(calls, "linkProgram")).toHaveLength(3);
+    expect(callsTo(calls, "bufferData").slice(1)).toEqual([["ARRAY_BUFFER", 1000 * INSTANCE_FLOATS * 4, "DYNAMIC_DRAW"]]);
+  });
+
+  it("prepares the CPU particles at the first render when nobody asked before", () => {
+    const { gl, calls } = createFakeGl({ halfFloat: true });
+    const renderer = new Renderer(gl, 100);
+    renderer.resize(100, 100);
+    renderer.render(pool(40, 100), CHROMA, 1, 1 / 60, 1);
+    renderer.render(pool(40, 100), CHROMA, 1, 1 / 60, 1);
+    expect(callsTo(calls, "linkProgram")).toHaveLength(3);
+    expect(callsTo(calls, "drawArraysInstanced")).toEqual([["TRIANGLE_STRIP", 0, 4, 40], ["TRIANGLE_STRIP", 0, 4, 40]]);
+  });
+
+  it("releases what it made and retries when a particle buffer cannot be created", () => {
+    let fail = true;
+    let buffers = 0;
+    const { gl, calls } = createFakeGl({ overrides: { createBuffer: () => (fail && ++buffers === 2 ? null : { kind: "Buffer", n: 900 + buffers }) } });
+    const renderer = new Renderer(gl, 10);
+    expect(() => renderer.prepareParticles()).toThrow("Cannot create particle buffers");
+    expect(callsTo(calls, "deleteBuffer")).toHaveLength(2);
+    expect(callsTo(calls, "deleteVertexArray")).toHaveLength(1);
+    expect(callsTo(calls, "deleteProgram")).toHaveLength(1);
+    expect(callsTo(calls, "bufferData")).toEqual([]);
+    fail = false;
+    renderer.prepareParticles();
+    expect(callsTo(calls, "bufferData")).toHaveLength(2);
+    renderer.prepareParticles();
+    expect(callsTo(calls, "bufferData")).toHaveLength(2);
+  });
+
+    it("reports a particle shader failure from prepareParticles and retries on the next call", () => {
+    let fail = true;
+    let links = 0;
+    const { gl, calls } = createFakeGl({ overrides: { linkProgram: () => { links++; }, getProgramParameter: () => !(fail && links === 3), getProgramInfoLog: () => "particle link" } });
+    const renderer = new Renderer(gl, 10);
+    expect(() => renderer.prepareParticles()).toThrow(/particle link/);
+    expect(callsTo(calls, "bufferData")).toEqual([]);
+    fail = false;
+    renderer.prepareParticles();
+    expect(callsTo(calls, "linkProgram")).toHaveLength(4);
+    expect(callsTo(calls, "bufferData")).toHaveLength(2);
   });
 
   describe("stable slots", () => {
     it("uploads the drawn prefix of the pool in one call to one buffer", () => {
       const { gl, calls } = createFakeGl({ halfFloat: true });
       const renderer = new Renderer(gl, 500);
+      renderer.prepareParticles();
       renderer.resize(100, 100);
       const particles = pool(400, 500);
       calls.length = 0;
@@ -206,6 +265,7 @@ describe("Renderer", () => {
   it("draws nothing before the first resize", () => {
     const { gl, calls } = createFakeGl();
     const renderer = new Renderer(gl, 10);
+    renderer.prepareParticles();
     calls.length = 0;
     renderer.render(pool(5), CHROMA, 1, 1 / 60, 1);
     expect(calls).toEqual([]);

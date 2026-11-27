@@ -30,6 +30,8 @@ const field = new FlowField(mulberry32(config.seed));
 const particles = new ParticleSystem(config.particles, mulberry32(config.seed + 1));
 const budget = new ParticleBudget(config.particles, config.particlesFixed);
 const renderer = new Renderer(gl, config.particles);
+// Before the first frame, so a particle shader that does not compile fails here rather than in a callback.
+renderer.prepareParticles();
 const debug: DebugTarget = { demo: null, frame: null };
 const onFrame = (frame: Frame): void => {
   debug.frame = frame;
