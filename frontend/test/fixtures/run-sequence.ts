@@ -4,8 +4,15 @@ import { REPLAY_CAPACITY, type ReplayScenario, type ReplayTrace } from "./gpu-re
 export type Viewport = "960x640" | "full";
 export type Backend = "cpu" | "gpu";
 /** Fixed-limit workloads of the paired comparison (GPU plan, Task 1 and Task 6). */
-export const WORKLOADS = ["dense-10000", "dense-8000", "dense-1000", "draining", "drained", "rotation"] as const;
+export const WORKLOADS = ["dense-10000", "dense-8000", "dense-2500", "dense-1000", "draining", "drained", "rotation"] as const;
 export type Workload = (typeof WORKLOADS)[number];
+/** Spawn limits a fixed-limit run accepts. */
+export type ReplayLimit = 10000 | 8000 | 2500 | 1000;
+/**
+ * The workloads the setup form starts with: Task 6's matrix. `dense-2500`, where the phone's adaptive
+ * budget settles, came later for the active-horizon runs and is opt-in, so the default plan stays 86 runs.
+ */
+export const DEFAULT_WORKLOADS: readonly Workload[] = WORKLOADS.filter((workload) => workload !== "dense-2500");
 
 export interface SequenceConfig {
   viewports: Viewport[];
@@ -32,11 +39,11 @@ export interface RunSpec {
   backend: Backend;
   repetition: number;
   scenario: ReplayScenario;
-  limit: 10000 | 8000 | 1000;
+  limit: ReplayLimit;
 }
 
-const SCENARIO: Record<Workload, [ReplayScenario, 10000 | 8000 | 1000]> = {
-  "dense-10000": ["dense", 10000], "dense-8000": ["dense", 8000], "dense-1000": ["dense", 1000],
+const SCENARIO: Record<Workload, [ReplayScenario, ReplayLimit]> = {
+  "dense-10000": ["dense", 10000], "dense-8000": ["dense", 8000], "dense-2500": ["dense", 2500], "dense-1000": ["dense", 1000],
   draining: ["draining", 10000], drained: ["drained", 10000], rotation: ["rotation", 10000],
 };
 

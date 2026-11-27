@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { REPLAY_CAPACITY, ReplayTrace } from "./fixtures/gpu-replay";
-import { backendOrder, buildRunPlan, estimateMinutes, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
+import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
   type FailedRun, type RunSpec, type SequenceConfig } from "./fixtures/run-sequence";
 
-const CONFIG: SequenceConfig = { viewports: ["960x640", "full"], workloads: [...WORKLOADS], repetitions: 3, scheduleReplays: true, warmupSeconds: 30, measureSeconds: 60 };
+const CONFIG: SequenceConfig = { viewports: ["960x640", "full"], workloads: [...DEFAULT_WORKLOADS], repetitions: 3, scheduleReplays: true, warmupSeconds: 30, measureSeconds: 60 };
 
 /** `seconds` of 0.1 s steps (the clamp) after a zero first callback, with counts from `count(time after the step)`. */
 function trace(seconds: number, count: (time: number) => number) {
@@ -36,6 +36,15 @@ describe("run plan", () => {
     ]);
     expect(small.find((spec) => spec.workload === "dense-1000")).toEqual(expect.objectContaining({ scenario: "dense", limit: 1000 }));
     expect(small.find((spec) => spec.workload === "rotation")).toEqual(expect.objectContaining({ scenario: "rotation", limit: 10000 }));
+  });
+
+  it("offers dense-2500 as an opt-in workload outside the default 86-run plan", () => {
+    expect(WORKLOADS).toContain("dense-2500");
+    expect(DEFAULT_WORKLOADS).toEqual(["dense-10000", "dense-8000", "dense-1000", "draining", "drained", "rotation"]);
+    expect(buildRunPlan(CONFIG)).toHaveLength(86);
+    const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], workloads: ["dense-2500", "drained"], repetitions: 3, scheduleReplays: false });
+    expect(plan.filter((spec) => spec.workload === "dense-2500")).toHaveLength(6);
+    expect(plan.find((spec) => spec.workload === "dense-2500")).toEqual(expect.objectContaining({ kind: "fixed", scenario: "dense", limit: 2500 }));
   });
 
   it("runs only the CPU, once per repetition, when asked", () => {

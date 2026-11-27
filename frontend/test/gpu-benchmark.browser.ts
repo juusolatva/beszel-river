@@ -3,6 +3,7 @@ import { Renderer } from "../src/render/renderer";
 import { ParticleBudget } from "../src/sim/budget";
 import { createSubmissionCounter } from "./fixtures/gpu-gl";
 import { GpuTimer } from "./fixtures/gpu-timer";
+import type { ReplayLimit } from "./fixtures/run-sequence";
 import { BudgetSchedule, compareGpuStates, occupancyParity, CpuReplay, CPU_REFERENCE, effectiveDecisions, fiveSecondWindows, GpuReplay, readGpuState,
   REPLAY_CAPACITY, REPLAY_SCENARIOS, REPLAY_SEED, ReplayTrace, replayableStep, replayIds, replayFrameIndex, ScheduleCursor, validateCpuTrace,
   validateGpuTrace, type RecordedSchedule, type ReplayScenario } from "./fixtures/gpu-replay";
@@ -10,7 +11,7 @@ import { BudgetSchedule, compareGpuStates, occupancyParity, CpuReplay, CPU_REFER
 interface BenchmarkOptions {
   backend?: "cpu" | "gpu";
   scenario?: ReplayScenario;
-  limit?: 10000 | 8000 | 1000;
+  limit?: ReplayLimit;
   warmupSeconds?: number;
   measureSeconds?: number;
   traceCapacity?: number;
@@ -114,7 +115,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
   if (!Number.isInteger(traceCapacity) || traceCapacity <= 0) throw new Error("Trace capacity must be a positive integer");
-  if (![10000, 8000, 1000].includes(limit) || !(motion >= 0 && motion <= 1)) throw new Error("Invalid replay limit or motion");
+  if (![10000, 8000, 2500, 1000].includes(limit) || !(motion >= 0 && motion <= 1)) throw new Error("Invalid replay limit or motion");
   // Checked and preallocated first, so a malformed saved schedule fails before the page or any GPU resource is used.
   const cursor = schedule ? new ScheduleCursor(BudgetSchedule.from(schedule.decisions)) : null;
   // Everything that needs no GL is allocated before any GL resource, so a failure here leaks none.
