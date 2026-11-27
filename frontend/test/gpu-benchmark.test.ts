@@ -100,9 +100,10 @@ describe("GPU backend", () => {
   });
 
   it("reports a drawer shader failure as a failed GPU start and releases the GPU replay", async () => {
-    // The renderer links three programs and the simulation three more; the drawer's is the seventh.
+    // The renderer links two programs on the GPU backend (no CPU particle program) and the simulation
+    // three more; the drawer's is the sixth.
     let links = 0;
-    const { calls } = stubPage({ overrides: { linkProgram: () => { links++; }, getProgramParameter: () => links < 7, getProgramInfoLog: () => "drawer link" } });
+    const { calls } = stubPage({ overrides: { linkProgram: () => { links++; }, getProgramParameter: () => links < 6, getProgramInfoLog: () => "drawer link" } });
     await expect(runGpuBenchmark({ backend: "gpu", refreshHz: 60, conditions: "unit fixture" })).rejects.toThrow(/GPU backend failed.*drawer link.*run invalid/);
     expect(callsTo(calls, "deleteTransformFeedback")).toHaveLength(1);
   });

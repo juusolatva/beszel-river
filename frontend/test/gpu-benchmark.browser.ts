@@ -148,6 +148,8 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { gl: countedGl, counters } = createSubmissionCounter(gl);
   const renderer = new Renderer(countedGl, REPLAY_CAPACITY);
   const cpu = backend === "cpu" ? new CpuReplay(motion) : null;
+  // As the page does before its first frame, so no measured callback links the particle program.
+  if (cpu) renderer.prepareParticles();
   let gpu: GpuReplay | null = null;
   if (backend === "gpu") {
     try {

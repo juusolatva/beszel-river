@@ -29,12 +29,14 @@ const REFERENCE_DEPOSIT = -Math.expm1(-TRAIL_STEP / LOOK.trailTau);
  * 8-bit trails accumulate at 60 Hz so small high-refresh deposits do not vanish on quantization.
  */
 export class Renderer {
-  private readonly particles: Program;
   private readonly fade: Program;
   private readonly present: Program;
-  private readonly particleVao: WebGLVertexArrayObject;
   private readonly emptyVao: WebGLVertexArrayObject;
-  private readonly instanceBuffer: WebGLBuffer;
+  // The CPU pool's program, vertex array and instance buffer; made by `prepareParticles`, so a GPU
+  // session links one program less and allocates no instance buffer.
+  private particles: Program | null = null;
+  private particleVao: WebGLVertexArrayObject | null = null;
+  private instanceBuffer: WebGLBuffer | null = null;
   // The CPU pool of the current `render` call, uploaded at its first deposit; null in GPU frames.
   private pool: ParticleInstances | null = null;
   private chroma: Float32Array | null = null;
@@ -52,17 +54,26 @@ export class Renderer {
 
   constructor(
     private readonly gl: WebGL2RenderingContext,
-    capacity: number,
+    private readonly capacity: number,
   ) {
     this.half = gl.getExtension("EXT_color_buffer_float") !== null;
-    this.particles = createProgram(gl, particleVert, particleFrag);
     this.fade = createProgram(gl, fullscreenVert, fadeFrag);
     this.present = createProgram(gl, fullscreenVert, presentFrag);
     this.emptyVao = gl.createVertexArray();
+  }
 
-    this.particleVao = gl.createVertexArray();
-    gl.bindVertexArray(this.particleVao);
+  /**
+   * Sets up drawing the CPU pool: its program, vertex array and an instance buffer for `capacity`
+   * particles. `render` does this on first use; call it before the first frame so a shader that does not
+   * compile fails at startup. Further calls do nothing.
+   */
+  prepareParticles(): void {
+    if (this.particles) return;
+    const { gl } = this;
+    const program = createProgram(gl, particleVert, particleFrag);
 
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
     const cornerBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
@@ -77,13 +88,17 @@ export class Renderer {
     // One record per slot, uploaded whole every frame: segment, hue and intensity, then stream index
     // and size jitter. Updating spawn-time values separately, in small writes to a second buffer the
     // GPU may still be reading, more than quadrupled GPU time in some runs on the X280 (Task 5).
-    this.instanceBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
+    const instanceBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.capacity * INSTANCE_FLOATS * 4, gl.DYNAMIC_DRAW);
     attribute(1, 4, INSTANCE_FLOATS * 4, 0);
     attribute(2, 2, INSTANCE_FLOATS * 4, 16);
     attribute(3, 2, INSTANCE_FLOATS * 4, 24);
     gl.bindVertexArray(null);
+    // Assigned last: a failed setup is retried rather than left half made.
+    this.particleVao = vao;
+    this.instanceBuffer = instanceBuffer;
+    this.particles = program;
   }
 
   /** Whether trails use RGBA16F targets; false once `resize` has fallen back to RGBA8. */
@@ -129,6 +144,7 @@ export class Renderer {
    * one (8-bit trails above 60 Hz) uploads nothing.
    */
   render(particles: ParticleInstances, chroma: Float32Array, devicePixelRatio: number, dt: number, aspect: number): void {
+    this.prepareParticles();
     this.pool = particles;
     this.chroma = chroma;
     this.sizeScale = LOOK.sizePx * devicePixelRatio;
@@ -213,6 +229,7 @@ export class Renderer {
       }
     } else if (this.pool && this.pool.drawCount > 0) {
       const pool = this.pool;
+      const particles = this.particles!;
       if (!this.uploaded) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
         gl.bufferSubData(gl.ARRAY_BUFFER, 0, pool.instances, 0, pool.drawCount * INSTANCE_FLOATS);
@@ -220,14 +237,14 @@ export class Renderer {
       }
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      gl.useProgram(this.particles.program);
-      gl.uniform1f(this.particles.uniform("u_aspect"), aspect);
-      gl.uniform1f(this.particles.uniform("u_pixel"), 1 / this.height);
-      gl.uniform1f(this.particles.uniform("u_sizeScale"), this.sizeScale);
-      gl.uniform1f(this.particles.uniform("u_lightness"), LOOK.lightness);
-      gl.uniform1fv(this.particles.uniform("u_chroma"), this.chroma!);
+      gl.useProgram(particles.program);
+      gl.uniform1f(particles.uniform("u_aspect"), aspect);
+      gl.uniform1f(particles.uniform("u_pixel"), 1 / this.height);
+      gl.uniform1f(particles.uniform("u_sizeScale"), this.sizeScale);
+      gl.uniform1f(particles.uniform("u_lightness"), LOOK.lightness);
+      gl.uniform1fv(particles.uniform("u_chroma"), this.chroma!);
       // Match the trail decay at any frame rate, retaining the original deposit at 60 Hz.
-      gl.uniform1f(this.particles.uniform("u_depositScale"), depositScale);
+      gl.uniform1f(particles.uniform("u_depositScale"), depositScale);
       gl.bindVertexArray(this.particleVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, pool.drawCount);
       gl.disable(gl.BLEND);
