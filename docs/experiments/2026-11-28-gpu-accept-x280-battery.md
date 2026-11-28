@@ -5,9 +5,9 @@ power.** With 10,000 particles it does 70–76 % less callback work than the CPU
 of 2,500. With an empty pool the two paths cost the same. Occupancy parity passed in all 72 runs and every final
 state matched its validation replay. Whole-laptop battery power is the same within noise in every cell. The one
 difference beyond noise goes the other way: in Chrome at full screen with 10,000 particles, the GPU path drew
-about 0.5 W more (+4 %). One cell misses the
-[gate](../PLAN.md#gpu-production-proposal--2026-11-28) on one count: a single missed display period, described
-under "Gate" below.
+about 0.5 W more (+4 %). The run passes the
+[gate](../PLAN.md#gpu-production-proposal--2026-11-28), with one missed display period accepted as noise (see
+"Gate" below).
 
 ## Runs
 
@@ -96,12 +96,12 @@ path.
 - **Missed display periods:** passed in Firefox (GPU 0, CPU 7) and in five of Chrome's six cells. **Chrome full
   `drained`: GPU 1, CPU 0.** One period in 3,602 callbacks, in the set's last run, in a cell where both
   paths do the same callback work (0.8 ms median, 1.1 ms p95) and draw nothing after the active horizon.
-  Strictly this misses the gate; it is recorded here for the user's decision.
+  Strictly this misses the gate; the user accepted it as noise on 2026-11-28.
 
 ## What this settles
 
-- Acceptance run 1 is done. The callback-work and parity gates pass; the missed-period result above awaits a
-  decision.
+- Acceptance run 1 passes: the callback-work and parity gates pass in every cell, and the one extra missed
+  period was accepted as noise.
 - The case for the GPU default is callback headroom and missed display periods (Firefox's CPU path missed 7,
   its GPU path none), not battery life: on this laptop the GPU path draws the same power, and 4 % more in
   Chrome at full screen with a dense pool.
