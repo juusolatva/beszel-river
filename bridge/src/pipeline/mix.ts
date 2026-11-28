@@ -14,7 +14,8 @@ export interface Recipe {
   bias: number;
   center: number;
   tau: number;
-  inputs: Partial<Record<Feature, number>>;
+  /** Feature and weight pairs, listed once at parse time so mixing allocates nothing per sample. */
+  inputs: readonly (readonly [Feature, number])[];
 }
 
 /**
@@ -120,10 +121,10 @@ export function parseMixConfig(json: unknown): MixConfig {
 function parseRecipe(raw: unknown, channel: Mixed): Recipe {
   if (!isObject(raw)) return fail(`"${channel}" is missing`);
   if (!isObject(raw.inputs)) return fail(`${channel}.inputs must be an object`);
-  const inputs: Partial<Record<Feature, number>> = {};
+  const inputs: [Feature, number][] = [];
   for (const [feature, weight] of Object.entries(raw.inputs)) {
     if (!(FEATURES as readonly string[]).includes(feature)) fail(`${channel}.inputs.${feature} is not a feature (${FEATURES.join(", ")})`);
-    inputs[feature as Feature] = number(weight, `${channel}.inputs.${feature}`);
+    inputs.push([feature as Feature, number(weight, `${channel}.inputs.${feature}`)]);
   }
   const tau = number(raw.tau, `${channel}.tau`, 0);
   if (tau < 0) fail(`${channel}.tau must be >= 0`);
@@ -219,7 +220,7 @@ export class Mixer {
     for (const channel of MIXED) {
       const recipe = this.config.channels[channel];
       let raw = recipe.bias;
-      for (const [feature, weight] of Object.entries(recipe.inputs) as [Feature, number][]) {
+      for (const [feature, weight] of recipe.inputs) {
         raw += weight * (features[feature] - recipe.center);
       }
       raw = clamp01(raw);
