@@ -1,5 +1,5 @@
 import type { Frame, FrameEvent, Stream } from "@beszel-river/shared";
-import { FILAMENTS } from "../sim/streams";
+import { FILAMENTS, MAX_STREAMS } from "../sim/streams";
 import { clamp } from "../util/math";
 import type { FrameSource } from "./source";
 
@@ -108,8 +108,9 @@ export class StreamSource implements FrameSource {
 }
 
 /**
- * Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation, and
- * `filaments` is kept only with the expected length.
+ * Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation,
+ * `filaments` is kept only with the expected length, and streams past `MAX_STREAMS` are left out: streams
+ * in a frame never drain, so no more than that many could ever be shown.
  */
 export function parseFrame(data: string): Frame | null {
   let raw: unknown;
@@ -121,19 +122,26 @@ export function parseFrame(data: string): Frame | null {
   if (!isObject(raw) || raw.v !== 1 || typeof raw.t !== "number" || !Array.isArray(raw.streams)) return null;
   const streams: Stream[] = [];
   for (const s of raw.streams as unknown[]) {
-    if (!isObject(s) || typeof s.id !== "string") continue;
-    const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
-    for (const channel of CHANNELS) {
-      const value = s[channel];
-      if (typeof value === "number" && Number.isFinite(value)) stream[channel] = clamp(value, 0, 1);
-    }
-    const filaments = s.filaments;
-    if (Array.isArray(filaments) && filaments.length === FILAMENTS && filaments.every((f) => typeof f === "number" && Number.isFinite(f))) {
-      stream.filaments = filaments.map((f: number) => clamp(f, 0, 1));
-    }
-    streams.push(stream);
+    if (streams.length === MAX_STREAMS) break;
+    const stream = parseStream(s);
+    if (stream) streams.push(stream);
   }
   return { v: 1, t: raw.t, streams };
+}
+
+/** One stream entry with its channels clamped, or null without a string `id`. */
+function parseStream(s: unknown): Stream | null {
+  if (!isObject(s) || typeof s.id !== "string") return null;
+  const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+  for (const channel of CHANNELS) {
+    const value = s[channel];
+    if (typeof value === "number" && Number.isFinite(value)) stream[channel] = clamp(value, 0, 1);
+  }
+  const filaments = s.filaments;
+  if (Array.isArray(filaments) && filaments.length === FILAMENTS && filaments.every((f) => typeof f === "number" && Number.isFinite(f))) {
+    stream.filaments = filaments.map((f: number) => clamp(f, 0, 1));
+  }
+  return stream;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

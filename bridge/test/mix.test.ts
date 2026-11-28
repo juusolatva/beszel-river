@@ -36,6 +36,11 @@ describe("parseMixConfig", () => {
     }
   });
 
+  it("lists each channel's inputs as feature and weight pairs", () => {
+    expect(config.channels.turbulence.inputs).toEqual([["net", 0.5], ["disk", 0.5]]);
+    expect(parseMixConfig(valid).channels.flow.inputs).toEqual([]);
+  });
+
   it("rejects unknown features, missing channels and bad numbers", () => {
     expect(() => parseMixConfig([valid])).toThrow(/expected an object/);
     expect(() => parseMixConfig({ ...valid, flow: { inputs: { hostname: 1 } } })).toThrow(/not a feature/);
