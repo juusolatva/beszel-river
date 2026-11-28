@@ -106,7 +106,7 @@ export interface Config {
   seed: number;
   /**
    * Simulates and draws particles on the GPU (transform feedback), falling back to the CPU when setup
-   * fails. `?gpu` enables; experimental, with a fixed particle limit until the GPU reports live counts.
+   * fails. `?gpu` enables; experimental.
    */
   gpu: boolean;
   /** Shows the debug panel. `?debug` enables. */

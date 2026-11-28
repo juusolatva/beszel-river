@@ -67,6 +67,26 @@ export class GpuFreeScan {
   get prefixTexture(): WebGLTexture { return this.textures[this.current]; }
 
   /**
+   * Queues a copy of the prefix at slot `count - 1` (the inactive slots among the first `count`) from
+   * the last `scan`, which must have covered at least `count` slots, into `buffer` (16 bytes), as a
+   * `PIXEL_PACK_BUFFER`. Nothing waits for it: fence it, and read the buffer once the fence signals.
+   */
+  copyTotal(count: number, buffer: WebGLBuffer): void {
+    if (!Number.isInteger(count) || count < 1 || count > this.capacity) throw new Error("Invalid GPU scan count");
+    const gl = this.gl;
+    const last = count - 1;
+    try {
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.framebuffers[this.current]);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, buffer);
+      // RGBA_INTEGER with UNSIGNED_INT is the read format WebGL2 guarantees for an unsigned integer target.
+      gl.readPixels(last % this.width, Math.floor(last / this.width), 1, 1, gl.RGBA_INTEGER, gl.UNSIGNED_INT, 0);
+    } finally {
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    }
+  }
+
+  /**
    * Prefix of the first `count` slots (default all): one flag pass followed by ceil(log2(count))
    * disjoint integer passes over the rows that hold them. Later slots keep stale prefixes; read none.
    */

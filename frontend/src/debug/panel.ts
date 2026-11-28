@@ -3,7 +3,7 @@ import { CHANNELS, type DemoSource, type DemoStream } from "../source/demo";
 
 export interface Stats {
   fps: number;
-  /** Live particles; null when the simulation does not report them (the GPU path). */
+  /** Live particles; null while the GPU path has no count yet (`GpuParticles.liveCount`). */
   particles: number | null;
   /** Live particle limit from `ParticleBudget`. */
   limit: number;

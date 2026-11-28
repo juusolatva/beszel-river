@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
-import { createGpuBackend, GpuStepClock, MIN_GPU_STEP } from "../src/gpu-backend";
+import { createGpuBackend, GpuBudgetLive, GpuStepClock, MIN_GPU_STEP } from "../src/gpu-backend";
 import { effectiveGpuStep } from "../src/sim/gpu-lifecycle";
 import { callsTo, createFakeGl } from "./fake-gl";
 
@@ -16,6 +16,7 @@ describe("GpuStepClock", () => {
     // 480 Hz: every other callback runs one step of two intervals.
     expect(clock.take(1 / 480)).toBe(0);
     expect(clock.take(1 / 480)).toBe(Math.fround(2 / 480));
+    expect(clock.interval).toBeCloseTo(2 / 480, 15);
     expect(clock.take(1 / 480)).toBe(0);
     expect(clock.take(1 / 480)).toBe(Math.fround(2 / 480));
     // A jittery callback just short of the floor waits for the next one.
@@ -32,6 +33,8 @@ describe("GpuStepClock", () => {
   it("clamps long pauses to maxDt and drops the rest", () => {
     const clock = new GpuStepClock();
     expect(clock.take(20)).toBe(Math.fround(LOOK.maxDt));
+    // The budget sees the pause itself, which it ignores, not the clamped step.
+    expect(clock.interval).toBe(20);
     expect(clock.take(1 / 60)).toBe(Math.fround(1 / 60));
   });
 
@@ -58,8 +61,12 @@ describe("GpuStepClock", () => {
 describe("createGpuBackend", () => {
   it("prepares the drawer and turns spawning on", () => {
     const { gl, calls } = createFakeGl();
-    const { particles, drawer, clock } = createGpuBackend(gl, 12, 42);
+    const { particles, drawer, clock, live } = createGpuBackend(gl, 12, 42);
     expect(clock.take(1 / 60)).toBe(Math.fround(1 / 60));
+    // No readbacks in steady state; the limit is the pool size, so live <= limit holds.
+    expect(particles.countingLive).toBe(false);
+    expect(live.live(12)).toBe(12);
+    expect(createGpuBackend(gl, 12, 42, true).particles.countingLive).toBe(true);
     expect(particles.spawningEnabled).toBe(true);
     expect(particles.capacity).toBe(12);
     expect(drawer.drawCapacity).toBe(12);
@@ -84,5 +91,57 @@ describe("createGpuBackend", () => {
   it("throws when the simulation itself cannot start", () => {
     const { gl } = createFakeGl({ overrides: { getParameter: () => 0 } });
     expect(() => createGpuBackend(gl, 12, 42)).toThrow("GPU motion unsupported");
+  });
+});
+
+describe("GpuBudgetLive", () => {
+  function stub() {
+    return { liveCount: null as number | null, countingLive: false, forgets: 0, forgetLiveCount() { this.forgets++; this.liveCount = null; } };
+  }
+
+  it("needs no count until the budget drops the limit", () => {
+    const particles = stub();
+    const live = new GpuBudgetLive(particles, false);
+    expect(particles.countingLive).toBe(false);
+    // Proven at most the limit: the limit itself stands in for the unread count.
+    expect(live.live(10000)).toBe(10000);
+    expect(live.live(11000)).toBe(11000);
+  });
+
+  it("counts after a drop until a fresh count is at or below the new limit, then stops", () => {
+    const particles = stub();
+    const live = new GpuBudgetLive(particles, false);
+    particles.liveCount = 9000; // a count from before the drop
+    live.dropped();
+    expect(particles.countingLive).toBe(true);
+    expect(particles.forgets).toBe(1);
+    expect(particles.liveCount).toBeNull();
+    // Unknown, then still above the new limit: no overload counts.
+    expect(live.live(8000)).toBe(Infinity);
+    particles.liveCount = 8400;
+    expect(live.live(8000)).toBe(Infinity);
+    expect(particles.countingLive).toBe(true);
+    // At or below it: proven, and readbacks stop.
+    particles.liveCount = 7990;
+    expect(live.live(8000)).toBe(7990);
+    expect(particles.countingLive).toBe(false);
+    // It stays proven without counts, also across a rise.
+    particles.liveCount = null;
+    expect(live.live(8000)).toBe(8000);
+    expect(live.live(8800)).toBe(8800);
+  });
+
+  it("keeps counting throughout for ?debug, forgetting old counts on a drop", () => {
+    const particles = stub();
+    const live = new GpuBudgetLive(particles, true);
+    expect(particles.countingLive).toBe(true);
+    particles.liveCount = 9500;
+    expect(live.live(10000)).toBe(9500);
+    live.dropped();
+    expect(particles.forgets).toBe(1);
+    expect(live.live(8000)).toBe(Infinity);
+    particles.liveCount = 7000;
+    expect(live.live(8000)).toBe(7000);
+    expect(particles.countingLive).toBe(true);
   });
 });

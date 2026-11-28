@@ -252,6 +252,7 @@ export function runGpuAllocationBrowserChecks(): { cases: number } {
         assert(birthsAtLimit >= 0, `Horizon never reached limit ${limit}: ${gpu.activeSlots}`);
         if (limit === 0) {
           assert(births === birthsAtLimit && live === 0, `Births or live particles after emptying: ${births - birthsAtLimit}, ${live}`);
+          assert(gpu.liveCount === 0, `Live count ${gpu.liveCount} after emptying`);
         } else {
           assert(births > birthsAtLimit, `No births at horizon ${limit}`);
           // After the 20 s phase every particle from the full pool has died.

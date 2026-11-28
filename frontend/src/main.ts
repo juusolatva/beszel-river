@@ -32,7 +32,8 @@ let gpu: GpuBackend | null = null;
 if (config.gpu) {
   try {
     const { createGpuBackend } = await import("./gpu-backend");
-    gpu = createGpuBackend(gl, config.particles, config.seed + 1);
+    // `?debug` reads live counts back throughout, for the panel; otherwise only after a budget drop.
+    gpu = createGpuBackend(gl, config.particles, config.seed + 1, config.debug);
   } catch (error) {
     console.warn("GPU simulation unavailable, using the CPU:", error);
   }
@@ -115,7 +116,7 @@ function frame(now: number): void {
   // The first callback may arrive partway through a display period; do not calibrate from it.
   const interval = last === undefined ? 0 : (now - last) / 1000;
   last = now;
-  if (gpu) gpuFrame(gpu, gpu.clock.take(interval));
+  if (gpu) gpuFrame(gpu, interval);
   else cpuFrame(particles!, interval);
   raf = requestAnimationFrame(frame);
 }
@@ -143,10 +144,12 @@ function cpuFrame(particles: ParticleSystem, interval: number): void {
 }
 
 /**
- * One GPU step of `dt` seconds (`GpuStepClock`: 0 skips the callback). The limit stays at the pool
- * size: `ParticleBudget` needs exact live counts, which the GPU does not report yet.
+ * One GPU step, once the callback intervals add up to one (`GpuStepClock`); callbacks in between do
+ * nothing. The budget sees each step's whole wall-clock interval, and the live count through
+ * `GpuBudgetLive`, which reads it back only after a drop.
  */
-function gpuFrame({ particles, drawer }: GpuBackend, dt: number): void {
+function gpuFrame({ particles, drawer, clock, live }: GpuBackend, interval: number): void {
+  const dt = clock.take(interval);
   if (dt <= 0) return;
   t += dt;
   const simStart = performance.now();
@@ -158,7 +161,16 @@ function gpuFrame({ particles, drawer }: GpuBackend, dt: number): void {
   // CPU time to submit the step, as the CPU path's figure is its simulation; neither includes rendering.
   stats.simMs = ease(stats.simMs, performance.now() - simStart, 0.5, dt);
   stats.fps = ease(stats.fps, 1 / dt, 0.5, dt);
-  renderer.renderGpu(drawer, dt, aspect, pixelRatio, particles.globalHue, 1);
+  stats.particles = particles.liveCount;
+  renderer.renderGpu(drawer, dt, aspect, pixelRatio, particles.globalHue, budget.intensityScale);
+  // Include rendering submission and any driver stalls; this does not measure GPU execution.
+  const workSeconds = (performance.now() - simStart) / 1000;
+  const before = budget.limit;
+  if (budget.update(clock.interval, live.live(budget.limit), workSeconds)) {
+    if (budget.limit < before) live.dropped();
+    particles.limit = budget.limit;
+    stats.limit = budget.limit;
+  }
 }
 
 // Rebuilding GL state after a context loss is not worth the code; a reload restores everything.
