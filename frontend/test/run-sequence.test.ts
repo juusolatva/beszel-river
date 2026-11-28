@@ -59,7 +59,7 @@ describe("run plan", () => {
     expect(CONFIG.warmupSeconds - DROP_SCHEDULE.decisions[1].time).toBeGreaterThan(LOOK.lifeRange[1]);
   });
 
-    it("runs only the CPU, once per repetition, when asked", () => {
+  it("runs only the CPU, once per repetition, when asked", () => {
     const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], cpuOnly: true });
     // 1 discovery + 6 workloads × 3 repetitions + 3 replays.
     expect(plan).toHaveLength(1 + 18 + 3);

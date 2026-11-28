@@ -361,7 +361,7 @@ describe("ParticleSystem", () => {
       expect(particles.drawCount).toBe(41);
     });
 
-        it("gives a slot taken by a new stream that stream's index", () => {
+    it("gives a slot taken by a new stream that stream's index", () => {
       const { set, particles, run } = setup(300, stream("a"), stream("b"));
       run(LOOK.turnoverSeconds);
       // Daily rotation: both IDs replaced; new streams claim slots once the old ones drain.
