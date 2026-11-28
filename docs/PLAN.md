@@ -534,6 +534,16 @@ Needing benchmarks before acceptance (X280 Chrome and Firefox, empty-pool and CP
 
 Not pursued: removing the spawn counter's wrap marker (2³² births per slot), a 48-byte state record (an ABI change for a step that takes 0.3–0.5 ms of GPU time on the X280), `R11F_G11F_B10F` trail targets (they change the look on both paths; blue keeps 5 mantissa bits, risking the faint-trail problems the RGBA8 fallback had; reconsider only if phone GPU time shows fill rate is the bottleneck), a GPU flow field (the phone record does not split the empty-pool cost between flow field, stream easing and GL calls; profile first), `texelFetch` in the trail shaders and uploading only used stream rows (negligible).
 
+#### External performance review — 2026-11-28
+
+An external review of the CPU and GPU paths, renderer, harness and bridge was checked finding by finding against the code and these records by four independent verifiers. Acted on:
+
+- [x] **Harness viewport tag** (1.4): the benchmark pages lacked `<meta name="viewport">`, so every phone run rendered at a desktop layout's size; fixed, and the phone figures are marked in the production proposal (#153).
+- [x] **CPU lowest free slot** (1.1): see "Lowest free slot" under Part 2 (#154).
+- [x] **Bridge baseline** (1.5): `Baseline` sorted a copy of up to 1,440 values on every reference read. Replaying 24 h of minute records for 32 hosts blocked the event loop for 8.9–9.5 s, and realtime samples, which read without adding, cost 13–15 ms a second. A `SortedWindow` (a ring for arrival order plus a sorted `Float64Array`, updated by binary search and `copyWithin`) gives the same values for finite rates (an overflowing rate, such as `1e999` in a record, now counts as 0 instead of making the reference infinite): 20–22 ms for the replay and about 0.005 ms a second for realtime reads (`tsx` timing on the development laptop). A property test compares it with sorting a copy.
+
+Checked and left: the flow field's per-aspect cost is real but explains only an estimated 0.1–0.3 ms of the phone's 3.6 ms gap between viewports (profile before attributing it); the scan's GL calls (the radix-16 scan stays deferred); the live-count readback inside `workSeconds` (about 7 stalled frames per drop, no feedback loop); stream easing (at most about 0.1 ms with 32 streams); shader micro-optimizations, 240 Hz step merging, resize coalescing, constant uniforms, black-trail passes and hidden-tab timers (microseconds, rare displays, documented choices or development tools only).
+
 #### Production proposal checklist
 
 What the separate production proposal must settle, beyond the decision item above:
