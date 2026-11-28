@@ -123,19 +123,25 @@ export function parseFrame(data: string): Frame | null {
   const streams: Stream[] = [];
   for (const s of raw.streams as unknown[]) {
     if (streams.length === MAX_STREAMS) break;
-    if (!isObject(s) || typeof s.id !== "string") continue;
-    const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
-    for (const channel of CHANNELS) {
-      const value = s[channel];
-      if (typeof value === "number" && Number.isFinite(value)) stream[channel] = clamp(value, 0, 1);
-    }
-    const filaments = s.filaments;
-    if (Array.isArray(filaments) && filaments.length === FILAMENTS && filaments.every((f) => typeof f === "number" && Number.isFinite(f))) {
-      stream.filaments = filaments.map((f: number) => clamp(f, 0, 1));
-    }
-    streams.push(stream);
+    const stream = parseStream(s);
+    if (stream) streams.push(stream);
   }
   return { v: 1, t: raw.t, streams };
+}
+
+/** One stream entry with its channels clamped, or null without a string `id`. */
+function parseStream(s: unknown): Stream | null {
+  if (!isObject(s) || typeof s.id !== "string") return null;
+  const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
+  for (const channel of CHANNELS) {
+    const value = s[channel];
+    if (typeof value === "number" && Number.isFinite(value)) stream[channel] = clamp(value, 0, 1);
+  }
+  const filaments = s.filaments;
+  if (Array.isArray(filaments) && filaments.length === FILAMENTS && filaments.every((f) => typeof f === "number" && Number.isFinite(f))) {
+    stream.filaments = filaments.map((f: number) => clamp(f, 0, 1));
+  }
+  return stream;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
