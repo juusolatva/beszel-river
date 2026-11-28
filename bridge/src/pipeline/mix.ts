@@ -14,7 +14,7 @@ export interface Recipe {
   bias: number;
   center: number;
   tau: number;
-  /** Feature and weight pairs, listed once at parse time so mixing allocates nothing per sample. */
+  /** Feature and weight pairs, listed once at parse time so mixing builds no arrays per sample. */
   inputs: readonly (readonly [Feature, number])[];
 }
 
