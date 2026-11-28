@@ -87,31 +87,93 @@ export function coreProfile(cores: readonly number[] | null): number[] | null {
 
 /** Byte rates over the last 24 h of samples, to scale each host against its own normal traffic. */
 export class Baseline {
-  private readonly net: number[] = [];
-  private readonly disk: number[] = [];
+  private readonly net: SortedWindow;
+  private readonly disk: SortedWindow;
 
-  constructor(private readonly size = 24 * 60) {}
+  constructor(size = 24 * 60) {
+    this.net = new SortedWindow(size);
+    this.disk = new SortedWindow(size);
+  }
 
   add(sample: Sample): void {
-    push(this.net, sample.tx + sample.rx, this.size);
-    push(this.disk, sample.diskRead + sample.diskWrite, this.size);
+    this.net.push(sample.tx + sample.rx);
+    this.disk.push(sample.diskRead + sample.diskWrite);
   }
 
   /** 95th percentile, floored so an idle host does not turn every trickle into full scale. */
   netReference(): number {
-    return Math.max(percentile(this.net, 0.95), 64 * 1024);
+    return Math.max(this.net.percentile(0.95), 64 * 1024);
   }
 
   diskReference(): number {
-    return Math.max(percentile(this.disk, 0.95), 256 * 1024);
+    return Math.max(this.disk.percentile(0.95), 256 * 1024);
   }
 }
 
-function push(values: number[], value: number, size: number): void {
-  values.push(value);
-  if (values.length > size) values.shift();
+/**
+ * The last `size` values, kept in arrival order (to drop the oldest) and in sorted order, so a
+ * percentile is one read. Sorting a copy on every read cost about 9 s of blocked event loop to replay
+ * 24 h of minute records for 32 hosts, and 13–15 ms a second for realtime samples, which read without
+ * adding. A push is two binary searches and two moves of at most `size` values.
+ */
+export class SortedWindow {
+  private readonly ring: Float64Array;
+  private readonly sorted: Float64Array;
+  private head = 0;
+  private count = 0;
+
+  constructor(readonly size: number) {
+    if (!Number.isInteger(size) || size <= 0) throw new Error("Window size must be a positive integer");
+    this.ring = new Float64Array(size);
+    this.sorted = new Float64Array(size);
+  }
+
+  get length(): number {
+    return this.count;
+  }
+
+  /**
+   * Adds `value`, dropping the oldest once full. Non-finite values count as 0, which keeps the sorted
+   * order valid: a hub record can still produce one (`1e999` parses as Infinity, and two huge rates can
+   * sum to it), where sorting a copy kept Infinity and made the reference infinite.
+   */
+  push(value: number): void {
+    const v = Number.isFinite(value) ? value : 0;
+    const { ring, sorted } = this;
+    if (this.count === this.size) {
+      // Remove the oldest value's copy from the sorted run; any equal copy will do.
+      const old = ring[this.head];
+      const at = lowerBound(sorted, this.count, old);
+      sorted.copyWithin(at, at + 1, this.count);
+      this.count--;
+    }
+    ring[this.head] = v;
+    this.head = (this.head + 1) % this.size;
+    const at = lowerBound(sorted, this.count, v);
+    sorted.copyWithin(at + 1, at, this.count);
+    sorted[at] = v;
+    this.count++;
+  }
+
+  /** The value at fraction `p` of the sorted window, as `percentile` picks it; 0 when empty. */
+  percentile(p: number): number {
+    if (this.count === 0) return 0;
+    return this.sorted[Math.min(this.count - 1, Math.floor(p * this.count))];
+  }
 }
 
+/** First index in `sorted[0, length)` whose value is not below `value`. */
+function lowerBound(sorted: Float64Array, length: number, value: number): number {
+  let low = 0, high = length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (sorted[mid] < value) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/** The value at fraction `p` of `values` sorted, by sorting a copy; the reference `SortedWindow` matches. */
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);

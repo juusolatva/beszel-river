@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Baseline, clamp01, computeFeatures, coreProfile, FILAMENTS, logRatio, percentile, sampleFromInfo, sampleFromStats } from "../src/pipeline/features.js";
+import { Baseline, clamp01, computeFeatures, coreProfile, FILAMENTS, logRatio, percentile, sampleFromInfo, sampleFromStats, SortedWindow } from "../src/pipeline/features.js";
 
 const MB = 1024 * 1024;
 
@@ -98,6 +98,55 @@ describe("Baseline", () => {
 
   it("percentile handles empty input", () => {
     expect(percentile([], 0.95)).toBe(0);
+  });
+});
+
+describe("SortedWindow", () => {
+  /** Deterministic values with many duplicates, so equal copies are removed and inserted too. */
+  function* values(seed: number, n: number): Generator<number> {
+    let x = seed;
+    for (let i = 0; i < n; i++) {
+      x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+      yield (x % 50) * 1024 + (i % 7 === 0 ? 0.5 : 0);
+    }
+  }
+
+  it("matches sorting a copy of the last values, through wraparound and duplicates", () => {
+    // Every push for small windows; the full 24 h window at sampled pushes, since the reference sorts.
+    for (const [size, every] of [[1, 1], [2, 1], [7, 1], [64, 1], [1440, 97]]) {
+      const window = new SortedWindow(size);
+      const recent: number[] = [];
+      let n = 0;
+      for (const v of values(size, size * 3 + 5)) {
+        window.push(v);
+        recent.push(v);
+        if (recent.length > size) recent.shift();
+        if (++n % every !== 0) continue;
+        expect(window.length).toBe(recent.length);
+        for (const p of [0, 0.5, 0.95, 1]) expect(window.percentile(p)).toBe(percentile(recent, p));
+      }
+    }
+  });
+
+  it("is empty at first and counts non-finite values as 0", () => {
+    const window = new SortedWindow(3);
+    expect(window.percentile(0.95)).toBe(0);
+    window.push(Number.NaN);
+    window.push(Infinity);
+    window.push(5);
+    expect([window.percentile(0), window.percentile(0.5), window.percentile(1)]).toEqual([0, 0, 5]);
+  });
+
+  it("keeps a baseline finite when a record's rates overflow", () => {
+    const b = new Baseline(4);
+    // 1e999 parses as Infinity; huge finite rates also sum to it.
+    b.add(sampleFromStats(JSON.parse('{"b": [1e999, 0]}')));
+    b.add(sampleFromStats({ b: [1.5e308, 1.5e308] }));
+    expect(b.netReference()).toBe(64 * 1024);
+  });
+
+    it("rejects sizes that are not positive integers", () => {
+    for (const size of [0, -1, 1.5, Number.NaN]) expect(() => new SortedWindow(size)).toThrow("positive integer");
   });
 });
 
