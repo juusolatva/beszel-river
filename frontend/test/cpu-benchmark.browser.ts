@@ -22,11 +22,19 @@ function analyticCenter(this: StreamSlot, y: number): number {
 
 function skipRebuild(): void {}
 
+/** Returns slot `i` to the pool's free set, as `ParticleSystem.step` does inline. */
+function release(p: Pool, i: number): void {
+  const w = i >>> 5;
+  p.freeBits[w] |= 1 << (i & 31);
+  if (w < p.lowWord) p.lowWord = w;
+  p.live--;
+}
+
 /** The pool's private state, for the reference step below. */
 interface Pool {
   capacity: number; instances: Float32Array; x: Float32Array; y: Float32Array; vx: Float32Array; vy: Float32Array;
   age: Float32Array; life: Float32Array; hueJitter: Float32Array; size: Float32Array; speedJitter: Float32Array;
-  offset: Float32Array; slot: Uint8Array; active: Uint8Array; releaseSlot(i: number): void; globalHue: number; intensityScale: number;
+  offset: Float32Array; slot: Uint8Array; active: Uint8Array; freeBits: Uint32Array; lowWord: number; live: number; globalHue: number; intensityScale: number;
   drawCount: number; count: number;
 }
 
@@ -52,7 +60,7 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
     age[i] += dt;
     if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
       p.active[i] = 0;
-      p.releaseSlot(i);
+      release(p, i);
       s.particles--;
       instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;
@@ -113,7 +121,7 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
     age[i] += dt;
     if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
       p.active[i] = 0;
-      p.releaseSlot(i);
+      release(p, i);
       s.particles--;
       instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;

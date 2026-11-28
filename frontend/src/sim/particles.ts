@@ -129,14 +129,6 @@ export class ParticleSystem {
     return w * 32 + bit;
   }
 
-  /** Returns slot `i` to the free set; its liveness flag is the caller's. */
-  private releaseSlot(i: number): void {
-    const w = i >>> 5;
-    this.freeBits[w] |= 1 << (i & 31);
-    if (w < this.lowWord) this.lowWord = w;
-    this.live--;
-  }
-
   /** Starts a particle in free pool slot `i` for stream slot `slotIndex` and writes its spawn-time floats. */
   private birth(i: number, slotIndex: number, s: StreamSlot): void {
     const { random } = this;
@@ -182,7 +174,8 @@ export class ParticleSystem {
     const centers = streams.centers;
     this.globalHue = fract(this.globalHue + LOOK.hueRotate * dt);
     const end = this.drawCount;
-    let highest = -1;
+    const freeBits = this.freeBits;
+    let highest = -1, lowWord = this.lowWord, died = 0;
 
     for (let i = 0; i < end; i++) {
       if (!this.active[i]) continue;
@@ -191,7 +184,12 @@ export class ParticleSystem {
       age[i] += dt;
       if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
         this.active[i] = 0;
-        this.releaseSlot(i);
+        // Back to the free set, inline: with a method call here Firefox ran dense pools about 5 % slower
+        // (2026-11-28 X280 tie-break), as Task 3 found for the centre lookup.
+        const w = i >>> 5;
+        freeBits[w] |= 1 << (i & 31);
+        if (w < lowWord) lowWord = w;
+        died++;
         s.particles--;
         instances[i * INSTANCE_FLOATS + 5] = 0;
         continue;
@@ -241,6 +239,8 @@ export class ParticleSystem {
       instances[o + 4] = fract(this.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + this.hueJitter[i]);
       instances[o + 5] = LOOK.intensity * this.intensityScale * fade * s.brightness;
     }
+    this.lowWord = lowWord;
+    this.live -= died;
     // Slots above the highest survivor are all dead now: stop drawing them.
     this.drawCount = highest + 1;
     return this.count;
