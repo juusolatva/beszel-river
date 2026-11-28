@@ -1,0 +1,707 @@
+{
+ "note": "Single-run sequence exports from test/gpu-sequence.html, unchanged, collected in run order.",
+ "runs": [
+  {
+   "file": "x280-ac-firefox-tiebreak-1-old.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 1 (old particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-old",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "7b423a64-2235-4369-b7f9-be857d007fce",
+      "startedAt": "2026-11-28T03:26:50.846Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 1 (old particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 4.439999999987776,
+        "p95": 6.4799999999959255,
+        "p99": 6.760000000002037
+       },
+       "simulationMs": {
+        "median": 3.279999999998836,
+        "p95": 4.8399999999965075,
+        "p99": 5.099999999998545
+       },
+       "submissionMs": {
+        "median": 1.0800000000017462,
+        "p95": 1.5599999999976717,
+        "p99": 1.6600000000034925
+       },
+       "intervalMs": {
+        "median": 16.31999999999971,
+        "p95": 17.200000000004366,
+        "p99": 17.24000000000524
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959776,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029993,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9953,
+        "max": 9996,
+        "simulationMean": 9980.991285726359,
+        "wallMean": 9980.991285727583
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "file": "x280-ac-firefox-tiebreak-2-new.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 2 (new particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-new",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "918c6905-a26c-4b24-a638-ac1abe2714e9",
+      "startedAt": "2026-11-28T03:29:36.753Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 2 (new particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 4.620000000002619,
+        "p95": 7.1600000000034925,
+        "p99": 7.580000000001746
+       },
+       "simulationMs": {
+        "median": 3.540000000000873,
+        "p95": 5.5200000000040745,
+        "p99": 5.8399999999965075
+       },
+       "submissionMs": {
+        "median": 1,
+        "p95": 1.5200000000040745,
+        "p99": 1.7000000000043656
+       },
+       "intervalMs": {
+        "median": 16.339999999996508,
+        "p95": 17.200000000004366,
+        "p99": 17.25999999999476
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959776,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029993,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9951,
+        "max": 9995,
+        "simulationMean": 9980.969395525542,
+        "wallMean": 9980.96939552697
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "file": "x280-ac-firefox-tiebreak-3-old.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 3 (old particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-old",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "fb9437f3-6589-45c0-af2d-b340d8ea556d",
+      "startedAt": "2026-11-28T03:32:22.600Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 3 (old particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 4.5,
+        "p95": 6.539999999993597,
+        "p99": 6.879999999990105
+       },
+       "simulationMs": {
+        "median": 3.3399999999965075,
+        "p95": 4.879999999997381,
+        "p99": 5.1599999999962165
+       },
+       "submissionMs": {
+        "median": 1.1000000000058208,
+        "p95": 1.5800000000017462,
+        "p99": 1.7200000000011642
+       },
+       "intervalMs": {
+        "median": 16.320000000006985,
+        "p95": 17.200000000004366,
+        "p99": 17.24000000000524
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959808,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029994,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9951,
+        "max": 9995,
+        "simulationMean": 9980.99511341435,
+        "wallMean": 9980.995113414616
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "file": "x280-ac-firefox-tiebreak-4-new.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 4 (new particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-new",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "0ea0a4df-4d1c-4bec-bf1e-51370255a854",
+      "startedAt": "2026-11-28T03:35:08.486Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 4 (new particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 4.6599999999962165,
+        "p95": 7.180000000000291,
+        "p99": 7.519999999996799
+       },
+       "simulationMs": {
+        "median": 3.5599999999976717,
+        "p95": 5.559999999997672,
+        "p99": 5.819999999999709
+       },
+       "submissionMs": {
+        "median": 1.0200000000040745,
+        "p95": 1.5400000000008731,
+        "p99": 1.679999999993015
+       },
+       "intervalMs": {
+        "median": 16.320000000006985,
+        "p95": 17.200000000004366,
+        "p99": 17.24000000000524
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959584,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029987,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9949,
+        "max": 9995,
+        "simulationMean": 9980.961145257414,
+        "wallMean": 9980.961145258865
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "file": "x280-ac-firefox-tiebreak-5-old.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 5 (old particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-old",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "01ec5aac-7d10-4d0f-b51f-6a6b21d05243",
+      "startedAt": "2026-11-28T03:37:54.275Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 5 (old particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 4.30000000000291,
+        "p95": 6.440000000002328,
+        "p99": 6.760000000002037
+       },
+       "simulationMs": {
+        "median": 3.1600000000034925,
+        "p95": 4.8399999999965075,
+        "p99": 5.080000000001746
+       },
+       "submissionMs": {
+        "median": 1.0599999999976717,
+        "p95": 1.5399999999935972,
+        "p99": 1.6600000000034925
+       },
+       "intervalMs": {
+        "median": 16.320000000006985,
+        "p95": 17.200000000004366,
+        "p99": 17.24000000000524
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959808,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029994,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9951,
+        "max": 9995,
+        "simulationMean": 9980.93834085749,
+        "wallMean": 9980.938340858565
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "file": "x280-ac-firefox-tiebreak-6-new.json",
+   "export": {
+    "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 6 (new particles.ts)",
+    "refreshHz": 60,
+    "commit": "8c768ef-new",
+    "config": {
+     "viewports": [
+      "full"
+     ],
+     "workloads": [
+      "dense-10000"
+     ],
+     "repetitions": 1,
+     "scheduleReplays": false,
+     "cpuOnly": true,
+     "warmupSeconds": 30,
+     "measureSeconds": 60
+    },
+    "schedules": {},
+    "results": [
+     {
+      "spec": {
+       "index": 0,
+       "viewport": "full",
+       "kind": "fixed",
+       "workload": "dense-10000",
+       "backend": "cpu",
+       "repetition": 1,
+       "scenario": "dense",
+       "limit": 10000
+      },
+      "ok": true,
+      "runId": "64ed1f55-9bee-4bc3-8311-79fee3489f9e",
+      "startedAt": "2026-11-28T03:40:40.134Z",
+      "battery": null,
+      "memory": null,
+      "metadata": {
+       "cpuReference": "a90be9077096e35749f3b3409193db31ca51635a",
+       "effectiveStep": "Float32(clamp(interval, 0, LOOK.maxDt))",
+       "backend": "cpu",
+       "scenario": "dense",
+       "seed": 42,
+       "capacity": 10000,
+       "budget": "fixed limit",
+       "limit": 10000,
+       "gpuTiming": "unavailable: EXT_disjoint_timer_query_webgl2 not supported",
+       "motion": 1,
+       "refreshHz": 60,
+       "conditions": "X280, on AC, powersave governor with balance_performance EPP, Firefox 161 with privacy.reduceTimerPrecision off, kiosk mode, idle PC, lowest-free-slot tie-break 6 (new particles.ts)",
+       "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:161.0) Gecko/20100101 Firefox/161.0",
+       "renderer": "Intel(R) HD Graphics 400, or similar",
+       "targetFormat": "RGBA16F",
+       "width": 1920,
+       "height": 1080,
+       "pixelRatio": 1.2,
+       "warmupSeconds": 30,
+       "measureSeconds": 60
+      },
+      "timing": {
+       "callbacks": 3603,
+       "callbackMs": {
+        "median": 6.1600000000034925,
+        "p95": 7.599999999991269,
+        "p99": 10.139999999999418
+       },
+       "simulationMs": {
+        "median": 4.7000000000116415,
+        "p95": 5.879999999997381,
+        "p99": 8.30000000000291
+       },
+       "submissionMs": {
+        "median": 1.3000000000029104,
+        "p95": 1.6999999999970896,
+        "p99": 1.860000000000582
+       },
+       "intervalMs": {
+        "median": 16.320000000006985,
+        "p95": 17.219999999993888,
+        "p99": 17.25999999999476
+       },
+       "missedPeriods": 0,
+       "uploadedBytes": 1152959776,
+       "textureUploadBytes": 0,
+       "drawCalls": 10809,
+       "summedParticleDrawCapacity": 36029993,
+       "simulatedSlotsPerPositiveStep": "drawCount (highest live slot + 1)",
+       "drawCapacity": "drawCount (highest live slot + 1)",
+       "gpuTime": "unavailable: EXT_disjoint_timer_query_webgl2 not supported"
+      },
+      "occupancy": {
+       "cpu": {
+        "min": 9952,
+        "max": 9995,
+        "simulationMean": 9980.983957186558,
+        "wallMean": 9980.983957186994
+       },
+       "gpu": {
+        "unavailable": "crossValidate: false"
+       }
+      },
+      "parity": {
+       "unavailable": "crossValidate: false"
+      },
+      "finalStateMatches": true,
+      "decisions": [
+       {
+        "callback": 0,
+        "time": 0,
+        "limit": 10000,
+        "intensity": 1
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
