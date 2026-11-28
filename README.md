@@ -232,7 +232,7 @@ npm run dev:frontend
 adb reverse tcp:5173 tcp:5173
 ```
 
-then open `http://localhost:5173/test/gpu-sequence.html` on the phone.
+then open `http://localhost:5173/test/gpu-sequence.html` on the phone. The harness pages set `<meta name="viewport">` like the page, so a phone renders them at production size; before 2026-11-28 they did not, and phone runs used a 980-pixel-wide desktop layout (1470×2942 framebuffer on the test phone).
 
 A timed run fails rather than survive a hidden tab, so page lifecycle events have their own untimed real-shader check on the same page. It replays synthetic traces through both backends with the page's time clamping, at normal and reduced motion (0.5), and takes a few minutes in software WebGL:
 
