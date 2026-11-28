@@ -155,10 +155,10 @@ export class SortedWindow {
     this.count++;
   }
 
-  /** The value at fraction `p` of the sorted window, as `percentile` picks it; 0 when empty. */
+  /** The value at fraction `p` (clamped to 0..1) of the sorted window, as `percentile` picks it; 0 when empty. */
   percentile(p: number): number {
     if (this.count === 0) return 0;
-    return this.sorted[Math.min(this.count - 1, Math.floor(p * this.count))];
+    return this.sorted[Math.min(this.count - 1, Math.floor(clamp01(p) * this.count))];
   }
 }
 
@@ -173,11 +173,11 @@ function lowerBound(sorted: Float64Array, length: number, value: number): number
   return low;
 }
 
-/** The value at fraction `p` of `values` sorted, by sorting a copy; the reference `SortedWindow` matches. */
+/** The value at fraction `p` (clamped to 0..1) of `values` sorted, by sorting a copy; the reference `SortedWindow` matches. */
 export function percentile(values: readonly number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+  return sorted[Math.min(sorted.length - 1, Math.floor(clamp01(p) * sorted.length))];
 }
 
 export function clamp01(value: number): number {

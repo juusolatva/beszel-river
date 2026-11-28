@@ -122,7 +122,7 @@ describe("SortedWindow", () => {
         recent.push(v);
         if (recent.length > size) recent.shift();
         if (++n % every !== 0) continue;
-        expect(window.length).toBe(recent.length);
+        expect(window).toHaveLength(recent.length);
         for (const p of [0, 0.5, 0.95, 1]) expect(window.percentile(p)).toBe(percentile(recent, p));
       }
     }
@@ -143,6 +143,13 @@ describe("SortedWindow", () => {
     b.add(sampleFromStats(JSON.parse('{"b": [1e999, 0]}')));
     b.add(sampleFromStats({ b: [1.5e308, 1.5e308] }));
     expect(b.netReference()).toBe(64 * 1024);
+  });
+
+    it("clamps fractions outside 0..1 and NaN instead of reading past the window", () => {
+    const window = new SortedWindow(4);
+    for (const v of [3, 1, 4, 2]) window.push(v);
+    expect([window.percentile(-1), window.percentile(Number.NaN), window.percentile(2)]).toEqual([1, 1, 4]);
+    expect([percentile([3, 1, 4, 2], -1), percentile([3, 1, 4, 2], Number.NaN), percentile([3, 1, 4, 2], 2)]).toEqual([1, 1, 4]);
   });
 
     it("rejects sizes that are not positive integers", () => {
