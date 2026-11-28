@@ -220,6 +220,8 @@ export function runGpuAllocationBrowserChecks(): { cases: number } {
     for (const s of streams.slots) { s.half = 0.01; s.center = 0.75; s.rebuildCenters(); }
     const field = new FlowField(() => 0.5); field.update(0, 1.5);
     gpu.spawningEnabled = true;
+    // No readback arrives within this synchronous loop, but the empty horizon's 0 needs counting on.
+    gpu.countingLive = true;
     const words = new Uint32Array(capacity * 16);
     let live = 0, births = 0;
     // Live slots in the current buffer and births so far: every birth raises its slot's spawn counter.
