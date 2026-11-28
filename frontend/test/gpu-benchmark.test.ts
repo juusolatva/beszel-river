@@ -314,7 +314,32 @@ describe("budget schedules", () => {
     expect(result.decisions).toEqual([{ callback: 0, time: 0, limit: 10000, intensity: 1 }]);
   });
 
-  it("saves the effective decisions of a fixed-limit run", async () => {
+  it("waits for the settle time in simulated seconds when slow callbacks fall behind wall time", async () => {
+    const { state } = stubPage();
+    // 300 ms callbacks advance the simulation 0.1 s each (LOOK.maxDt): 1.5 simulated s take 4.5 wall s.
+    const run = runGpuBenchmark({ limit: 1000, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0.5, measureSeconds: 0.6, settleSeconds: 1.5, crossValidate: false });
+    drive(state, 300, 7000);
+    const result = await run;
+    const trace = result.trace;
+    const first = trace.measured.indexOf(1);
+    expect(first).toBeGreaterThan(0);
+    expect(startTime(trace, first)).toBeGreaterThanOrEqual(1.5);
+    // Not one simulated second early: the callback before it had not settled yet.
+    expect(startTime(trace, first - 1)).toBeLessThan(1.5);
+    expect(result.metadata.settleSeconds).toBe(1.5);
+    // The window still lasts measureSeconds of wall time from its own start.
+    expect(result.timing.callbacks).toBe(2);
+  });
+
+  it("fails a run whose simulation never reaches the settle time", async () => {
+    const { state } = stubPage();
+    const run = runGpuBenchmark({ limit: 1000, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 1, settleSeconds: 1e6, crossValidate: false });
+    // 5 s callbacks each simulate 0.1 s, so the 300 s timeout passes in about 60 callbacks.
+    drive(state, 5000, 310000);
+    await expect(run).rejects.toThrow(/settle: run invalid/);
+  });
+
+    it("saves the effective decisions of a fixed-limit run", async () => {
     const { state } = stubPage();
     const run = runGpuBenchmark({ limit: 8000, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 0.05 });
     drive(state, 20, 60);

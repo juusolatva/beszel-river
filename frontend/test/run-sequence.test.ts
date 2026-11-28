@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { LOOK } from "../src/config";
 import { REPLAY_CAPACITY, ReplayTrace } from "./fixtures/gpu-replay";
-import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, REPLAY_LIMITS, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
+import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, DROP_SCHEDULE, DROP_SETTLE_SECONDS, estimateMinutes, REPLAY_LIMITS, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
   type FailedRun, type RunSpec, type SequenceConfig } from "./fixtures/run-sequence";
 
 const CONFIG: SequenceConfig = { viewports: ["960x640", "full"], workloads: [...DEFAULT_WORKLOADS], repetitions: 3, scheduleReplays: true, warmupSeconds: 30, measureSeconds: 60 };
@@ -47,6 +48,15 @@ describe("run plan", () => {
     expect(plan.find((spec) => spec.workload === "dense-2500")).toEqual(expect.objectContaining({ kind: "fixed", scenario: "dense", limit: 2500 }));
     // Every workload's limit is one the benchmark accepts.
     expect(buildRunPlan({ ...CONFIG, workloads: [...WORKLOADS] }).every((spec) => REPLAY_LIMITS.includes(spec.limit))).toBe(true);
+  });
+
+  it("offers drop-2500 as an opt-in schedule replay from the full pool to 2,500", () => {
+    expect(DEFAULT_WORKLOADS).not.toContain("drop-2500");
+    const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], workloads: ["drop-2500"], repetitions: 2, scheduleReplays: false, cpuOnly: true });
+    expect(plan.map(({ kind, workload, backend, limit }) => [kind, workload, backend, limit])).toEqual([["drop", "drop-2500", "cpu", 10000], ["drop", "drop-2500", "cpu", 10000]]);
+    // The drop lands 15 s in; measuring waits a drain deadline (longest life plus a step) beyond it.
+    expect(DROP_SCHEDULE.decisions).toEqual([{ time: 0, limit: 10000, intensity: 1 }, { time: 15, limit: 2500, intensity: 2 }]);
+    expect(DROP_SETTLE_SECONDS - DROP_SCHEDULE.decisions[1].time).toBeGreaterThan(LOOK.lifeRange[1]);
   });
 
   it("runs only the CPU, once per repetition, when asked", () => {

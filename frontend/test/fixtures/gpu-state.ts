@@ -4,7 +4,7 @@ import { ParticleSystem } from "../../src/sim/particles";
 import type { StreamSet } from "../../src/sim/streams";
 
 const fields = ["x", "y", "vx", "vy", "age", "life", "hueJitter", "size", "speedJitter", "offset"] as const;
-type CpuStorage = Record<typeof fields[number], Float32Array> & { slot: Uint8Array; active: Uint8Array; freeTop: number };
+type CpuStorage = Record<typeof fields[number], Float32Array> & { slot: Uint8Array; active: Uint8Array };
 
 /** Test-only upload; readbacks and initial-state injection never enter production animation. */
 export function preloadGpuState(gl: WebGL2RenderingContext, particles: GpuParticles, state: ArrayBuffer): void {
@@ -21,14 +21,13 @@ export function preloadCpuState(state: ArrayBuffer, streams: StreamSet): Particl
   const storage = cpu as unknown as CpuStorage;
   const floats = new Float32Array(state);
   const words = new Uint32Array(state);
-  let active = 0;
   for (let i = 0; i < capacity; i++) {
     for (let j = 0; j < fields.length; j++) storage[fields[j]][i] = floats[i * 16 + j];
     storage.slot[i] = words[i * 16 + 12];
     storage.active[i] = words[i * 16 + 14];
-    if (storage.active[i]) { active++; streams.slots[storage.slot[i]].particles++; }
+    if (storage.active[i]) streams.slots[storage.slot[i]].particles++;
   }
-  storage.freeTop = capacity - active;
+  // Rebuilds the free slots and live count from the flags as well.
   cpu.resync();
   return cpu;
 }

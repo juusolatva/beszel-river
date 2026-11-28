@@ -25,7 +25,7 @@ export function runCpuOccupancy(scenario: OccupancyScenario, seed: number, pcg: 
   const frames = occupancyFrames(scenario);
   let particles: ParticleSystem, streams: StreamSet, spawn: (dt: number) => void;
   if (pcg) {
-    const control = cpuControl(capacity, seed, true, true);
+    const control = cpuControl(capacity, seed, true);
     ({ particles, streams } = control);
     spawn = (step) => control.spawn(step);
   } else {

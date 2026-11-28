@@ -19,12 +19,15 @@ export async function runGpuOccupancyInvestigation() {
     for (const filament of [false, true]) {
       const gpu = new GpuParticles(gl, capacity, seed); gpu.spawningEnabled = true;
       const streams = new StreamSet(1, gpu.lifecycle.canRelease);
+      // The 2026-11-14 investigation compared the CPU's former stack of freed slots ("reference",
+      // "pcgOnly") with lowest-first order ("ascendingOnly", "matched"). Since 2026-11-28 the CPU takes
+      // the lowest free slot itself, so those pairs now coincide; the recorded results used the stack.
       const controls = {
-        reference: cpuControl(capacity, 42, false, false),
-        differentSeed: cpuControl(capacity, 43, false, false),
-        ascendingOnly: cpuControl(capacity, 42, false, true),
-        pcgOnly: cpuControl(capacity, 42, true, false),
-        matched: cpuControl(capacity, 42, true, true),
+        reference: cpuControl(capacity, 42, false),
+        differentSeed: cpuControl(capacity, 43, false),
+        ascendingOnly: cpuControl(capacity, 42, false),
+        pcgOnly: cpuControl(capacity, 42, true),
+        matched: cpuControl(capacity, 42, true),
       };
       const names = Object.keys(controls) as (keyof typeof controls)[];
       const field = new FlowField(mulberry32(seed));
