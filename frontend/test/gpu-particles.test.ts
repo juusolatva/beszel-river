@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LOOK } from "../src/config";
 import { GPU_DRAIN_SECONDS } from "../src/sim/gpu-lifecycle";
-import { GpuParticles } from "../src/sim/gpu-particles";
+import { GPU_COUNT_EVERY, GpuParticles } from "../src/sim/gpu-particles";
 import { FlowField } from "../src/sim/noise";
 import { MAX_STREAMS, StreamSet } from "../src/sim/streams";
 import { callsTo, createFakeGl, type Call } from "./fake-gl";
@@ -74,91 +74,253 @@ describe("GPU motion orchestration", () => {
     gpu.dispose();
   });
 
-  it("sets samplers, sizes and LOOK uniforms once at setup and only per-step values in a step", () => {
-    const { gl, calls } = createFakeGl();
-    const gpu = new GpuParticles(gl, 33, 42);
-    const constants = ["u_flow", "u_stream", "u_command", "u_prefix", "u_width", "u_capacity", "u_seed",
-      "u_birth", "u_lifeSize", "u_filament", "u_span", "u_cell", "u_braid"];
-    for (const name of constants) expect(uniformCalls(calls, name), name).toHaveLength(1);
-    expect(uniformCalls(calls, "u_width")).toEqual([[33]]);
-    expect(uniformCalls(calls, "u_capacity")).toEqual([[33]]);
-    expect(uniformCalls(calls, "u_seed")).toEqual([[42]]);
-    expect(uniformCalls(calls, "u_prefix")).toEqual([[3]]);
-    const { streams, field } = inputs();
-    expect(uniformCalls(calls, "u_cell")).toEqual([[field.gridCell]]);
-    expect(uniformCalls(calls, "u_braid")).toEqual([[LOOK.braid, LOOK.braidWaves]]);
-    const start = calls.length;
-    gpu.step(1 / 60, streams, field, 1);
-    gpu.step(1 / 60, streams, field, 1);
-    for (const name of constants) expect(uniformCalls(calls, name, start), name).toHaveLength(0);
-    for (const name of ["u_limit", "u_enabled", "u_dt", "u_bounds", "u_physics"]) expect(uniformCalls(calls, name, start), name).toHaveLength(2);
-    gpu.dispose();
-  });
-
-  it("uploads the flow field's own grid without copying it", () => {
-    const { gl, calls } = createFakeGl();
-    const gpu = new GpuParticles(gl, 8, 42);
-    const { streams, field } = inputs();
-    gpu.step(1 / 60, streams, field, 1);
-    const flow = callsTo(calls, "texSubImage2D").find((args) => args[6] === "RG")!;
-    expect(flow.slice(4, 6)).toEqual([field.gridCols, field.gridRows]);
-    expect(flow[8]).toBe(field.vectors);
-    gpu.dispose();
-  });
-
-  describe("active horizon", () => {
-    const dt = Math.fround(0.1);
-    /** Steps until the drain deadline has passed since the first step, then two more: the shrink step. */
-    function shrinkStep(): number {
-      let clock = 0, n = 0;
-      while (clock <= GPU_DRAIN_SECONDS) { clock += dt; n++; }
-      return n + 2;
-    }
-    function feedbackCounts(calls: Call[], start: number): number[] {
-      // The feedback pass is the only POINTS draw issued with transform feedback begun.
-      const counts: number[] = [];
-      let begun = false;
-      for (const [name, ...args] of calls.slice(start)) {
-        if (name === "beginTransformFeedback") begun = true;
-        if (name === "endTransformFeedback") begun = false;
-        if (name === "drawArrays" && begun) counts.push(args[2] as number);
-      }
-      return counts;
-    }
-
-    it("drops to zero after the drain deadline without requests, then rises at once with them", () => {
-      const { gl, calls } = createFakeGl();
-      const gpu = new GpuParticles(gl, 1000, 42);
-      const { streams, field } = inputs();
+  describe("live count", () => {
+    function counting(capacity = 1000) {
+      const state = { status: "TIMEOUT_EXPIRED", free: 0 };
+      const { gl, calls } = createFakeGl({ overrides: {
+        fenceSync: () => ({ kind: "Sync" }),
+        clientWaitSync: () => state.status,
+        getBufferSubData: (_target, _offset, out) => { (out as Uint32Array)[0] = state.free; },
+      } });
+      const gpu = new GpuParticles(gl, capacity, 42);
       gpu.spawningEnabled = true;
-      gpu.limit = 0;
-      const last = shrinkStep();
-      for (let n = 1; n < last; n++) {
-        gpu.step(dt, streams, field, 1);
-        expect(gpu.activeSlots, `step ${n}`).toBe(1000);
-      }
-      const before = calls.length, hue = gpu.globalHue, buffer = gpu.stateBuffer;
-      gpu.step(dt, streams, field, 1);
-      expect(gpu.activeSlots).toBe(0);
-      // No pass, upload or binding at all; only the hue moves on.
-      expect(calls.slice(before)).toEqual([]);
-      expect(gpu.globalHue).toBeCloseTo(hue + LOOK.hueRotate * dt);
-      expect(gpu.stateBuffer).toBe(buffer);
+      gpu.countingLive = true;
+      return { gl, calls, gpu, state, ...inputs() };
+    }
 
-      gpu.limit = 600;
-      const start = calls.length;
-      gpu.step(dt, streams, field, 1);
-      expect(gpu.lifecycle.commands[MAX_STREAMS * 4 - 1]).toBeGreaterThan(0);
-      expect(gpu.activeSlots).toBe(600);
-      expect(feedbackCounts(calls, start)).toEqual([600]);
-      // The flag pass covers 600 slots and the prefix passes the five rows that hold them.
-      const step = calls.slice(start);
-      expect(callsTo(step, "drawArrays")[0]).toEqual(["POINTS", 0, 600]);
-      expect(callsTo(step, "drawArrays").filter(([mode]) => mode === "TRIANGLES")).toHaveLength(10);
-      expect(callsTo(step, "viewport")).toContainEqual([0, 0, 128, 5]);
-      expect(uniformCalls(calls, "u_capacity", start)).toEqual([[600]]);
+    it("reads nothing back unless counting is on, and asks on the next step once it is", () => {
+      const { calls, gpu, state, streams, field } = counting();
+      gpu.countingLive = false;
+      for (let i = 0; i < 3 * GPU_COUNT_EVERY; i++) gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toEqual([]);
+      expect(gpu.liveCount).toBeNull();
+      gpu.countingLive = true;
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(1);
+      // Turning it off drops the readback in flight and the count.
+      state.status = "ALREADY_SIGNALED";
+      gpu.countingLive = false;
+      expect(callsTo(calls, "deleteSync")).toHaveLength(1);
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "getBufferSubData")).toEqual([]);
+      expect(gpu.liveCount).toBeNull();
       gpu.dispose();
     });
+
+    it("forgets a count and the readback in flight, then asks again", () => {
+      const { calls, gpu, state, streams, field } = counting();
+      // The first readback goes out on the first step after counting starts.
+      gpu.step(0.1, streams, field, 1);
+      state.status = "ALREADY_SIGNALED";
+      state.free = 900;
+      gpu.step(0.1, streams, field, 1);
+      expect(gpu.liveCount).toBe(100);
+      for (let i = 0; i < GPU_COUNT_EVERY; i++) gpu.step(0.1, streams, field, 1);
+      state.status = "TIMEOUT_EXPIRED";
+      const reads = callsTo(calls, "readPixels").length;
+      gpu.forgetLiveCount();
+      expect(gpu.liveCount).toBeNull();
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(reads + 1);
+      gpu.dispose();
+    });
+
+    it("reads it back every GPU_COUNT_EVERY steps and never waits for it", () => {
+      const { calls, gpu, state, streams, field } = counting();
+      expect(callsTo(calls, "readPixels")).toEqual([]);
+      expect(gpu.liveCount).toBeNull();
+      gpu.step(0.1, streams, field, 1);
+      // The scan's total at slot 999, then a fence; nothing reads the buffer yet.
+      expect(callsTo(calls, "readPixels")).toEqual([[103, 7, 1, 1, "RGBA_INTEGER", "UNSIGNED_INT", 0]]);
+      expect(callsTo(calls, "fenceSync")).toEqual([["SYNC_GPU_COMMANDS_COMPLETE", 0]]);
+      expect(callsTo(calls, "getBufferSubData")).toEqual([]);
+      // Not ready: polled with a zero timeout, and no second readback while one is in flight.
+      for (let i = 0; i < GPU_COUNT_EVERY + 2; i++) gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "clientWaitSync").every(([, flags, timeout]) => flags === 0 && timeout === 0)).toBe(true);
+      expect(callsTo(calls, "readPixels")).toHaveLength(1);
+      expect(gpu.liveCount).toBeNull();
+      // Ready: live = horizon − free, and the fence is released.
+      state.status = "ALREADY_SIGNALED";
+      state.free = 400;
+      gpu.step(0.1, streams, field, 1);
+      expect(gpu.liveCount).toBe(600);
+      expect(callsTo(calls, "getBufferSubData")).toHaveLength(1);
+      expect(callsTo(calls, "deleteSync")).toHaveLength(1);
+      // The next readback comes GPU_COUNT_EVERY steps after it, counting the step that received it.
+      for (let i = 2; i < GPU_COUNT_EVERY; i++) gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(1);
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(2);
+      state.status = "CONDITION_SATISFIED";
+      state.free = 1000;
+      gpu.step(0.1, streams, field, 1);
+      expect(gpu.liveCount).toBe(0);
+      gpu.dispose();
+    });
+
+    it("subtracts the free count from the horizon at the request, not at the result", () => {
+      const { calls, gpu, state, streams, field } = counting();
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(1);
+      // The readback stays in flight while the horizon falls to a lowered limit.
+      gpu.limit = 300;
+      let steps = 0;
+      while (gpu.activeSlots === 1000 && steps++ < 1000) gpu.step(0.1, streams, field, 1);
+      expect(gpu.activeSlots).toBe(300);
+      state.status = "ALREADY_SIGNALED";
+      state.free = 250;
+      gpu.step(0.1, streams, field, 1);
+      expect(gpu.liveCount).toBe(750);
+      gpu.dispose();
+    });
+
+        it("runs the scan for a due count on a step without births", () => {
+      const { calls, gpu, streams, field } = counting();
+      gpu.limit = 0; // no room, so no requests and normally no scan
+      const start = calls.length;
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls.slice(start), "clearBufferuiv")).toHaveLength(1);
+      expect(callsTo(calls.slice(start), "readPixels")).toHaveLength(1);
+      // Births stay off: the scan is only read back.
+      expect(uniformCalls(calls, "u_enabled", start)).toEqual([[0]]);
+      gpu.dispose();
+    });
+
+    it("reports no count once the horizon is empty while counting is off", () => {
+      const { gpu, streams, field } = counting(100);
+      gpu.countingLive = false;
+      gpu.limit = 0;
+      let steps = 0;
+      while (gpu.activeSlots > 0 && steps++ < 1000) gpu.step(0.1, streams, field, 1);
+      expect(gpu.activeSlots).toBe(0);
+      expect(gpu.liveCount).toBeNull();
+      gpu.dispose();
+    });
+
+        it("is zero once the horizon is empty, dropping a readback of the earlier state", () => {
+      const { calls, gpu, state, streams, field } = counting(100);
+      gpu.limit = 0;
+      let steps = 0;
+      while (gpu.activeSlots > 0 && steps++ < 1000) gpu.step(0.1, streams, field, 1);
+      expect(gpu.activeSlots).toBe(0);
+      expect(gpu.liveCount).toBe(0);
+      expect(callsTo(calls, "deleteSync")).toHaveLength(callsTo(calls, "fenceSync").length);
+      // A stale result can no longer arrive.
+      state.status = "ALREADY_SIGNALED";
+      state.free = 0;
+      gpu.step(0.1, streams, field, 1);
+      expect(gpu.liveCount).toBe(0);
+      gpu.dispose();
+    });
+
+    it("drops a failed wait and asks again later", () => {
+      const { calls, gpu, state, streams, field } = counting();
+      gpu.step(0.1, streams, field, 1);
+      state.status = "WAIT_FAILED";
+      gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "deleteSync")).toHaveLength(1);
+      expect(callsTo(calls, "getBufferSubData")).toEqual([]);
+      expect(gpu.liveCount).toBeNull();
+      for (let i = 0; i < GPU_COUNT_EVERY; i++) gpu.step(0.1, streams, field, 1);
+      expect(callsTo(calls, "readPixels")).toHaveLength(2);
+      gpu.dispose();
+    });
+
+    it("releases the count buffer and a pending fence on dispose", () => {
+      const { calls, gpu, streams, field } = counting();
+      for (let i = 0; i < GPU_COUNT_EVERY; i++) gpu.step(0.1, streams, field, 1);
+      const pack = callsTo(calls, "bindBuffer").find(([target]) => target === "PIXEL_PACK_BUFFER")![1];
+      gpu.dispose();
+      expect(callsTo(calls, "deleteSync")).toHaveLength(1);
+      expect(callsTo(calls, "deleteBuffer")).toContainEqual([pack]);
+    });
+  });
+
+  it("sets samplers, sizes and LOOK uniforms once at setup and only per-step values in a step", () => {
+  const { gl, calls } = createFakeGl();
+  const gpu = new GpuParticles(gl, 33, 42);
+  const constants = ["u_flow", "u_stream", "u_command", "u_prefix", "u_width", "u_capacity", "u_seed",
+    "u_birth", "u_lifeSize", "u_filament", "u_span", "u_cell", "u_braid"];
+  for (const name of constants) expect(uniformCalls(calls, name), name).toHaveLength(1);
+  expect(uniformCalls(calls, "u_width")).toEqual([[33]]);
+  expect(uniformCalls(calls, "u_capacity")).toEqual([[33]]);
+  expect(uniformCalls(calls, "u_seed")).toEqual([[42]]);
+  expect(uniformCalls(calls, "u_prefix")).toEqual([[3]]);
+  const { streams, field } = inputs();
+  expect(uniformCalls(calls, "u_cell")).toEqual([[field.gridCell]]);
+  expect(uniformCalls(calls, "u_braid")).toEqual([[LOOK.braid, LOOK.braidWaves]]);
+  const start = calls.length;
+  gpu.step(1 / 60, streams, field, 1);
+  gpu.step(1 / 60, streams, field, 1);
+  for (const name of constants) expect(uniformCalls(calls, name, start), name).toHaveLength(0);
+  for (const name of ["u_limit", "u_enabled", "u_dt", "u_bounds", "u_physics"]) expect(uniformCalls(calls, name, start), name).toHaveLength(2);
+  gpu.dispose();
+});
+
+it("uploads the flow field's own grid without copying it", () => {
+  const { gl, calls } = createFakeGl();
+  const gpu = new GpuParticles(gl, 8, 42);
+  const { streams, field } = inputs();
+  gpu.step(1 / 60, streams, field, 1);
+  const flow = callsTo(calls, "texSubImage2D").find((args) => args[6] === "RG")!;
+  expect(flow.slice(4, 6)).toEqual([field.gridCols, field.gridRows]);
+  expect(flow[8]).toBe(field.vectors);
+  gpu.dispose();
+});
+
+describe("active horizon", () => {
+  const dt = Math.fround(0.1);
+  /** Steps until the drain deadline has passed since the first step, then two more: the shrink step. */
+  function shrinkStep(): number {
+    let clock = 0, n = 0;
+    while (clock <= GPU_DRAIN_SECONDS) { clock += dt; n++; }
+    return n + 2;
+  }
+  function feedbackCounts(calls: Call[], start: number): number[] {
+    // The feedback pass is the only POINTS draw issued with transform feedback begun.
+    const counts: number[] = [];
+    let begun = false;
+    for (const [name, ...args] of calls.slice(start)) {
+      if (name === "beginTransformFeedback") begun = true;
+      if (name === "endTransformFeedback") begun = false;
+      if (name === "drawArrays" && begun) counts.push(args[2] as number);
+    }
+    return counts;
+  }
+
+  it("drops to zero after the drain deadline without requests, then rises at once with them", () => {
+    const { gl, calls } = createFakeGl();
+    const gpu = new GpuParticles(gl, 1000, 42);
+    const { streams, field } = inputs();
+    gpu.spawningEnabled = true;
+    gpu.limit = 0;
+    const last = shrinkStep();
+    for (let n = 1; n < last; n++) {
+      gpu.step(dt, streams, field, 1);
+      expect(gpu.activeSlots, `step ${n}`).toBe(1000);
+    }
+    const before = calls.length, hue = gpu.globalHue, buffer = gpu.stateBuffer;
+    gpu.step(dt, streams, field, 1);
+    expect(gpu.activeSlots).toBe(0);
+    // No pass, upload or binding at all; only the hue moves on.
+    expect(calls.slice(before)).toEqual([]);
+    expect(gpu.globalHue).toBeCloseTo(hue + LOOK.hueRotate * dt);
+    expect(gpu.stateBuffer).toBe(buffer);
+
+    gpu.limit = 600;
+    const start = calls.length;
+    gpu.step(dt, streams, field, 1);
+    expect(gpu.lifecycle.commands[MAX_STREAMS * 4 - 1]).toBeGreaterThan(0);
+    expect(gpu.activeSlots).toBe(600);
+    expect(feedbackCounts(calls, start)).toEqual([600]);
+    // The flag pass covers 600 slots and the prefix passes the five rows that hold them.
+    const step = calls.slice(start);
+    expect(callsTo(step, "drawArrays")[0]).toEqual(["POINTS", 0, 600]);
+    expect(callsTo(step, "drawArrays").filter(([mode]) => mode === "TRIANGLES")).toHaveLength(10);
+    expect(callsTo(step, "viewport")).toContainEqual([0, 0, 128, 5]);
+    expect(uniformCalls(calls, "u_capacity", start)).toEqual([[600]]);
+    gpu.dispose();
+  });
 
     it("shrinks to a lowered limit only after the deadline and two full steps", () => {
       const { gl, calls } = createFakeGl();
@@ -233,14 +395,15 @@ describe("GPU motion orchestration", () => {
     expect(gpu.spawningEnabled).toBe(false);
     expect(gpu.stateStrideBytes).toBe(64);
     expect(gpu.streamTexture).not.toBe(gpu.commandTexture);
-    expect(callsTo(calls, "bufferData")).toEqual([["ARRAY_BUFFER", 512, "DYNAMIC_COPY"], ["ARRAY_BUFFER", 512, "DYNAMIC_COPY"]]);
+    // Two state buffers, then the 16-byte buffer the live count is read back into.
+    expect(callsTo(calls, "bufferData")).toEqual([["ARRAY_BUFFER", 512, "DYNAMIC_COPY"], ["ARRAY_BUFFER", 512, "DYNAMIC_COPY"], ["PIXEL_PACK_BUFFER", 16, "STREAM_READ"]]);
     // Simulation and free-scan vertex arrays, one of each per state buffer.
     expect(callsTo(calls, "vertexAttribIPointer")).toEqual(Array(4).fill([3, 4, "UNSIGNED_INT", 64, 48]));
     expect(callsTo(calls, "vertexAttribPointer").slice(0, 3)).toEqual([
       [0, 4, "FLOAT", false, 64, 0], [1, 4, "FLOAT", false, 64, 16], [2, 4, "FLOAT", false, 64, 32],
     ]);
     gpu.dispose();
-    expect(callsTo(calls, "deleteBuffer")).toHaveLength(2);
+    expect(callsTo(calls, "deleteBuffer")).toHaveLength(3); // both state buffers and the count buffer
     expect(callsTo(calls, "deleteTexture")).toHaveLength(5);
     // Two state arrays, and the scan's empty array and one flag array per state buffer.
     expect(callsTo(calls, "deleteVertexArray")).toHaveLength(5);

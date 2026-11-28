@@ -93,12 +93,14 @@ Spawning and stream ownership have separate untimed checks:
 ```js
 const { runGpuAllocationBrowserChecks } = await import("/test/gpu-allocation.browser.ts");
 runGpuAllocationBrowserChecks();
+const { runGpuLiveCountBrowserChecks } = await import("/test/gpu-live-count.browser.ts");
+console.log(await runGpuLiveCountBrowserChecks());
 const { runGpuLifecycleBrowserChecks } = await import("/test/gpu-lifecycle.browser.ts");
 const lifecycle = await runGpuLifecycleBrowserChecks();
 console.log(lifecycle.parityPassed, lifecycle.failedWindows, lifecycle.transitions);
 ```
 
-Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed that fixed per-stream bound; the [revised occupancy gate](#gpu-occupancy-gate) replaced it and passed, which unblocked [drawing](#gpu-drawing). See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
+Allocation checks verify exact integer prefixes, birth limits, seed repeatability, strict expiry and fresh same-ID claims after release. The live-count check steps once per task, as the page does, because WebGL updates a fence only between tasks, and requires every asynchronous `liveCount` to equal the exact count before the step that asked for it. A second pass without the full-state reads, which wait for the GPU, steps once per animation frame and requires each readback within 8 frames. The lifecycle check compares plain/filament occupancy and records rotation curves; `parityPassed: false` is a failed acceptance gate even when ownership assertions pass. Task 3 failed that fixed per-stream bound; the [revised occupancy gate](#gpu-occupancy-gate) replaced it and passed, which unblocked [drawing](#gpu-drawing). See the [recorded result](docs/superpowers/plans/2026-11-13-gpu-prototype.md#task-3-result--2026-11-13).
 
 To reproduce the separate occupancy investigation, run this on the same test page:
 
@@ -271,7 +273,7 @@ The page reads frames from `stream` next to itself (`/stream` at the site root).
 | `?interval=MS` | Demo update interval (default 1000; `60000` mimics the Beszel `systems` source). |
 | `?particles=N` | Fixed particle pool size, clamped to 100–10000. Without it the pool is 10000 (8000 with a coarse pointer), halved with reduced motion, and thins out on devices that cannot keep up. |
 | `?seed=N` | Fixed random seed, for repeatable looks. |
-| `?gpu` | Experimental: simulates and draws the particles on the GPU (WebGL2 transform feedback), loading that code only then. Falls back to the CPU, with a console warning, when the GPU path cannot be set up. The particle limit stays at the pool size, without the CPU's thinning on slow devices, and `?debug` shows the live count as `?`. |
+| `?gpu` | Experimental: simulates and draws the particles on the GPU (WebGL2 transform feedback), loading that code only then. Falls back to the CPU, with a console warning, when the GPU path cannot be set up. The particle limit thins out on slow devices as on the CPU; the GPU's live count is read back only after a drop, or throughout with `?debug`, since each readback waits for the browser's GPU process. |
 
 Visual tunables (speeds, colours, trail length, easing) are in `frontend/src/config.ts` (`LOOK`).
 

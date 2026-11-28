@@ -99,7 +99,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { warmupSeconds = scenario === "drained" ? 60 : 30, measureSeconds = 60, traceCapacity = 120000 } = options;
   if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
   if (budgetOption !== "fixed" && budgetOption !== "adaptive") throw new Error("Budget must be fixed or adaptive");
-  // Native GPU adaptation needs exact live counts the GPU never reports; replay a CPU schedule instead.
+  // GPU runs leave `countingLive` off and replay a CPU schedule, so readbacks never enter the timing.
   if (budgetOption === "adaptive" && backend !== "cpu") throw new Error("Adaptive discovery runs on the CPU only; replay its schedule on the GPU");
   // A saved schedule arrives as JSON: null or a non-object must not quietly become a fixed-limit run.
   if (options.schedule !== undefined && (typeof schedule !== "object" || schedule === null || !Array.isArray(schedule.decisions) || typeof schedule.runId !== "string")) {

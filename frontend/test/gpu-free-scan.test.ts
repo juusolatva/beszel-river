@@ -124,4 +124,44 @@ describe("GPU integer free scan", () => {
     expect(callsTo(calls, "deleteProgram")).toContainEqual([firstProgram]);
     expect(callsTo(calls, "deleteProgram")).toHaveLength(2);
   });
+
+  it("copies the total at the last counted slot from the final prefix target into a pack buffer", () => {
+    const { gl, calls } = createFakeGl();
+    const scan = new GpuFreeScan(gl, 10000);
+    const state = gl.createBuffer()!, pack = gl.createBuffer()!;
+    scan.scan(state, 1000);
+    // The read must name the framebuffer the final prefix texture is attached to.
+    const attachments = new Map<unknown, unknown>();
+    let bound: unknown;
+    for (const [name, ...args] of calls) {
+      if (name === "bindFramebuffer") bound = args[1];
+      if (name === "framebufferTexture2D") attachments.set(args[3], bound);
+    }
+    const prefixFramebuffer = attachments.get(scan.prefixTexture);
+    expect(prefixFramebuffer).toBeTruthy();
+    calls.length = 0;
+    scan.copyTotal(1000, pack);
+    // Slot 999 is texel (999 % 128, floor(999 / 128)) = (103, 7).
+    expect(callsTo(calls, "readPixels")).toEqual([[103, 7, 1, 1, "RGBA_INTEGER", "UNSIGNED_INT", 0]]);
+    expect(callsTo(calls, "bindBuffer")).toEqual([["PIXEL_PACK_BUFFER", pack], ["PIXEL_PACK_BUFFER", null]]);
+    expect(callsTo(calls, "bindFramebuffer")).toEqual([["READ_FRAMEBUFFER", prefixFramebuffer], ["READ_FRAMEBUFFER", null]]);
+    calls.length = 0;
+    scan.copyTotal(1, pack);
+    expect(callsTo(calls, "readPixels")[0].slice(0, 2)).toEqual([0, 0]);
+    for (const count of [0, 10001, 1.5]) expect(() => scan.copyTotal(count, pack)).toThrow("Invalid GPU scan count");
+  });
+
+  it("reads the target the last pass wrote, for even and odd pass counts", () => {
+    for (const [count, expected] of [[1, 0], [2, 1], [3, 0], [5, 1]] as const) {
+      const { gl, calls } = createFakeGl();
+      const scan = new GpuFreeScan(gl, 16);
+      // Framebuffers are labelled objects; recover them in creation order from their bind calls.
+      const order: unknown[] = [];
+      for (const [target, framebuffer] of callsTo(calls, "bindFramebuffer")) if (target === "FRAMEBUFFER" && framebuffer && !order.includes(framebuffer)) order.push(framebuffer);
+      scan.scan(gl.createBuffer()!, count);
+      calls.length = 0;
+      scan.copyTotal(count, gl.createBuffer()!);
+      expect(callsTo(calls, "bindFramebuffer")[0]).toEqual(["READ_FRAMEBUFFER", order[expected]]);
+    }
+  });
 });

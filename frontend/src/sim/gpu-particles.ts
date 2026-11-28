@@ -10,6 +10,9 @@ import { GpuFreeScan } from "./gpu-free-scan";
 import { effectiveGpuStep, GPU_DRAIN_SECONDS, GpuLifecycle } from "./gpu-lifecycle";
 import { MAX_STREAMS, type StreamSet } from "./streams";
 
+/** Steps between live-count readbacks while counting; one is in flight at a time. */
+export const GPU_COUNT_EVERY = 12;
+
 /**
  * Isolated transform-feedback experiment; production continues to use ParticleSystem.
  *
@@ -37,6 +40,14 @@ export class GpuParticles {
   private readonly uniforms!: Record<"dt" | "bounds" | "physics" | "limit" | "enabled" | "capacity", WebGLUniformLocation | null>;
   private horizon: number;
   private horizonSet: number;
+  // Live count: read back from the free scan without waiting, so it describes a step a few frames ago.
+  private live: number | null = null;
+  private counting = false;
+  private countBuffer: WebGLBuffer | null = null;
+  private countSync: WebGLSync | null = null;
+  private countHorizon = 0;
+  private stepsSinceCount = 0;
+  private readonly countOut = new Uint32Array(4);
   // Simulation seconds, and the claim that since `reachSince` no birth could land at or above `reach`.
   private clock = 0;
   private reach = 0;
@@ -69,6 +80,11 @@ export class GpuParticles {
       this.createStateBuffers();
       this.createDataTextures();
       this.scan = new GpuFreeScan(gl, capacity, this.buffers);
+      this.countBuffer = gl.createBuffer() as WebGLBuffer | null;
+      if (!this.countBuffer) throw new Error("GPU resource allocation failed");
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.countBuffer);
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, 16, gl.STREAM_READ);
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
       this.setConstantUniforms(this.scan.width);
     } catch (error) {
       this.dispose();
@@ -84,11 +100,38 @@ export class GpuParticles {
   get globalHue(): number { return this.hue; }
   /** Slots the next step and draw cover, from 0: every slot at or above it is dead in both buffers. */
   get activeSlots(): number { return this.horizon; }
+  /**
+   * Live particles while `countingLive` is on: the exact count before the step that asked for it,
+   * delivered a few steps later (asked every `GPU_COUNT_EVERY` steps), or 0 from a step whose horizon
+   * was empty. Null before the first one and whenever counting is off. For the budget and `?debug`;
+   * never an estimate.
+   */
+  get liveCount(): number | null { return this.live; }
+
+  /**
+   * Whether to read the live count back. Off by default: in Chrome reading the buffer waits for the GPU
+   * process, which took 2–13 ms per readback on a UHD 620 laptop. Turning it on forgets any earlier count,
+   * so the next one describes a step from now on, and asks for it on the next step.
+   */
+  get countingLive(): boolean { return this.counting; }
+  set countingLive(on: boolean) {
+    if (on === this.counting) return;
+    this.counting = on;
+    this.forgetLiveCount();
+  }
+
+  /** Drops the current count and any readback in flight; while counting, asks again on the next step. */
+  forgetLiveCount(): void {
+    this.dropCount();
+    this.live = null;
+    this.stepsSinceCount = GPU_COUNT_EVERY - 1;
+  }
 
   /** Advance using a Float32-effective step shared by prototype replay, easing and CPU reference. */
   step(dt: number, streams: StreamSet, field: FlowField, aspect: number): void {
     if (dt <= 0) return;
     dt = effectiveGpuStep(dt);
+    this.pollCount();
     this.clock += dt;
     let births = false;
     if (this.spawningEnabled) {
@@ -100,16 +143,22 @@ export class GpuParticles {
       this.restartReach(this.horizon);
     }
     if (this.horizon === 0) {
-      // Nothing is alive and nothing is born: no pass to run, nothing for the drawer to read.
+      // Nothing is alive and nothing is born: no pass to run, nothing for the drawer to read. A
+      // readback still in flight describes an earlier state, so it is dropped. Without counting nothing
+      // would replace the 0 once the river refills, so it is reported only while counting.
+      this.dropCount();
+      this.live = this.counting ? 0 : null;
       this.hue = fract(this.hue + LOOK.hueRotate * dt);
       return;
     }
     const gl = this.gl;
     let begun = false;
+    const count = this.counting && this.countSync === null && ++this.stepsSinceCount >= GPU_COUNT_EVERY;
     try {
-      // Without requests no slot reads a free rank, so the scan would be wasted. The commands are
-      // still uploaded: the drawer hides stale generations with them.
-      if (births) this.scan!.scan(this.stateBuffer, this.horizon);
+      // Without requests no slot reads a free rank, so the scan would be wasted unless a count is
+      // due. The commands are still uploaded: the drawer hides stale generations with them.
+      if (births || count) this.scan!.scan(this.stateBuffer, this.horizon);
+      if (count) this.requestCount();
       this.uploadInputs(streams, field);
       const u = this.uniforms;
       gl.useProgram(this.program!.program);
@@ -151,9 +200,47 @@ export class GpuParticles {
     if (this.program) gl.deleteProgram(this.program.program);
     this.scan?.dispose();
     this.scan = null;
+    this.dropCount();
+    if (this.countBuffer) gl.deleteBuffer(this.countBuffer);
+    this.countBuffer = null;
     this.vaos.length = this.buffers.length = this.textures.length = 0;
     this.feedback = null;
     this.program = null;
+  }
+
+  /**
+   * Copies the free-slot total of the scan just run and fences it. Slots from the horizon up are dead
+   * in the scanned buffer, so live = horizon − free.
+   */
+  private requestCount(): void {
+    const gl = this.gl;
+    this.scan!.copyTotal(this.horizon, this.countBuffer!);
+    this.countSync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0) as WebGLSync | null;
+    this.countHorizon = this.horizon;
+    this.stepsSinceCount = 0;
+  }
+
+  /** Reads a fenced count once the GPU has written it; never waits. */
+  private pollCount(): void {
+    const sync = this.countSync;
+    if (!sync) return;
+    const gl = this.gl;
+    const status = gl.clientWaitSync(sync, 0, 0);
+    if (status === gl.WAIT_FAILED) {
+      this.dropCount();
+      return;
+    }
+    if (status !== gl.ALREADY_SIGNALED && status !== gl.CONDITION_SATISFIED) return;
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, this.countBuffer);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, this.countOut);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    this.dropCount();
+    this.live = Math.max(0, this.countHorizon - this.countOut[0]);
+  }
+
+  private dropCount(): void {
+    if (this.countSync) this.gl.deleteSync(this.countSync);
+    this.countSync = null;
   }
 
   /** Moves the horizon for this step, given the slot count below which any birth must land. */
