@@ -13,6 +13,12 @@ interface BenchmarkOptions {
   scenario?: ReplayScenario;
   limit?: ReplayLimit;
   warmupSeconds?: number;
+  /**
+   * Simulated seconds that must have passed before measuring starts, besides `warmupSeconds` of wall
+   * time: callbacks longer than `LOOK.maxDt` fall behind wall time, so a schedule replay on a slow
+   * device would otherwise measure before its changes have played out (default 0).
+   */
+  settleSeconds?: number;
   measureSeconds?: number;
   traceCapacity?: number;
   motion?: number;
@@ -45,6 +51,8 @@ const CPU_SLOTS = "drawCount (highest live slot + 1)";
  * was always the full capacity.
  */
 const GPU_SLOTS = "activeSlots (horizon: at most capacity)";
+/** Wall seconds past the warmup after which a run that has not simulated `settleSeconds` fails. */
+const SETTLE_TIMEOUT = 300;
 const BUDGET_LABELS = { fixed: "fixed limit", adaptive: "CPU adaptive discovery (not a paired performance result)", schedule: "CPU-schedule replay" };
 
 const usedCanvases = new WeakSet<HTMLCanvasElement>();
@@ -96,7 +104,7 @@ function gpuValidation(gl: WebGL2RenderingContext, trace: ReplayTrace) {
 export async function runGpuBenchmark(options: BenchmarkOptions) {
   const { backend = "cpu", schedule, budget: budgetOption = "fixed", scheduleCapacity = 1024, refreshHz, conditions, crossValidate = true, gpuTiming = true } = options;
   const { scenario = schedule?.scenario ?? "dense", motion = schedule?.motion ?? 1, limit = 10000 } = options;
-  const { warmupSeconds = scenario === "drained" ? 60 : 30, measureSeconds = 60, traceCapacity = 120000 } = options;
+  const { warmupSeconds = scenario === "drained" ? 60 : 30, measureSeconds = 60, traceCapacity = 120000, settleSeconds = 0 } = options;
   if (backend !== "cpu" && backend !== "gpu") throw new Error("Backend must be cpu or gpu");
   if (budgetOption !== "fixed" && budgetOption !== "adaptive") throw new Error("Budget must be fixed or adaptive");
   // GPU runs leave `countingLive` off and replay a CPU schedule, so readbacks never enter the timing.
@@ -114,6 +122,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   const mode = schedule ? "schedule" : budgetOption;
   if (!(refreshHz > 0) || !Number.isFinite(refreshHz) || !conditions.trim()) throw new Error("Record refresh rate and power/thermal/load conditions");
   if (!Number.isFinite(warmupSeconds) || warmupSeconds < 0 || !Number.isFinite(measureSeconds) || measureSeconds <= 0) throw new Error("Invalid measurement duration");
+  if (!Number.isFinite(settleSeconds) || settleSeconds < 0) throw new Error("Invalid settle time");
   if (!Number.isInteger(traceCapacity) || traceCapacity <= 0) throw new Error("Trace capacity must be a positive integer");
   if (!(REPLAY_LIMITS as readonly number[]).includes(limit) || !(motion >= 0 && motion <= 1)) throw new Error("Invalid replay limit or motion");
   // Checked and preallocated first, so a malformed saved schedule fails before the page or any GPU resource is used.
@@ -129,6 +138,9 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
   // Simulation time at the start of the next step, the sum of the trace's effective steps: it picks
   // the scenario's frame and the schedule's decision, so slow, clamped callbacks shift neither.
   let simulationTime = 0;
+  // Wall seconds at which measuring started, once both the warmup and the settle time have passed.
+  let measureFrom: number | undefined;
+  let settleWait = false;
   const work = new Float64Array(traceCapacity);
   const simulation = new Float64Array(traceCapacity);
   const submission = new Float64Array(traceCapacity);
@@ -196,7 +208,13 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
       try {
         start ??= now;
         const seconds = (now - start) / 1000;
-        if (seconds >= warmupSeconds + measureSeconds) { cleanup(); resolve(); return; }
+        if (measureFrom === undefined && seconds >= warmupSeconds) {
+          // Without a settle wait the window starts at the warmup's end, exactly as before settling existed.
+          if (simulationTime >= settleSeconds) measureFrom = settleWait ? seconds : warmupSeconds;
+          else if (seconds >= warmupSeconds + SETTLE_TIMEOUT) throw new Error(`Simulation reached only ${simulationTime.toFixed(1)} of ${settleSeconds} s to settle: run invalid`);
+          else settleWait = true;
+        }
+        if (measureFrom !== undefined && seconds >= measureFrom + measureSeconds) { cleanup(); resolve(); return; }
         const interval = last === undefined ? 0 : (now - last) / 1000;
         last = now;
         const pixelRatio = Math.min(devicePixelRatio || 1, LOOK.devicePixelRatioCap);
@@ -212,7 +230,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
           targetFormat = gl.getFramebufferAttachmentParameter(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE) === gl.FLOAT ? "RGBA16F" : "RGBA8";
           gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         }
-        const isMeasured = seconds >= warmupSeconds;
+        const isMeasured = measureFrom !== undefined;
         if (cursor) {
           cursor.advance(simulationTime);
           stepLimit = cursor.limit;
@@ -322,7 +340,7 @@ export async function runGpuBenchmark(options: BenchmarkOptions) {
     metadata: { cpuReference: CPU_REFERENCE, effectiveStep: "Float32(clamp(interval, 0, LOOK.maxDt))", backend, scenario, seed: REPLAY_SEED, capacity: REPLAY_CAPACITY,
       budget: BUDGET_LABELS[mode], limit: mode === "fixed" ? limit : "scheduled", scheduleSource: schedule?.runId,
       gpuTiming: typeof timer === "string" ? timer : "enabled", motion, refreshHz, conditions, userAgent: navigator.userAgent, renderer: rendererName, targetFormat,
-      width, height, pixelRatio: trace.pixelRatio[trace.length - 1], warmupSeconds, measureSeconds },
+      width, height, pixelRatio: trace.pixelRatio[trace.length - 1], warmupSeconds, measureSeconds, settleSeconds },
     timing: { callbacks: measured, callbackMs: distribution(work, measured), simulationMs: distribution(simulation, measured),
       submissionMs: distribution(submission, measured), intervalMs: distribution(intervals, measured), missedPeriods,
       uploadedBytes: totalUploads, textureUploadBytes: totalTextureUploads, drawCalls: totalDraws, summedParticleDrawCapacity: totalDrawCapacity,

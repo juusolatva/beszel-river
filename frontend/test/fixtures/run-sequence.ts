@@ -1,4 +1,5 @@
 import type { runGpuBenchmark } from "../gpu-benchmark.browser";
+import { GPU_DRAIN_SECONDS } from "../../src/sim/gpu-lifecycle";
 import { REPLAY_CAPACITY, type RecordedSchedule, type ReplayScenario, type ReplayTrace } from "./gpu-replay";
 
 export type Viewport = "960x640" | "full";
@@ -18,9 +19,16 @@ export const DEFAULT_WORKLOADS: readonly Workload[] = WORKLOADS.filter((workload
 /**
  * `drop-2500`: the full pool, then a budget drop to 2,500 (brightness ×2, as `ParticleBudget` sets it)
  * 15 s in, replayed like a recorded schedule. The page's budget starts at the full pool, so slots above
- * a lowered limit hold particles that fixed-limit runs never create; with the default 30 s warmup the
- * measured minute starts after every particle from before the drop has died (lifetimes end by 14 s).
+ * a lowered limit hold particles that fixed-limit runs never create; measuring waits until every
+ * particle from before the drop has died (`DROP_SETTLE_SECONDS`).
  */
+/**
+ * Simulated seconds before a `drop-2500` run may measure: the drop plus the drain deadline, by which
+ * every particle born before it has died. Below 10 fps callbacks fall behind wall time, so the 30 s
+ * warmup alone would not reach it.
+ */
+export const DROP_SETTLE_SECONDS = 15 + GPU_DRAIN_SECONDS;
+
 export const DROP_SCHEDULE: RecordedSchedule = {
   runId: "synthetic-drop-2500",
   scenario: "dense",

@@ -22,14 +22,6 @@ function analyticCenter(this: StreamSlot, y: number): number {
 
 function skipRebuild(): void {}
 
-/** Returns slot `i` to the pool's free set, as `ParticleSystem.step` does inline. */
-function release(p: Pool, i: number): void {
-  const w = i >>> 5;
-  p.freeBits[w] |= 1 << (i & 31);
-  if (w < p.lowWord) p.lowWord = w;
-  p.live--;
-}
-
 /** The pool's private state, for the reference step below. */
 interface Pool {
   capacity: number; instances: Float32Array; x: Float32Array; y: Float32Array; vx: Float32Array; vy: Float32Array;
@@ -53,14 +45,19 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
   const maxFx = cols - 1.001, maxFy = field.gridRows - 1.001;
   p.globalHue = fract(p.globalHue + LOOK.hueRotate * dt);
   const end = p.drawCount;
-  let highest = -1;
+  // Free-slot accounting as `ParticleSystem.step` does it: inline, with no call left in the loop.
+  const freeBits = p.freeBits;
+  let highest = -1, lowWord = p.lowWord, died = 0;
   for (let i = 0; i < end; i++) {
     if (!p.active[i]) continue;
     const s = slots[p.slot[i]];
     age[i] += dt;
     if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
       p.active[i] = 0;
-      release(p, i);
+      const w = i >>> 5;
+      freeBits[w] |= 1 << (i & 31);
+      if (w < lowWord) lowWord = w;
+      died++;
       s.particles--;
       instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;
@@ -96,6 +93,8 @@ export function calledStep(this: ParticleSystem, dt: number, streams: StreamSet,
     instances[o + 4] = fract(p.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + p.hueJitter[i]);
     instances[o + 5] = LOOK.intensity * p.intensityScale * fade * s.brightness;
   }
+  p.lowWord = lowWord;
+  p.live -= died;
   p.drawCount = highest + 1;
   return p.count;
 }
@@ -113,7 +112,9 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
   const centers = streams.centers;
   p.globalHue = fract(p.globalHue + LOOK.hueRotate * dt);
   const end = p.drawCount;
-  let highest = -1;
+  // Free-slot accounting as `ParticleSystem.step` does it: inline, with no call left in the loop.
+  const freeBits = p.freeBits;
+  let highest = -1, lowWord = p.lowWord, died = 0;
   for (let i = 0; i < end; i++) {
     if (!p.active[i]) continue;
     const slotIndex = p.slot[i];
@@ -121,7 +122,10 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
     age[i] += dt;
     if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
       p.active[i] = 0;
-      release(p, i);
+      const w = i >>> 5;
+      freeBits[w] |= 1 << (i & 31);
+      if (w < lowWord) lowWord = w;
+      died++;
       s.particles--;
       instances[i * INSTANCE_FLOATS + 5] = 0;
       continue;
@@ -154,6 +158,8 @@ function sampledStep(this: ParticleSystem, dt: number, streams: StreamSet, field
     instances[o + 4] = fract(p.globalHue + y[i] * LOOK.hueGradient + s.hueOffset + p.hueJitter[i]);
     instances[o + 5] = LOOK.intensity * p.intensityScale * fade * s.brightness;
   }
+  p.lowWord = lowWord;
+  p.live -= died;
   p.drawCount = highest + 1;
   return p.count;
 }
