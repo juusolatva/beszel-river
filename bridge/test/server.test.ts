@@ -178,6 +178,19 @@ describe("StreamServer", () => {
     await response.body!.cancel().catch(() => undefined);
   });
 
+  it("bounds the update resent after drain by its UTF-8 size", async () => {
+    const stalled = stallWhen((chunk) => chunk.includes("event: snapshot"));
+    const base = await start(true, undefined, undefined, { drainTimeoutMs: 1000, maxBufferedBytes: 1024 });
+    const response = await fetch(`${base}/stream`);
+    const large: Frame = { ...frame(2), streams: [{ id: "🙂".repeat(300), alive: true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 }] };
+    server!.broadcast(large);
+    expect(server!.clientCount).toBe(1);
+    stalled.response!.emit("drain");
+    expect(server!.clientCount).toBe(0);
+    expect(stalled.writes).toBe(1);
+    await response.body!.cancel().catch(() => undefined);
+  });
+
   it("destroys blocked output on shutdown instead of waiting for it to flush", async () => {
     const stalled = stallWhen((chunk) => chunk.includes("event: snapshot"));
     const counts: number[] = [];

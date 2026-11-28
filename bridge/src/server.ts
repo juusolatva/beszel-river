@@ -4,6 +4,9 @@ import { sendHealth } from "./health.js";
 import { closer, listen, requestPath } from "./http.js";
 import { SECURITY_HEADERS, sendStatic, type StaticFiles } from "./static.js";
 
+const PING = ": ping\n\n";
+const PING_BYTES = Buffer.byteLength(PING);
+
 export interface StreamServerOptions {
   host: string;
   port: number;
@@ -42,6 +45,7 @@ export class StreamServer {
   private pingTimer: NodeJS.Timeout | undefined;
   /** Shared by blocked clients rather than retaining a separate frame queue for each. */
   private latestUpdate = "";
+  private latestUpdateBytes = 0;
 
   constructor(private readonly options: StreamServerOptions) {
     this.server = createServer((request, response) => this.handle(request, response));
@@ -55,15 +59,18 @@ export class StreamServer {
   /** Starts listening; resolves with the bound port (useful with port 0). */
   listen(): Promise<number> {
     this.pingTimer = setInterval(() => {
-      for (const client of this.clients) this.write(client, ": ping\n\n");
+      for (const client of this.clients) this.write(client, PING, false, PING_BYTES);
     }, this.options.pingMs ?? 15_000);
     return listen(this.server, this.options.port, this.options.host);
   }
 
   broadcast(frame: Frame): void {
     const chunk = event("update", frame);
+    // One byte count per broadcast, not one per client.
+    const bytes = Buffer.byteLength(chunk);
     this.latestUpdate = chunk;
-    for (const client of this.clients) this.write(client, chunk, true);
+    this.latestUpdateBytes = bytes;
+    for (const client of this.clients) this.write(client, chunk, true, bytes);
   }
 
   close(): Promise<void> {
@@ -84,13 +91,13 @@ export class StreamServer {
     client.response.destroy();
   }
 
-  private write(client: Client, chunk: string, update = false): void {
+  private write(client: Client, chunk: string, update = false, bytes = Buffer.byteLength(chunk)): void {
     if (client.blocked) {
       if (update) client.pending = true;
       return;
     }
     const response = client.response;
-    if (response.destroyed || response.writableEnded || response.writableLength + Buffer.byteLength(chunk) > (this.options.maxBufferedBytes ?? 256 * 1024)) {
+    if (response.destroyed || response.writableEnded || response.writableLength + bytes > (this.options.maxBufferedBytes ?? 256 * 1024)) {
       this.drop(client);
       return;
     }
@@ -135,7 +142,7 @@ export class StreamServer {
         client.blocked = undefined;
         if (client.pending) {
           client.pending = false;
-          this.write(client, this.latestUpdate, true);
+          this.write(client, this.latestUpdate, true, this.latestUpdateBytes);
         }
       });
       this.options.onClients?.(this.clients.size);
