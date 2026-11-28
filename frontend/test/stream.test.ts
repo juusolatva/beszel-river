@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FILAMENTS } from "../src/sim/streams";
+import { FILAMENTS, MAX_STREAMS } from "../src/sim/streams";
 import { parseFrame } from "../src/source/stream";
 
 describe("parseFrame", () => {
@@ -22,6 +22,12 @@ describe("parseFrame", () => {
       t: 100,
       streams: [{ id: "a", alive: true, width: 1, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 }],
     });
+  });
+
+  it("keeps the first MAX_STREAMS valid streams, not counting invalid entries", () => {
+    const streams = [null, ...Array.from({ length: MAX_STREAMS + 5 }, (_, i) => ({ id: `s${i}`, alive: true }))];
+    const frame = parseFrame(JSON.stringify({ v: 1, t: 1, streams }));
+    expect(frame!.streams.map((s) => s.id)).toEqual(Array.from({ length: MAX_STREAMS }, (_, i) => `s${i}`));
   });
 
   it("keeps and clamps filaments only when there are 6 finite numbers", () => {

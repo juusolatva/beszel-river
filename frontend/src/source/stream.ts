@@ -1,5 +1,5 @@
 import type { Frame, FrameEvent, Stream } from "@beszel-river/shared";
-import { FILAMENTS } from "../sim/streams";
+import { FILAMENTS, MAX_STREAMS } from "../sim/streams";
 import { clamp } from "../util/math";
 import type { FrameSource } from "./source";
 
@@ -108,8 +108,9 @@ export class StreamSource implements FrameSource {
 }
 
 /**
- * Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation, and
- * `filaments` is kept only with the expected length.
+ * Accepts only version 1 frames; channels are clamped so a bad value cannot break the simulation,
+ * `filaments` is kept only with the expected length, and streams past `MAX_STREAMS` are left out: streams
+ * in a frame never drain, so no more than that many could ever be shown.
  */
 export function parseFrame(data: string): Frame | null {
   let raw: unknown;
@@ -121,6 +122,7 @@ export function parseFrame(data: string): Frame | null {
   if (!isObject(raw) || raw.v !== 1 || typeof raw.t !== "number" || !Array.isArray(raw.streams)) return null;
   const streams: Stream[] = [];
   for (const s of raw.streams as unknown[]) {
+    if (streams.length === MAX_STREAMS) break;
     if (!isObject(s) || typeof s.id !== "string") continue;
     const stream: Stream = { id: s.id, alive: s.alive === true, width: 0.5, flow: 0, density: 0, turbulence: 0, pulse: 0, heat: 0.5 };
     for (const channel of CHANNELS) {
