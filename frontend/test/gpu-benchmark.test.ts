@@ -334,7 +334,8 @@ describe("budget schedules", () => {
   it("fails a run whose simulation never reaches the settle time", async () => {
     const { state } = stubPage();
     const run = runGpuBenchmark({ limit: 1000, refreshHz: 60, conditions: "unit fixture", warmupSeconds: 0, measureSeconds: 1, settleSeconds: 1e6, crossValidate: false });
-    drive(state, 100, 301000);
+    // 5 s callbacks each simulate 0.1 s, so the 300 s timeout passes in about 60 callbacks.
+    drive(state, 5000, 310000);
     await expect(run).rejects.toThrow(/settle: run invalid/);
   });
 
