@@ -31,8 +31,16 @@ export class ParticleSystem {
   private readonly offset: Float32Array;
   private readonly slot: Uint8Array;
   private readonly active: Uint8Array;
-  private readonly free: Int32Array;
-  private freeTop: number;
+  /**
+   * One bit per slot, set while free. Births take the lowest free slot, so live particles gather at the
+   * bottom of the pool and, after `limit` drops, `drawCount` falls to it within one lifetime, as the
+   * GPU's active horizon does. A stack of freed slots kept reusing high ones, so `drawCount`, and with it
+   * every step, upload and draw, stayed near its peak.
+   */
+  private readonly freeBits: Uint32Array;
+  /** No free slot lies in a word below this one. */
+  private lowWord = 0;
+  private live = 0;
   private globalHue = 0;
   /** Most particles alive at once (`ParticleBudget`), at most `capacity`. */
   limit: number;
@@ -56,23 +64,30 @@ export class ParticleSystem {
     this.offset = new Float32Array(capacity);
     this.slot = new Uint8Array(capacity);
     this.active = new Uint8Array(capacity);
-    this.free = Int32Array.from({ length: capacity }, (_, i) => capacity - 1 - i);
-    this.freeTop = capacity;
+    this.freeBits = new Uint32Array(Math.ceil(capacity / 32));
+    this.freeBits.fill(0xffffffff);
+    // Slots past the capacity in the last word are never free.
+    if (capacity % 32) this.freeBits[this.freeBits.length - 1] = (1 << (capacity % 32)) - 1;
     this.limit = capacity;
   }
 
   get count(): number {
-    return this.capacity - this.freeTop;
+    return this.live;
   }
 
   /**
-   * Rebuilds `drawCount`, each live slot's stream index and size and dead slots' intensity from the
-   * particle state. For test fixtures that write the state directly instead of spawning.
+   * Rebuilds `drawCount`, the free slots and live count, each live slot's stream index and size and
+   * dead slots' intensity from the particle state. For test fixtures that write the state directly.
    */
   resync(): void {
     this.drawCount = 0;
+    this.live = 0;
+    this.lowWord = 0;
+    this.freeBits.fill(0);
     for (let i = 0; i < this.capacity; i++) {
       const o = i * INSTANCE_FLOATS;
+      if (!this.active[i]) this.freeBits[i >>> 5] |= 1 << (i & 31);
+      else this.live++;
       if (this.active[i]) {
         this.instances[o + 6] = this.slot[i];
         this.instances[o + 7] = this.size[i];
@@ -96,8 +111,30 @@ export class ParticleSystem {
       s.spawnCarry += baseRate * s.spawnWeight * dt;
       const n = Math.floor(s.spawnCarry);
       s.spawnCarry -= n;
-      for (let k = 0; k < n && this.capacity - this.freeTop < this.limit; k++) this.birth(this.free[--this.freeTop], slotIndex, s);
+      for (let k = 0; k < n && this.live < this.limit; k++) this.birth(this.takeLowestFree(), slotIndex, s);
     }
+  }
+
+  /** Claims the lowest free slot. Only called while `live < limit <= capacity`, so one exists. */
+  private takeLowestFree(): number {
+    const bits = this.freeBits;
+    let w = this.lowWord;
+    while (bits[w] === 0) w++;
+    const word = bits[w];
+    // The lowest set bit, and its index from the count of zeros above it.
+    const bit = 31 - Math.clz32(word & -word);
+    bits[w] = word & (word - 1);
+    this.lowWord = w;
+    this.live++;
+    return w * 32 + bit;
+  }
+
+  /** Returns slot `i` to the free set; its liveness flag is the caller's. */
+  private releaseSlot(i: number): void {
+    const w = i >>> 5;
+    this.freeBits[w] |= 1 << (i & 31);
+    if (w < this.lowWord) this.lowWord = w;
+    this.live--;
   }
 
   /** Starts a particle in free pool slot `i` for stream slot `slotIndex` and writes its spawn-time floats. */
@@ -154,7 +191,7 @@ export class ParticleSystem {
       age[i] += dt;
       if (age[i] > life[i] || y[i] > 1.08 || x[i] < -0.1 || x[i] > aspect + 0.1) {
         this.active[i] = 0;
-        this.free[this.freeTop++] = i;
+        this.releaseSlot(i);
         s.particles--;
         instances[i * INSTANCE_FLOATS + 5] = 0;
         continue;

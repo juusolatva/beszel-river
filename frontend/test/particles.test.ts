@@ -37,6 +37,22 @@ function drawn(particles: ParticleSystem, streams: StreamSet, pixelRatio = PIXEL
   return out;
 }
 
+/**
+ * FNV-1a over the nine-float records sorted by their bits, so it checks every drawn value but not
+ * which slot holds which particle: the pool's slot assignment is free to change.
+ */
+function hashRecords(records: Float32Array): string {
+  const words = new Uint32Array(records.buffer, records.byteOffset, records.length);
+  const order = Array.from({ length: records.length / 9 }, (_, i) => i);
+  order.sort((a, b) => {
+    for (let k = 0; k < 9; k++) if (words[a * 9 + k] !== words[b * 9 + k]) return words[a * 9 + k] - words[b * 9 + k];
+    return 0;
+  });
+  let h = 0x811c9dc5;
+  for (const i of order) for (let k = 0; k < 9; k++) h = Math.imul(h ^ words[i * 9 + k], 0x01000193) >>> 0;
+  return h.toString(16);
+}
+
 function stream(id: string, overrides: Partial<Stream> = {}): Stream {
   return { id, alive: true, width: 0.5, flow: 0.5, density: 0.5, turbulence: 0.5, pulse: 0, heat: 0.5, ...overrides };
 }
@@ -86,13 +102,14 @@ describe("ParticleSystem", () => {
     for (let i = 0; i < count * 9; i++) expect(Math.abs(a[i] - b[i])).toBeLessThan(0.001);
   });
 
-  // Recorded with the step that called `FlowField.sample` per particle (before inlined sampling) and
-  // wrote nine compacted floats per live particle. The inlined interpolation keeps its arithmetic, and
-  // `drawn` rebuilds those records from stable slots, so every drawn value must stay bit-identical,
-  // through grid resizes from aspect changes.
+  // Every drawn value must stay bit-identical through grid resizes from aspect changes. First recorded
+  // (slot order, 938973b2 and 7b0724a4) with the step that called `FlowField.sample` per particle and
+  // wrote nine compacted floats per live particle; `drawn` rebuilds those records from stable slots.
+  // Re-recorded order-independently on 2026-11-28 with the LIFO free stack, before lowest-free-slot
+  // allocation, which moves particles between slots but must not change one of them.
   it.each([
-    [undefined, 666, "938973b2"],
-    [[0.1, 0.2, 0.9, 0.3, 0.1, 0], 629, "7b0724a4"],
+    [undefined, 666, "d8ea4b22"],
+    [[0.1, 0.2, 0.9, 0.3, 0.1, 0], 629, "6347784e"],
   ])("reproduces the recorded trajectories exactly across aspect changes (%s)", (filaments, count, hash) => {
     const random = mulberry32(7);
     const set = new StreamSet(1);
@@ -107,9 +124,7 @@ describe("ParticleSystem", () => {
       field.update(t, aspect);
       n = particles.step(DT, set, field, aspect);
     }
-    let h = 0x811c9dc5;
-    for (const word of new Uint32Array(drawn(particles, set).buffer)) h = Math.imul(h ^ word, 0x01000193) >>> 0;
-    expect([n, h.toString(16)]).toEqual([count, hash]);
+    expect([n, hashRecords(drawn(particles, set))]).toEqual([count, hash]);
   });
 
   it("starts empty and spawns nothing without streams", () => {
@@ -292,7 +307,61 @@ describe("ParticleSystem", () => {
       expect(particles.drawCount).toBe(0);
     });
 
-    it("gives a slot taken by a new stream that stream's index", () => {
+    it("draws only up to the lowered limit within one lifetime after the budget drops", () => {
+      // As on the page: the budget starts at the full pool and lowers the limit once it is populated.
+      const { particles, run } = setup(1000, stream("a", { density: 1 }), stream("b", { density: 1 }));
+      run(LOOK.turnoverSeconds * 2);
+      expect(particles.drawCount).toBeGreaterThan(800);
+      particles.limit = 250;
+      // Births take the lowest free slot, which lies below the limit while fewer than `limit` live, so
+      // once the particles from before the drop have died nothing is drawn past it.
+      run(LOOK.lifeRange[1] + 0.5);
+      expect(particles.count).toBeLessThanOrEqual(250);
+      expect(particles.count).toBeGreaterThan(200);
+      expect(particles.drawCount).toBeLessThanOrEqual(250);
+      for (let k = 0; k < 10; k++) {
+        run(0.5);
+        expect(particles.drawCount).toBeLessThanOrEqual(250);
+      }
+    });
+
+    it("never hands out a slot past the capacity, including in a partly used last bitset word", () => {
+      for (const capacity of [1, 31, 33, 100]) {
+        const { particles, run } = setup(capacity, stream("a", { density: 1 }));
+        for (let k = 0; k < 40; k++) {
+          run(0.25);
+          expect(particles.drawCount).toBeLessThanOrEqual(capacity);
+          expect(particles.count).toBeLessThanOrEqual(capacity);
+        }
+        // Draining the free set directly: every slot once, lowest first, none past the capacity.
+        const fresh = new ParticleSystem(capacity, mulberry32(1)) as unknown as { takeLowestFree(): number; count: number };
+        const taken = Array.from({ length: capacity }, () => fresh.takeLowestFree());
+        expect(taken).toEqual(Array.from({ length: capacity }, (_, i) => i));
+        expect(fresh.count).toBe(capacity);
+      }
+    });
+
+    it("rebuilds the free slots and live count from directly written state", () => {
+      const { set, particles, run } = setup(64, stream("a", { density: 1 }));
+      // Let the stream ease in, so it has a share to spawn with.
+      run(1);
+      const live = liveFlags(particles);
+      // Slots 0-9 and 40 live, written by hand as fixtures do; nothing else.
+      live.fill(0);
+      for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 40]) live[i] = 1;
+      particles.resync();
+      expect(particles.count).toBe(11);
+      expect(particles.drawCount).toBe(41);
+      // The next births fill slot 10 upwards, not slot 40's neighbours or anything past it.
+      particles.limit = 13;
+      set.slots[0].spawnCarry = 2.5;
+      particles.spawn(0, set);
+      expect([live[10], live[11], live[12]]).toEqual([1, 1, 0]);
+      expect(particles.count).toBe(13);
+      expect(particles.drawCount).toBe(41);
+    });
+
+        it("gives a slot taken by a new stream that stream's index", () => {
       const { set, particles, run } = setup(300, stream("a"), stream("b"));
       run(LOOK.turnoverSeconds);
       // Daily rotation: both IDs replaced; new streams claim slots once the old ones drain.

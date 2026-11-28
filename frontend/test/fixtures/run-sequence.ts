@@ -1,10 +1,10 @@
 import type { runGpuBenchmark } from "../gpu-benchmark.browser";
-import { REPLAY_CAPACITY, type ReplayScenario, type ReplayTrace } from "./gpu-replay";
+import { REPLAY_CAPACITY, type RecordedSchedule, type ReplayScenario, type ReplayTrace } from "./gpu-replay";
 
 export type Viewport = "960x640" | "full";
 export type Backend = "cpu" | "gpu";
 /** Fixed-limit workloads of the paired comparison (GPU plan, Task 1 and Task 6). */
-export const WORKLOADS = ["dense-10000", "dense-8000", "dense-2500", "dense-1000", "draining", "drained", "rotation"] as const;
+export const WORKLOADS = ["dense-10000", "dense-8000", "dense-2500", "dense-1000", "drop-2500", "draining", "drained", "rotation"] as const;
 export type Workload = (typeof WORKLOADS)[number];
 /** Spawn limits a fixed-limit run accepts. */
 export const REPLAY_LIMITS = [10000, 8000, 2500, 1000] as const;
@@ -13,7 +13,20 @@ export type ReplayLimit = (typeof REPLAY_LIMITS)[number];
  * The workloads the setup form starts with: Task 6's matrix. `dense-2500`, where the phone's adaptive
  * budget settles, came later for the active-horizon runs and is opt-in, so the default plan stays 86 runs.
  */
-export const DEFAULT_WORKLOADS: readonly Workload[] = WORKLOADS.filter((workload) => workload !== "dense-2500");
+export const DEFAULT_WORKLOADS: readonly Workload[] = WORKLOADS.filter((workload) => workload !== "dense-2500" && workload !== "drop-2500");
+
+/**
+ * `drop-2500`: the full pool, then a budget drop to 2,500 (brightness ×2, as `ParticleBudget` sets it)
+ * 15 s in, replayed like a recorded schedule. The page's budget starts at the full pool, so slots above
+ * a lowered limit hold particles that fixed-limit runs never create; with the default 30 s warmup the
+ * measured minute starts after every particle from before the drop has died (lifetimes end by 14 s).
+ */
+export const DROP_SCHEDULE: RecordedSchedule = {
+  runId: "synthetic-drop-2500",
+  scenario: "dense",
+  motion: 1,
+  decisions: [{ time: 0, limit: 10000, intensity: 1 }, { time: 15, limit: 2500, intensity: 2 }],
+};
 
 export interface SequenceConfig {
   viewports: Viewport[];
@@ -35,7 +48,7 @@ export interface RunSpec {
   /** Position in the plan, stable across reloads. */
   index: number;
   viewport: Viewport;
-  kind: "fixed" | "discovery" | "schedule";
+  kind: "fixed" | "discovery" | "schedule" | "drop";
   workload: Workload | "discovery" | "schedule-replay";
   backend: Backend;
   repetition: number;
@@ -44,7 +57,7 @@ export interface RunSpec {
 }
 
 const SCENARIO: Record<Workload, [ReplayScenario, ReplayLimit]> = {
-  "dense-10000": ["dense", 10000], "dense-8000": ["dense", 8000], "dense-2500": ["dense", 2500], "dense-1000": ["dense", 1000],
+  "dense-10000": ["dense", 10000], "dense-8000": ["dense", 8000], "dense-2500": ["dense", 2500], "dense-1000": ["dense", 1000], "drop-2500": ["dense", 10000],
   draining: ["draining", 10000], drained: ["drained", 10000], rotation: ["rotation", 10000],
 };
 
@@ -72,7 +85,8 @@ export function buildRunPlan(config: SequenceConfig): RunSpec[] {
     for (let repetition = 1; repetition <= config.repetitions; repetition++) {
       for (const workload of config.workloads) {
         const [scenario, limit] = SCENARIO[workload];
-        for (const backend of backends(config, repetition)) add({ viewport, kind: "fixed", workload, backend, repetition, scenario, limit });
+        const kind = workload === "drop-2500" ? "drop" : "fixed";
+        for (const backend of backends(config, repetition)) add({ viewport, kind, workload, backend, repetition, scenario, limit });
       }
     }
     if (config.scheduleReplays) {

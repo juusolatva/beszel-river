@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { LOOK } from "../src/config";
 import { REPLAY_CAPACITY, ReplayTrace } from "./fixtures/gpu-replay";
-import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, REPLAY_LIMITS, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
+import { backendOrder, buildRunPlan, DEFAULT_WORKLOADS, DROP_SCHEDULE, estimateMinutes, REPLAY_LIMITS, ledgerMarkdown, occupancyCurve, summarizeRun, timeToZero, WORKLOADS,
   type FailedRun, type RunSpec, type SequenceConfig } from "./fixtures/run-sequence";
 
 const CONFIG: SequenceConfig = { viewports: ["960x640", "full"], workloads: [...DEFAULT_WORKLOADS], repetitions: 3, scheduleReplays: true, warmupSeconds: 30, measureSeconds: 60 };
@@ -49,7 +50,16 @@ describe("run plan", () => {
     expect(buildRunPlan({ ...CONFIG, workloads: [...WORKLOADS] }).every((spec) => REPLAY_LIMITS.includes(spec.limit))).toBe(true);
   });
 
-  it("runs only the CPU, once per repetition, when asked", () => {
+  it("offers drop-2500 as an opt-in schedule replay from the full pool to 2,500", () => {
+    expect(DEFAULT_WORKLOADS).not.toContain("drop-2500");
+    const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], workloads: ["drop-2500"], repetitions: 2, scheduleReplays: false, cpuOnly: true });
+    expect(plan.map(({ kind, workload, backend, limit }) => [kind, workload, backend, limit])).toEqual([["drop", "drop-2500", "cpu", 10000], ["drop", "drop-2500", "cpu", 10000]]);
+    // The drop lands 15 s in: inside the 30 s warmup, and more than a lifetime before measuring starts.
+    expect(DROP_SCHEDULE.decisions).toEqual([{ time: 0, limit: 10000, intensity: 1 }, { time: 15, limit: 2500, intensity: 2 }]);
+    expect(CONFIG.warmupSeconds - DROP_SCHEDULE.decisions[1].time).toBeGreaterThan(LOOK.lifeRange[1]);
+  });
+
+    it("runs only the CPU, once per repetition, when asked", () => {
     const plan = buildRunPlan({ ...CONFIG, viewports: ["full"], cpuOnly: true });
     // 1 discovery + 6 workloads × 3 repetitions + 3 replays.
     expect(plan).toHaveLength(1 + 18 + 3);

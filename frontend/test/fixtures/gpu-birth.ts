@@ -35,7 +35,7 @@ export function replayRecordedBirth(): BirthInputs {
   const capacity = 10000, seed = 42, dt = Math.fround(0.1), aspect = 1.5;
   let watching = false, generation = 0;
   const draws: number[] = [];
-  const control = cpuControl(capacity, seed, true, true, (index, drawGeneration, value) => {
+  const control = cpuControl(capacity, seed, true, (index, drawGeneration, value) => {
     if (!watching || index !== RECORDED_BIRTH.index) return;
     if (drawGeneration !== generation) { generation = drawGeneration; draws.length = 0; }
     draws.push(value);

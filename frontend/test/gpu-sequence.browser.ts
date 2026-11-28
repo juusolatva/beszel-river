@@ -1,6 +1,6 @@
 import { runGpuBenchmark } from "./gpu-benchmark.browser";
 import type { RecordedSchedule } from "./fixtures/gpu-replay";
-import { buildRunPlan, DEFAULT_WORKLOADS, estimateMinutes, ledgerMarkdown, summarizeRun, WORKLOADS, type FailedRun, type RunEnvironment, type RunSpec,
+import { buildRunPlan, DEFAULT_WORKLOADS, DROP_SCHEDULE, estimateMinutes, ledgerMarkdown, summarizeRun, WORKLOADS, type FailedRun, type RunEnvironment, type RunSpec,
   type RunSummary, type SequenceConfig, type Viewport } from "./fixtures/run-sequence";
 
 /**
@@ -226,7 +226,8 @@ async function runNext(state: SequenceState): Promise<void> {
       warmupSeconds: spec.scenario === "drained" ? Math.max(60, state.config.warmupSeconds) : state.config.warmupSeconds,
       measureSeconds: state.config.measureSeconds,
       crossValidate: !state.config.cpuOnly,
-      ...(spec.kind === "fixed" ? { limit: spec.limit } : spec.kind === "discovery" ? { budget: "adaptive" as const } : { schedule, scenario: undefined }),
+      ...(spec.kind === "fixed" ? { limit: spec.limit } : spec.kind === "discovery" ? { budget: "adaptive" as const }
+        : spec.kind === "drop" ? { schedule: DROP_SCHEDULE, scenario: undefined } : { schedule, scenario: undefined }),
     });
     if (spec.kind === "discovery" && result.schedule) state.schedules[spec.viewport] = result.schedule;
     state.results.push(summarizeRun(spec, result, env));
